@@ -644,6 +644,22 @@ describe('realistic performance CI policy', () => {
     expect(devGenerationRunner).toContain(
       "export const DEV_GENERATION_SPIKE_SCHEMA = 'kovo-dev-generation-spike-comparison/v3'",
     );
+    expect(devGenerationRunner).toContain(
+      "export const DEV_GENERATION_CANDIDATE_BINDING_SCHEMA = 'kovo-dev-generation-candidate-binding/v6'",
+    );
+    expect(devGenerationRunner).toContain("'kovo-dev-generation-path-blob-delta/v1'");
+    expect(devGenerationRunner).toContain("'--diff-algorithm=histogram'");
+    expect(devGenerationRunner).toContain("'--no-ext-diff'");
+    expect(devGenerationRunner).toContain("'--no-textconv'");
+    expect(devGenerationRunner).toContain("'--no-renames'");
+    expect(devGenerationRunner).toContain("'--unified=3'");
+    expect(devGenerationRunner).toContain("'-O/dev/null'");
+    expect(devGenerationRunner).toContain('pathBlobChanges(');
+    expect(devGenerationRunner).toContain('contentSha256: sha256(canonicalJson(content))');
+    expect(devGenerationRunner).not.toContain('patchBytes: 113_296');
+    expect(devGenerationRunner).not.toContain(
+      "patchId: '7ca973eed5467af294c601d41f3ddb1ade04fbff'",
+    );
     expect(devGenerationRunner).toContain("dependencyMode: 'deferred'");
     expect(devGenerationRunner).toContain("'--packed-product'");
     expect(devGenerationRunner).toContain("'--packed-product-digest'");

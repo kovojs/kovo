@@ -3,8 +3,9 @@
 This is the packed-product v3 decision contract for the repaired async-analysis candidate selected
 from the authenticated development edit profiles. It supersedes the source-checkout v2 runner and
 the rejected fresh-generation v1 comparison. The outer, preparation, retained-failure, and product
-boundary schemas remain v3. Candidate identity is now `kovo-dev-generation-candidate-binding/v5`;
-an earlier candidate binding cannot be reinterpreted as evidence for this three-commit series.
+boundary schemas remain v3. Candidate identity is now `kovo-dev-generation-candidate-binding/v6`;
+an earlier candidate binding cannot be reinterpreted as evidence for this content-census-bound
+series.
 
 ## Causal basis
 
@@ -49,9 +50,6 @@ The durable candidate ref is
 - repaired series tip: `1c591eca2fa7d1ba9c5cf90673cea36c54ee158f`, parent
   `07d6e5b23245df0d48fc071f78397329750705ee`, tree
   `c409518713e7ae1451b4eb3d3524b17b4ac823fa`
-- stable combined patch ID: `7ca973eed5467af294c601d41f3ddb1ade04fbff`
-- 113,296-byte raw binary/full-index combined patch SHA-256:
-  `sha256:ef119100be9f3a03d2de44a18a0114a988d0875cde324d23fa8b3cba60181c96`
 - changed paths, all simple modifications:
   `packages/server/src/internal/data-plane-static-analysis.test.ts`,
   `packages/server/src/internal/data-plane-static-analysis.ts`,
@@ -61,11 +59,28 @@ The durable candidate ref is
 
 The baseline and spike are separate clean committed worktrees. The spike must be exactly three
 commits above the selected baseline, produced by cherry-picking the bound commits in order. The
-durable ref, all three source commit/parent/tree identities, combined raw binary patch byte count
-and SHA-256, stable patch ID, and simple-modification path census must all match. This allows a
-measurement source that contains newer unrelated harness or documentation changes while preventing
-any unrelated path from entering the timed candidate. A conflict-resolved cherry-pick is a
-different candidate and must not be measured under this binding.
+durable ref and all three source commit, parent, and tree identities must match. For every source
+and applied commit boundary, v6 also authenticates the exact simple-modification path set and a
+canonical before/after census containing each regular blob's mode, object ID, byte length, and
+SHA-256. The combined source and applied censuses must be byte-for-byte equal under canonical JSON;
+for the series above their content digest is
+`sha256:fc022810f961fe5b8fc54d89609bef27cd01127a15c241047bc6d8460cd8e41d`.
+
+Raw `git diff` bytes and stable patch IDs remain same-host equivalence diagnostics, not durable
+candidate identity. Git 2.50.1 with `diff.algorithm=histogram` rendered the combined source delta as
+113,296 bytes, SHA-256
+`ef119100be9f3a03d2de44a18a0114a988d0875cde324d23fa8b3cba60181c96`, patch ID
+`7ca973eed5467af294c601d41f3ddb1ade04fbff`; hosted Git 2.54's default Myers rendering of the same
+objects was 113,290 bytes, SHA-256
+`8f91b8b7b78d8d896ed5547ccdf2ab2a0a6c3a822e6a7b8559f5217a13542bcf`, patch ID
+`0b5d7f891520eed5d3c77535a7eb3c7ede955085`. V6 passes explicit diff configuration for the
+diagnostic and compares source against applied output only on the same host. Machine-global diff
+configuration therefore cannot change the canonical binding or weaken the equivalence check.
+
+This allows a measurement source that contains newer unrelated harness or documentation changes
+while preventing any unrelated path or changed candidate-path blob from entering the timed
+candidate. A conflict-resolved cherry-pick is a different candidate and must not be measured under
+this binding.
 
 ## Serialized measurement
 
@@ -150,6 +165,21 @@ authorizes integration.
 ## Repaired candidate status
 
 Status: **awaiting the hosted N=24 and N=216 decision; no result is claimed yet**.
+
+[Run `32187892588`, N=24 job
+`95875635162`](https://github.com/kovojs/kovo/actions/runs/32187892588/job/95875635162) is
+authenticated diagnostic evidence only. It checked out exact source
+`a69f823ccb34aa41ec13b4215e95eb23da6d1197`, fetched the exact durable candidate ref, verified the
+three source parents, and cleanly created the three-commit applied series, but failed before its
+first benchmark sample because v5 compared Git-version-dependent combined diff constants. Clean
+local worktrees at the same source reproduced zero drift on all six candidate paths. The clean
+applied series was `406210810a1a3731e118a73540ce32bee60f327e` →
+`11adfd50e3a3f0c06ebc8ceb6d7fcb3cbd2fa821` →
+`fd52ed21565fd04567280c1f0b43a3b006ee1aa5`, with final tree
+`50c0d5f6836518e667cc745be316749d3f1c43cc`; its canonical delta digest exactly matched the source
+digest above. The reproduction proved that the two raw identities describe the same source and
+applied blob transitions. The run cannot be treated as `accept` or `reject`; a new v6 run is
+required.
 
 The workflow prepares clean committed baseline and candidate worktrees, applies the exact bound
 three-commit series, and runs the unchanged serialized `B,S,S,B` contract independently for both

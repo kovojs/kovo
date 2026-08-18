@@ -50,7 +50,8 @@ import { validReadyRouteProbe } from './lib/perf-ready-route.mjs';
 export const DEV_GENERATION_SPIKE_SCHEMA = 'kovo-dev-generation-spike-comparison/v3';
 export const DEV_GENERATION_SPIKE_PREPARE_SCHEMA = 'kovo-dev-generation-spike-prepare/v3';
 export const DEV_GENERATION_ADAPTER_FAILURE_SCHEMA = 'kovo-dev-generation-adapter-failure/v3';
-export const DEV_GENERATION_CANDIDATE_BINDING_SCHEMA = 'kovo-dev-generation-candidate-binding/v5';
+export const DEV_GENERATION_CANDIDATE_BINDING_SCHEMA = 'kovo-dev-generation-candidate-binding/v6';
+export const DEV_GENERATION_CANDIDATE_DELTA_SCHEMA = 'kovo-dev-generation-path-blob-delta/v1';
 export const DEV_GENERATION_PRODUCT_BOUNDARY_SCHEMA =
   'kovo-dev-generation-packed-product-boundary/v3';
 export const DEV_GENERATION_PRODUCT_POLICY_SCHEMA = 'kovo-dev-generation-packed-product-policy/v3';
@@ -69,9 +70,7 @@ export { DEV_GENERATION_CELL_PORT_STRIDE };
 export const DEV_CRITICAL_PATH_CANDIDATE = Object.freeze({
   commit: '1c591eca2fa7d1ba9c5cf90673cea36c54ee158f',
   parent: 'eb16f11734a2ab635a8207f2e6ece4612713f248',
-  patchBytes: 113_296,
-  patchId: '7ca973eed5467af294c601d41f3ddb1ade04fbff',
-  patchSha256: 'sha256:ef119100be9f3a03d2de44a18a0114a988d0875cde324d23fa8b3cba60181c96',
+  parentTree: '66aa1edca7a8112ebd708511e462e24bbd9b80b6',
   paths: Object.freeze([
     'packages/server/src/internal/data-plane-static-analysis.test.ts',
     'packages/server/src/internal/data-plane-static-analysis.ts',
@@ -203,6 +202,7 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
   const git = dependencies.git ?? gitOutput;
   const patch = dependencies.patch ?? gitPatchBytes;
   const patchId = dependencies.patchId ?? gitPatchId;
+  const readBlob = dependencies.readBlob ?? gitBlobBytes;
   const candidate = options.candidate ?? DEV_CRITICAL_PATH_CANDIDATE;
   const candidateRepository = canonicalDirectory(options.candidateRepository ?? repoRoot);
   const baselineRoot = canonicalGitRoot(options.baselineRoot, git);
@@ -263,10 +263,14 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
   ]);
   const candidateCommit = git(candidateRepository, ['rev-parse', `${candidate.commit}^{commit}`]);
   const candidateTree = git(candidateRepository, ['rev-parse', `${candidate.commit}^{tree}`]);
+  const candidateParent = git(candidateRepository, ['rev-parse', `${candidate.parent}^{commit}`]);
+  const candidateParentTree = git(candidateRepository, ['rev-parse', `${candidate.parent}^{tree}`]);
   if (
     candidateRefCommit !== candidate.commit ||
     candidateCommit !== candidate.commit ||
-    candidateTree !== candidate.tree
+    candidateTree !== candidate.tree ||
+    candidateParent !== candidate.parent ||
+    candidateParentTree !== candidate.parentTree
   ) {
     throw new Error('profile-driven candidate object identity is unavailable or unexpected');
   }
@@ -287,65 +291,196 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
     const commit = git(candidateRepository, ['rev-parse', `${entry.commit}^{commit}`]);
     const parent = git(candidateRepository, ['rev-parse', `${entry.commit}^`]);
     const tree = git(candidateRepository, ['rev-parse', `${entry.commit}^{tree}`]);
-    if (commit !== entry.commit || parent !== entry.parent || tree !== entry.tree) {
+    const parents = git(candidateRepository, [
+      'rev-list',
+      '--parents',
+      '-n',
+      '1',
+      entry.commit,
+    ]).split(' ');
+    if (
+      commit !== entry.commit ||
+      parent !== entry.parent ||
+      tree !== entry.tree ||
+      !sameStrings(parents, [entry.commit, entry.parent])
+    ) {
       throw new Error(
         'profile-driven candidate series object identity is unavailable or unexpected',
       );
     }
   }
-  for (const [index, entry] of series.entries()) {
-    const expectedCommitPatch = patch(candidateRepository, entry.parent, entry.commit);
-    const observedCommitPatch = patch(
-      spikeRoot,
-      index === 0 ? baselineCommit : spikeSeries[index - 1],
-      spikeSeries[index],
-    );
-    if (!observedCommitPatch.equals(expectedCommitPatch)) {
-      throw new Error('spike commits do not preserve the exact candidate series patch boundaries');
-    }
-  }
-  const expectedPatch = patch(candidateRepository, candidate.parent, candidate.commit);
-  const observedPatch = patch(spikeRoot, baselineCommit, spikeCommit);
-  const expectedPatchSha256 = sha256(expectedPatch);
-  const observedPatchSha256 = sha256(observedPatch);
-  const expectedPatchId = patchId(candidateRepository, candidate.parent, candidate.commit);
-  const observedPatchId = patchId(spikeRoot, baselineCommit, spikeCommit);
-  if (
-    expectedPatch.byteLength !== candidate.patchBytes ||
-    observedPatch.byteLength !== candidate.patchBytes ||
-    expectedPatchSha256 !== candidate.patchSha256 ||
-    expectedPatchId !== candidate.patchId ||
-    observedPatchSha256 !== candidate.patchSha256 ||
-    observedPatchId !== candidate.patchId ||
-    !observedPatch.equals(expectedPatch)
-  ) {
-    throw new Error(
-      `spike patch does not exactly match ${candidate.commit}: expected ${candidate.patchSha256}/${candidate.patchId}, observed ${observedPatchSha256}/${observedPatchId}`,
-    );
-  }
   const expectedPaths = candidate.paths;
+  if (
+    !Array.isArray(expectedPaths) ||
+    expectedPaths.length === 0 ||
+    !sameStrings(expectedPaths, [...new Set(expectedPaths)].sort())
+  ) {
+    throw new Error('profile-driven candidate path declaration is not an exact sorted census');
+  }
+  const sourcePaths = changedPaths(candidateRepository, candidate.parent, candidate.commit, git);
   const observedPaths = changedPaths(spikeRoot, baselineCommit, spikeCommit, git);
-  if (!sameStrings(observedPaths, expectedPaths)) {
+  if (!sameStrings(sourcePaths, expectedPaths) || !sameStrings(observedPaths, expectedPaths)) {
     throw new Error(
-      `spike path census differs from profile-driven candidate: ${observedPaths.join(', ')}`,
+      `source or spike path census differs from profile-driven candidate: source=${sourcePaths.join(', ')} spike=${observedPaths.join(', ')}`,
     );
+  }
+
+  const sourceSeries = [];
+  const appliedSeries = [];
+  for (const [index, entry] of series.entries()) {
+    const appliedCommit = spikeSeries[index];
+    const appliedParent = index === 0 ? baselineCommit : spikeSeries[index - 1];
+    const appliedTree = git(spikeRoot, ['rev-parse', `${appliedCommit}^{tree}`]);
+    const appliedParents = git(spikeRoot, [
+      'rev-list',
+      '--parents',
+      '-n',
+      '1',
+      appliedCommit,
+    ]).split(' ');
+    if (!sameStrings(appliedParents, [appliedCommit, appliedParent])) {
+      throw new Error('spike series must contain only the exact linear applied commits');
+    }
+    const sourceStepPaths = changedPaths(candidateRepository, entry.parent, entry.commit, git);
+    const appliedStepPaths = changedPaths(spikeRoot, appliedParent, appliedCommit, git);
+    if (
+      sourceStepPaths.some((relativePath) => !expectedPaths.includes(relativePath)) ||
+      !sameStrings(appliedStepPaths, sourceStepPaths)
+    ) {
+      throw new Error('spike commits do not preserve the exact candidate series path boundaries');
+    }
+    const sourceChanges = pathBlobChanges(
+      candidateRepository,
+      entry.parent,
+      entry.commit,
+      sourceStepPaths,
+      git,
+      readBlob,
+    );
+    const appliedChanges = pathBlobChanges(
+      spikeRoot,
+      appliedParent,
+      appliedCommit,
+      appliedStepPaths,
+      git,
+      readBlob,
+    );
+    if (canonicalJson(appliedChanges) !== canonicalJson(sourceChanges)) {
+      throw new Error('spike commits do not preserve the exact candidate path/blob/byte changes');
+    }
+
+    const sourceHostPatch = hostPatchEvidence(
+      candidateRepository,
+      entry.parent,
+      entry.commit,
+      patch,
+      patchId,
+    );
+    const appliedHostPatch = hostPatchEvidence(
+      spikeRoot,
+      appliedParent,
+      appliedCommit,
+      patch,
+      patchId,
+    );
+    if (canonicalJson(appliedHostPatch) !== canonicalJson(sourceHostPatch)) {
+      throw new Error('spike commits do not preserve the exact same-host candidate diff');
+    }
+    const deltaSha256 = sha256(canonicalJson({ changes: sourceChanges, paths: sourceStepPaths }));
+    sourceSeries.push({
+      changes: sourceChanges,
+      commit: entry.commit,
+      deltaSha256,
+      hostPatch: sourceHostPatch,
+      parent: entry.parent,
+      paths: sourceStepPaths,
+      tree: entry.tree,
+    });
+    appliedSeries.push({
+      changes: appliedChanges,
+      commit: appliedCommit,
+      deltaSha256,
+      hostPatch: appliedHostPatch,
+      parent: appliedParent,
+      paths: appliedStepPaths,
+      source: { commit: entry.commit, parent: entry.parent, tree: entry.tree },
+      tree: appliedTree,
+    });
+  }
+
+  const sourceEndpoints = pathBlobChanges(
+    candidateRepository,
+    candidate.parent,
+    candidate.commit,
+    expectedPaths,
+    git,
+    readBlob,
+  );
+  const appliedEndpoints = pathBlobChanges(
+    spikeRoot,
+    baselineCommit,
+    spikeCommit,
+    expectedPaths,
+    git,
+    readBlob,
+  );
+  if (canonicalJson(appliedEndpoints) !== canonicalJson(sourceEndpoints)) {
+    throw new Error('spike range does not preserve the exact candidate path/blob/byte delta');
+  }
+  const sourceHostPatch = hostPatchEvidence(
+    candidateRepository,
+    candidate.parent,
+    candidate.commit,
+    patch,
+    patchId,
+  );
+  const appliedHostPatch = hostPatchEvidence(
+    spikeRoot,
+    baselineCommit,
+    spikeCommit,
+    patch,
+    patchId,
+  );
+  if (canonicalJson(appliedHostPatch) !== canonicalJson(sourceHostPatch)) {
+    throw new Error('spike range does not preserve the exact same-host candidate diff');
+  }
+  const sourceDelta = candidateDeltaEvidence({
+    endpoints: sourceEndpoints,
+    hostPatch: sourceHostPatch,
+    paths: sourcePaths,
+    series: sourceSeries,
+  });
+  const appliedDelta = candidateDeltaEvidence({
+    endpoints: appliedEndpoints,
+    hostPatch: appliedHostPatch,
+    paths: observedPaths,
+    series: appliedSeries,
+  });
+  if (appliedDelta.contentSha256 !== sourceDelta.contentSha256) {
+    throw new Error('spike canonical candidate delta differs from the exact source delta');
+  }
+  if (
+    git(candidateRepository, ['rev-parse', '--verify', `${candidate.ref}^{commit}`]) !==
+    candidate.commit
+  ) {
+    throw new Error('profile-driven candidate ref changed during authentication');
   }
   return {
     baseline: { commit: baselineCommit, root: baselineRoot },
     candidate: {
       commit: candidate.commit,
       parent: candidate.parent,
-      patchBytes: candidate.patchBytes,
-      patchId: candidate.patchId,
-      patchSha256: candidate.patchSha256,
+      parentTree: candidate.parentTree,
       paths: [...candidate.paths],
       ref: candidate.ref,
       series: candidate.series.map((entry) => ({ ...entry })),
+      sourceDelta,
       tree: candidate.tree,
     },
     schema: DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
     spike: {
       commit: spikeCommit,
+      appliedDelta,
       parent: baselineCommit,
       root: spikeRoot,
       series: spikeSeries,
@@ -2023,7 +2158,51 @@ function gitDirtyPaths(root, git) {
 function gitPatchBytes(root, from, to) {
   const result = spawnSync(
     'git',
-    ['-C', root, 'diff', '--binary', '--full-index', '--no-ext-diff', from, to],
+    [
+      '-C',
+      root,
+      '-c',
+      'core.attributesFile=/dev/null',
+      '-c',
+      'diff.algorithm=histogram',
+      '-c',
+      'diff.color=false',
+      '-c',
+      'diff.external=',
+      '-c',
+      'diff.indentHeuristic=true',
+      '-c',
+      'diff.mnemonicPrefix=false',
+      '-c',
+      'diff.noprefix=false',
+      '-c',
+      'diff.outputIndicatorContext= ',
+      '-c',
+      'diff.outputIndicatorNew=+',
+      '-c',
+      'diff.outputIndicatorOld=-',
+      '-c',
+      'diff.renames=false',
+      '-c',
+      'diff.suppressBlankEmpty=false',
+      'diff',
+      '--binary',
+      '--full-index',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--no-renames',
+      '--diff-algorithm=histogram',
+      '--indent-heuristic',
+      '--inter-hunk-context=0',
+      '--unified=3',
+      '--src-prefix=a/',
+      '--dst-prefix=b/',
+      '-O/dev/null',
+      from,
+      to,
+      '--',
+    ],
     { encoding: null, maxBuffer: MAX_COMMAND_OUTPUT_BYTES, stdio: ['ignore', 'pipe', 'pipe'] },
   );
   if (result.status !== 0 || result.signal || result.error) {
@@ -2048,8 +2227,105 @@ function gitPatchId(root, from, to) {
   return match[1];
 }
 
+function gitBlobBytes(root, objectId) {
+  if (!/^[0-9a-f]{40,64}$/u.test(objectId)) {
+    throw new TypeError('candidate blob object ID is malformed');
+  }
+  const result = spawnSync('git', ['-C', root, 'cat-file', 'blob', objectId], {
+    encoding: null,
+    maxBuffer: MAX_COMMAND_OUTPUT_BYTES,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (result.status !== 0 || result.signal || result.error) {
+    throw new Error(`could not read candidate blob: ${boundedDiagnostic(result.stderr)}`);
+  }
+  return Buffer.from(result.stdout);
+}
+
+function pathBlobChanges(root, from, to, paths, git, readBlob) {
+  return paths.map((relativePath) => ({
+    after: pathBlobDescriptor(root, to, relativePath, git, readBlob),
+    before: pathBlobDescriptor(root, from, relativePath, git, readBlob),
+    path: relativePath,
+  }));
+}
+
+function pathBlobDescriptor(root, commit, relativePath, git, readBlob) {
+  const output = git(root, ['ls-tree', '--full-tree', commit, '--', relativePath]);
+  const separator = output.indexOf('\t');
+  const metadata = separator > 0 ? output.slice(0, separator).split(' ') : [];
+  const observedPath = separator > 0 ? output.slice(separator + 1) : '';
+  if (
+    metadata.length !== 3 ||
+    (metadata[0] !== '100644' && metadata[0] !== '100755') ||
+    metadata[1] !== 'blob' ||
+    !/^[0-9a-f]{40,64}$/u.test(metadata[2] ?? '') ||
+    observedPath !== relativePath
+  ) {
+    throw new Error(`candidate path is not one exact regular blob at ${commit}: ${relativePath}`);
+  }
+  const bytes = readBlob(root, metadata[2]);
+  if (!Buffer.isBuffer(bytes)) {
+    throw new TypeError('candidate blob reader did not return bytes');
+  }
+  return {
+    byteLength: bytes.byteLength,
+    mode: metadata[0],
+    objectId: metadata[2],
+    sha256: sha256(bytes),
+  };
+}
+
+function hostPatchEvidence(root, from, to, patch, patchId) {
+  const bytes = patch(root, from, to);
+  if (!Buffer.isBuffer(bytes)) throw new TypeError('candidate patch reader did not return bytes');
+  return {
+    byteLength: bytes.byteLength,
+    patchId: patchId(root, from, to),
+    sha256: sha256(bytes),
+  };
+}
+
+function candidateDeltaEvidence({ endpoints, hostPatch, paths, series }) {
+  const content = {
+    endpoints,
+    paths,
+    schema: DEV_GENERATION_CANDIDATE_DELTA_SCHEMA,
+    series: series.map((entry) => ({
+      changes: entry.changes,
+      deltaSha256: entry.deltaSha256,
+      paths: entry.paths,
+    })),
+  };
+  return {
+    ...content,
+    contentSha256: sha256(canonicalJson(content)),
+    hostPatch,
+    series,
+  };
+}
+
 function changedPaths(root, from, to, git) {
-  const lines = git(root, ['diff', '--name-status', '--no-renames', from, to]);
+  const lines = git(root, [
+    '-c',
+    'core.attributesFile=/dev/null',
+    '-c',
+    'core.quotePath=false',
+    '-c',
+    'diff.external=',
+    '-c',
+    'diff.renames=false',
+    'diff',
+    '--name-status',
+    '--no-color',
+    '--no-ext-diff',
+    '--no-textconv',
+    '--no-renames',
+    '-O/dev/null',
+    from,
+    to,
+    '--',
+  ]);
   if (lines === '') return [];
   return lines.split(/\r?\n/u).map((line) => {
     const [status, file, extra] = line.split('\t');

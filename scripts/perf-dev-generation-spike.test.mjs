@@ -21,6 +21,7 @@ import {
   DEV_CRITICAL_PATH_CANDIDATE,
   DEV_GENERATION_ADAPTER_FAILURE_SCHEMA,
   DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
+  DEV_GENERATION_CANDIDATE_DELTA_SCHEMA,
   DEV_GENERATION_PRODUCT_BOUNDARY_SCHEMA,
   DEV_GENERATION_PRODUCT_POLICY,
   DEV_GENERATION_PRODUCT_POLICY_SCHEMA,
@@ -53,8 +54,9 @@ describe('dev-generation candidate comparator', () => {
     expect(DEV_GENERATION_SPIKE_SCHEMA).toBe('kovo-dev-generation-spike-comparison/v3');
     expect(DEV_GENERATION_SPIKE_PREPARE_SCHEMA).toBe('kovo-dev-generation-spike-prepare/v3');
     expect(DEV_GENERATION_CANDIDATE_BINDING_SCHEMA).toBe(
-      'kovo-dev-generation-candidate-binding/v5',
+      'kovo-dev-generation-candidate-binding/v6',
     );
+    expect(DEV_GENERATION_CANDIDATE_DELTA_SCHEMA).toBe('kovo-dev-generation-path-blob-delta/v1');
     expect(DEV_GENERATION_ADAPTER_FAILURE_SCHEMA).toBe('kovo-dev-generation-adapter-failure/v3');
     expect(DEV_GENERATION_PRODUCT_BOUNDARY_SCHEMA).toBe(
       'kovo-dev-generation-packed-product-boundary/v3',
@@ -77,9 +79,7 @@ describe('dev-generation candidate comparator', () => {
     expect(DEV_CRITICAL_PATH_CANDIDATE).toEqual({
       commit: '1c591eca2fa7d1ba9c5cf90673cea36c54ee158f',
       parent: 'eb16f11734a2ab635a8207f2e6ece4612713f248',
-      patchBytes: 113_296,
-      patchId: '7ca973eed5467af294c601d41f3ddb1ade04fbff',
-      patchSha256: 'sha256:ef119100be9f3a03d2de44a18a0114a988d0875cde324d23fa8b3cba60181c96',
+      parentTree: '66aa1edca7a8112ebd708511e462e24bbd9b80b6',
       paths: [
         'packages/server/src/internal/data-plane-static-analysis.test.ts',
         'packages/server/src/internal/data-plane-static-analysis.ts',
@@ -218,22 +218,30 @@ describe('dev-generation candidate comparator', () => {
     expect(binding).toMatchObject({
       baseline: { commit: fixture.baselineCommit, root: realpathSync(fixture.baseline) },
       candidate: {
-        patchBytes: fixture.candidate.patchBytes,
-        patchId: fixture.candidate.patchId,
-        patchSha256: fixture.candidate.patchSha256,
         paths: fixture.candidate.paths,
         ref: fixture.candidate.ref,
         series: fixture.candidate.series,
+        sourceDelta: {
+          contentSha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+          schema: DEV_GENERATION_CANDIDATE_DELTA_SCHEMA,
+        },
       },
       spike: {
         commit: fixture.spikeCommit,
+        appliedDelta: {
+          contentSha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+          schema: DEV_GENERATION_CANDIDATE_DELTA_SCHEMA,
+        },
         parent: fixture.baselineCommit,
         series: fixture.spikeSeries,
       },
     });
+    expect(binding.spike.appliedDelta.contentSha256).toBe(
+      binding.candidate.sourceDelta.contentSha256,
+    );
   });
 
-  it('rejects shortened and extended v5 candidate series before reading their objects', () => {
+  it('rejects shortened and extended v6 candidate series before reading their objects', () => {
     const fixture = candidateFixture();
     const authenticate = (series) =>
       authenticateGenerationCandidateRoots(
@@ -269,13 +277,57 @@ describe('dev-generation candidate comparator', () => {
     expect(binding).toMatchObject({
       baseline: { commit: fixture.sourceCommit },
       candidate: fixture.candidate,
-      schema: 'kovo-dev-generation-candidate-binding/v5',
+      schema: 'kovo-dev-generation-candidate-binding/v6',
       spike: { parent: fixture.sourceCommit },
     });
     expect(fixture.sourceCommit).not.toBe(fixture.candidate.parent);
   });
 
-  it('rejects candidate object, series, ref, patch, byte-count, path, and worktree drift', () => {
+  it('keeps canonical and same-host delta custody stable across conflicting diff configs', () => {
+    const fixture = realRebasedCandidateFixture();
+    const orderPath = path.join(temporaryDirectory('kovo-dev-generation-diff-order-'), 'order');
+    const configureDiff = (algorithm, indicator, order) => {
+      writeFileSync(orderPath, order);
+      execFileSync('git', ['config', 'diff.algorithm', algorithm], { cwd: fixture.repository });
+      execFileSync('git', ['config', 'diff.orderFile', orderPath], { cwd: fixture.repository });
+      execFileSync('git', ['config', 'diff.outputIndicatorNew', indicator], {
+        cwd: fixture.repository,
+      });
+    };
+    const authenticate = () =>
+      authenticateGenerationCandidateRoots({
+        baselineRoot: fixture.baseline,
+        candidate: fixture.candidate,
+        candidateRepository: fixture.repository,
+        spikeRoot: fixture.spike,
+      });
+
+    configureDiff('myers', '>', 'two.ts\none.ts\n');
+    const myers = authenticate();
+    configureDiff('histogram', '+', 'one.ts\ntwo.ts\n');
+    const histogram = authenticate();
+
+    expect(histogram.candidate.sourceDelta).toEqual(myers.candidate.sourceDelta);
+    expect(histogram.spike.appliedDelta).toEqual(myers.spike.appliedDelta);
+    expect(histogram.candidate.sourceDelta.contentSha256).toBe(
+      histogram.spike.appliedDelta.contentSha256,
+    );
+  });
+
+  it('rejects a clean cherry-pick over drift in a candidate-owned source blob', () => {
+    const fixture = realRebasedCandidateFixture({ sourcePathDrift: true });
+
+    expect(() =>
+      authenticateGenerationCandidateRoots({
+        baselineRoot: fixture.baseline,
+        candidate: fixture.candidate,
+        candidateRepository: fixture.repository,
+        spikeRoot: fixture.spike,
+      }),
+    ).toThrow(/path\/blob\/byte/u);
+  });
+
+  it('rejects candidate object, series, ref, host-diff, blob-byte, path, and worktree drift', () => {
     const identityDrift = candidateFixture();
     expect(() =>
       authenticateGenerationCandidateRoots(
@@ -317,6 +369,26 @@ describe('dev-generation candidate comparator', () => {
       ),
     ).toThrow(/series object identity/u);
 
+    const mergeDrift = candidateFixture();
+    expect(() =>
+      authenticateGenerationCandidateRoots(
+        {
+          baselineRoot: mergeDrift.baseline,
+          candidate: mergeDrift.candidate,
+          candidateRepository: mergeDrift.repository,
+          spikeRoot: mergeDrift.spike,
+        },
+        {
+          ...mergeDrift.dependencies,
+          git: (root, args) =>
+            root === mergeDrift.spike &&
+            args.join(' ') === `rev-list --parents -n 1 ${mergeDrift.spikeSeries[0]}`
+              ? `${mergeDrift.spikeSeries[0]} ${mergeDrift.baselineCommit} ${'9'.repeat(40)}`
+              : mergeDrift.dependencies.git(root, args),
+        },
+      ),
+    ).toThrow(/exact linear applied commits/u);
+
     const refDrift = candidateFixture();
     const driftedRef = 'refs/heads/perf-spike/drifted';
     expect(() =>
@@ -338,6 +410,32 @@ describe('dev-generation candidate comparator', () => {
       ),
     ).toThrow(/object identity/u);
 
+    const refRace = candidateFixture();
+    let refReads = 0;
+    expect(() =>
+      authenticateGenerationCandidateRoots(
+        {
+          baselineRoot: refRace.baseline,
+          candidate: refRace.candidate,
+          candidateRepository: refRace.repository,
+          spikeRoot: refRace.spike,
+        },
+        {
+          ...refRace.dependencies,
+          git: (root, args) => {
+            if (
+              root === refRace.repository &&
+              args.join(' ') === `rev-parse --verify ${refRace.candidate.ref}^{commit}`
+            ) {
+              refReads += 1;
+              return refReads === 1 ? refRace.candidate.commit : 'f'.repeat(40);
+            }
+            return refRace.dependencies.git(root, args);
+          },
+        },
+      ),
+    ).toThrow(/ref changed during authentication/u);
+
     const drift = candidateFixture();
     expect(() =>
       authenticateGenerationCandidateRoots(
@@ -355,7 +453,7 @@ describe('dev-generation candidate comparator', () => {
               : Buffer.from('patch'),
         },
       ),
-    ).toThrow(/does not exactly match/u);
+    ).toThrow(/same-host candidate diff/u);
 
     const boundaryDrift = candidateFixture();
     expect(() =>
@@ -374,20 +472,28 @@ describe('dev-generation candidate comparator', () => {
               : Buffer.from('patch'),
         },
       ),
-    ).toThrow(/series patch boundaries/u);
+    ).toThrow(/same-host candidate diff/u);
 
-    const byteCountDrift = candidateFixture();
+    const blobByteDrift = candidateFixture();
     expect(() =>
       authenticateGenerationCandidateRoots(
         {
-          baselineRoot: byteCountDrift.baseline,
-          candidate: { ...byteCountDrift.candidate, patchBytes: 1 },
-          candidateRepository: byteCountDrift.repository,
-          spikeRoot: byteCountDrift.spike,
+          baselineRoot: blobByteDrift.baseline,
+          candidate: blobByteDrift.candidate,
+          candidateRepository: blobByteDrift.repository,
+          spikeRoot: blobByteDrift.spike,
         },
-        byteCountDrift.dependencies,
+        {
+          ...blobByteDrift.dependencies,
+          readBlob: (root, objectId) => {
+            const bytes = blobByteDrift.dependencies.readBlob(root, objectId);
+            return root === blobByteDrift.spike
+              ? Buffer.concat([bytes, Buffer.from('drift')])
+              : bytes;
+          },
+        },
       ),
-    ).toThrow(/does not exactly match/u);
+    ).toThrow(/path\/blob\/byte/u);
 
     const pathDrift = candidateFixture();
     expect(() =>
@@ -425,7 +531,7 @@ describe('dev-generation candidate comparator', () => {
         {
           authenticateRoots: () => ({
             ...preparedFixture('/unused-baseline', '/unused-spike').candidateBinding,
-            schema: 'kovo-dev-generation-candidate-binding/v4',
+            schema: 'kovo-dev-generation-candidate-binding/v5',
           }),
         },
       ),
@@ -453,12 +559,7 @@ describe('dev-generation candidate comparator', () => {
         tooling: toolingIdentity(),
       };
     });
-    const binding = {
-      baseline: { commit: baseline.commit, root: baselineRoot },
-      candidate: { commit: 'c'.repeat(40), patchId: 'd'.repeat(40), patchSha256: digest('e') },
-      schema: DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
-      spike: { commit: spike.commit, parent: baseline.commit, root: spikeRoot },
-    };
+    const binding = candidateBindingFixture(baselineRoot, spikeRoot, baseline.commit, spike.commit);
     const prepared = await prepareDevGenerationSpike(
       {
         baselineRoot,
@@ -539,12 +640,12 @@ describe('dev-generation candidate comparator', () => {
         spike: productCapability(states.spike, 'alias-spike'),
       };
       mutate(products);
-      const binding = {
-        baseline: { commit: states.baseline.commit, root: baselineRoot },
-        candidate: { commit: 'c'.repeat(40), patchId: 'd'.repeat(40), patchSha256: digest('e') },
-        schema: DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
-        spike: { commit: states.spike.commit, parent: states.baseline.commit, root: spikeRoot },
-      };
+      const binding = candidateBindingFixture(
+        baselineRoot,
+        spikeRoot,
+        states.baseline.commit,
+        states.spike.commit,
+      );
 
       await expect(
         prepareDevGenerationSpike(
@@ -1489,9 +1590,7 @@ function candidateFixture({ spikeStatus = '' } = {}) {
   const candidate = {
     commit: tipCommit,
     parent: 'parent',
-    patchBytes: patch.byteLength,
-    patchId: 'f'.repeat(40),
-    patchSha256: `sha256:${createHash('sha256').update(patch).digest('hex')}`,
+    parentTree: '0'.repeat(40),
     paths: ['one.ts', 'two.ts'],
     ref: 'refs/heads/perf-spike/candidate',
     series: [
@@ -1501,6 +1600,46 @@ function candidateFixture({ spikeStatus = '' } = {}) {
     ],
     tree: '5'.repeat(40),
   };
+  const pathBytes = new Map([
+    ['one-0', Buffer.from('export const one = 1;\n')],
+    ['one-1', Buffer.from('export const one = 11;\n')],
+    ['one-2', Buffer.from('export const one = 111;\n')],
+    ['two-0', Buffer.from('export const two = 2;\n')],
+    ['two-1', Buffer.from('export const two = 22;\n')],
+  ]);
+  const objects = new Map(
+    [...pathBytes].map(([label, bytes]) => [
+      label,
+      createHash('sha1')
+        .update(Buffer.concat([Buffer.from(`blob ${bytes.byteLength}\0`), bytes]))
+        .digest('hex'),
+    ]),
+  );
+  const bytesByObject = new Map(
+    [...pathBytes].map(([label, bytes]) => [objects.get(label), bytes]),
+  );
+  const sourceStates = new Map([
+    [candidate.parent, { 'one.ts': 'one-0', 'two.ts': 'two-0' }],
+    [firstCommit, { 'one.ts': 'one-1', 'two.ts': 'two-0' }],
+    [secondCommit, { 'one.ts': 'one-1', 'two.ts': 'two-1' }],
+    [tipCommit, { 'one.ts': 'one-2', 'two.ts': 'two-1' }],
+  ]);
+  const appliedStates = new Map([
+    [baselineCommit, { 'one.ts': 'one-0', 'two.ts': 'two-0' }],
+    [spikeSeries[0], { 'one.ts': 'one-1', 'two.ts': 'two-0' }],
+    [spikeSeries[1], { 'one.ts': 'one-1', 'two.ts': 'two-1' }],
+    [spikeSeries[2], { 'one.ts': 'one-2', 'two.ts': 'two-1' }],
+  ]);
+  const changedByRange = new Map([
+    [`${candidate.parent}..${firstCommit}`, ['one.ts']],
+    [`${firstCommit}..${secondCommit}`, ['two.ts']],
+    [`${secondCommit}..${tipCommit}`, ['one.ts']],
+    [`${candidate.parent}..${tipCommit}`, ['one.ts', 'two.ts']],
+    [`${baselineCommit}..${spikeSeries[0]}`, ['one.ts']],
+    [`${spikeSeries[0]}..${spikeSeries[1]}`, ['two.ts']],
+    [`${spikeSeries[1]}..${spikeSeries[2]}`, ['one.ts']],
+    [`${baselineCommit}..${spikeCommit}`, ['one.ts', 'two.ts']],
+  ]);
   const command = (directory, args) => `${directory}|${args.join(' ')}`;
   const answers = new Map([
     [command(baseline, ['rev-parse', '--show-toplevel']), baseline],
@@ -1519,6 +1658,8 @@ function candidateFixture({ spikeStatus = '' } = {}) {
     [command(repository, ['rev-parse', '--verify', `${candidate.ref}^{commit}`]), candidate.commit],
     [command(repository, ['rev-parse', `${candidate.commit}^{commit}`]), candidate.commit],
     [command(repository, ['rev-parse', `${candidate.commit}^{tree}`]), candidate.tree],
+    [command(repository, ['rev-parse', `${candidate.parent}^{commit}`]), candidate.parent],
+    [command(repository, ['rev-parse', `${candidate.parent}^{tree}`]), candidate.parentTree],
     [
       command(repository, ['rev-list', '--reverse', `${candidate.parent}..${candidate.commit}`]),
       `${firstCommit}\n${secondCommit}\n${tipCommit}`,
@@ -1526,19 +1667,58 @@ function candidateFixture({ spikeStatus = '' } = {}) {
     [command(repository, ['rev-parse', `${firstCommit}^{commit}`]), firstCommit],
     [command(repository, ['rev-parse', `${firstCommit}^`]), candidate.parent],
     [command(repository, ['rev-parse', `${firstCommit}^{tree}`]), candidate.series[0].tree],
+    [
+      command(repository, ['rev-list', '--parents', '-n', '1', firstCommit]),
+      `${firstCommit} ${candidate.parent}`,
+    ],
     [command(repository, ['rev-parse', `${secondCommit}^{commit}`]), secondCommit],
     [command(repository, ['rev-parse', `${secondCommit}^`]), firstCommit],
     [command(repository, ['rev-parse', `${secondCommit}^{tree}`]), candidate.series[1].tree],
+    [
+      command(repository, ['rev-list', '--parents', '-n', '1', secondCommit]),
+      `${secondCommit} ${firstCommit}`,
+    ],
     [command(repository, ['rev-parse', `${tipCommit}^{commit}`]), tipCommit],
     [command(repository, ['rev-parse', `${tipCommit}^`]), secondCommit],
     [command(repository, ['rev-parse', `${tipCommit}^{tree}`]), candidate.series[2].tree],
     [
-      command(spike, ['diff', '--name-status', '--no-renames', baselineCommit, spikeCommit]),
-      'M\tone.ts\nM\ttwo.ts',
+      command(repository, ['rev-list', '--parents', '-n', '1', tipCommit]),
+      `${tipCommit} ${secondCommit}`,
+    ],
+    [command(spike, ['rev-parse', `${spikeSeries[0]}^{tree}`]), '6'.repeat(40)],
+    [
+      command(spike, ['rev-list', '--parents', '-n', '1', spikeSeries[0]]),
+      `${spikeSeries[0]} ${baselineCommit}`,
+    ],
+    [command(spike, ['rev-parse', `${spikeSeries[1]}^{tree}`]), '7'.repeat(40)],
+    [
+      command(spike, ['rev-list', '--parents', '-n', '1', spikeSeries[1]]),
+      `${spikeSeries[1]} ${spikeSeries[0]}`,
+    ],
+    [command(spike, ['rev-parse', `${spikeSeries[2]}^{tree}`]), '8'.repeat(40)],
+    [
+      command(spike, ['rev-list', '--parents', '-n', '1', spikeSeries[2]]),
+      `${spikeSeries[2]} ${spikeSeries[1]}`,
     ],
   ]);
   const git = (directory, args) => {
     const key = command(directory, args);
+    if (args[args.indexOf('diff') + 1] === '--name-status') {
+      const separator = args.indexOf('--');
+      const from = args[separator - 2];
+      const to = args[separator - 1];
+      return (changedByRange.get(`${from}..${to}`) ?? [])
+        .map((relativePath) => `M\t${relativePath}`)
+        .join('\n');
+    }
+    if (args[0] === 'ls-tree') {
+      const commit = args[2];
+      const relativePath = args[4];
+      const states = directory === repository ? sourceStates : appliedStates;
+      const label = states.get(commit)?.[relativePath];
+      if (label === undefined) throw new Error(`unexpected tree path ${key}`);
+      return `100644 blob ${objects.get(label)}\t${relativePath}`;
+    }
     if (!answers.has(key)) throw new Error(`unexpected git request ${key}`);
     return answers.get(key);
   };
@@ -1549,7 +1729,8 @@ function candidateFixture({ spikeStatus = '' } = {}) {
     dependencies: {
       git,
       patch: () => patch,
-      patchId: () => candidate.patchId,
+      patchId: () => 'f'.repeat(40),
+      readBlob: (_root, objectId) => bytesByObject.get(objectId),
     },
     repository,
     spike,
@@ -1558,7 +1739,7 @@ function candidateFixture({ spikeStatus = '' } = {}) {
   };
 }
 
-function realRebasedCandidateFixture() {
+function realRebasedCandidateFixture({ sourcePathDrift = false } = {}) {
   const container = temporaryDirectory('kovo-dev-generation-rebased-candidate-');
   const repository = path.join(container, 'repository');
   const baseline = path.join(container, 'baseline');
@@ -1574,15 +1755,27 @@ function realRebasedCandidateFixture() {
   git(repository, ['init', '--quiet']);
   git(repository, ['config', 'user.name', 'Kovo test']);
   git(repository, ['config', 'user.email', 'kovo-test@invalid.example']);
-  writeFileSync(path.join(repository, 'one.ts'), 'export const one = 1;\n');
+  const oneBase = [
+    'export const one = 1;',
+    'export const stableA = 1;',
+    'export const stableB = 2;',
+    'export const stableC = 3;',
+    'export const stableD = 4;',
+    'export const stableE = 5;',
+    'export const stableF = 6;',
+    'export const stableG = 7;',
+    '',
+  ].join('\n');
+  writeFileSync(path.join(repository, 'one.ts'), oneBase);
   writeFileSync(path.join(repository, 'two.ts'), 'export const two = 2;\n');
   writeFileSync(path.join(repository, 'unrelated.md'), 'base\n');
   git(repository, ['add', '.']);
   git(repository, ['commit', '--quiet', '-m', 'base']);
   const parent = git(repository, ['rev-parse', 'HEAD']).trim();
+  const parentTree = git(repository, ['rev-parse', 'HEAD^{tree}']).trim();
   git(repository, ['branch', 'candidate']);
   git(repository, ['checkout', '--quiet', 'candidate']);
-  writeFileSync(path.join(repository, 'one.ts'), 'export const one = 11;\n');
+  writeFileSync(path.join(repository, 'one.ts'), oneBase.replace('one = 1', 'one = 11'));
   git(repository, ['add', 'one.ts']);
   git(repository, ['commit', '--quiet', '-m', 'candidate first']);
   const firstCommit = git(repository, ['rev-parse', 'HEAD']).trim();
@@ -1592,28 +1785,17 @@ function realRebasedCandidateFixture() {
   git(repository, ['commit', '--quiet', '-m', 'candidate second']);
   const secondCommit = git(repository, ['rev-parse', 'HEAD']).trim();
   const secondTree = git(repository, ['rev-parse', 'HEAD^{tree}']).trim();
-  writeFileSync(path.join(repository, 'one.ts'), 'export const one = 111;\n');
+  writeFileSync(path.join(repository, 'one.ts'), oneBase.replace('one = 1', 'one = 111'));
   git(repository, ['add', 'one.ts']);
   git(repository, ['commit', '--quiet', '-m', 'candidate third']);
   const commit = git(repository, ['rev-parse', 'HEAD']).trim();
   const tree = git(repository, ['rev-parse', 'HEAD^{tree}']).trim();
-  const patch = execFileSync('git', [
-    '-C',
-    repository,
-    'diff',
-    '--binary',
-    '--full-index',
-    '--no-ext-diff',
-    parent,
-    commit,
-  ]);
-  const patchId = execFileSync('git', ['patch-id', '--stable'], { input: patch })
-    .toString('utf8')
-    .trim()
-    .split(/\s+/u)[0];
   git(repository, ['checkout', '--quiet', '-b', 'source', parent]);
   writeFileSync(path.join(repository, 'unrelated.md'), 'newer unrelated source\n');
-  git(repository, ['add', 'unrelated.md']);
+  if (sourcePathDrift) {
+    writeFileSync(path.join(repository, 'one.ts'), oneBase.replace('stableG = 7', 'stableG = 70'));
+  }
+  git(repository, ['add', 'unrelated.md', ...(sourcePathDrift ? ['one.ts'] : [])]);
   git(repository, ['commit', '--quiet', '-m', 'newer unrelated source']);
   const sourceCommit = git(repository, ['rev-parse', 'HEAD']).trim();
   git(repository, ['checkout', '--quiet', 'candidate']);
@@ -1626,9 +1808,7 @@ function realRebasedCandidateFixture() {
     candidate: {
       commit,
       parent,
-      patchBytes: patch.byteLength,
-      patchId,
-      patchSha256: `sha256:${createHash('sha256').update(patch).digest('hex')}`,
+      parentTree,
       paths: ['one.ts', 'two.ts'],
       ref: 'refs/heads/candidate',
       series: [
@@ -1656,6 +1836,88 @@ function toolingIdentity() {
   };
 }
 
+function candidateBindingFixture(baselineRoot, spikeRoot, baselineCommit, spikeCommit) {
+  const descriptors = ['1', '2', '3', '4'].map((seed, index) => ({
+    byteLength: 16 + index,
+    mode: '100644',
+    objectId: seed.repeat(40),
+    sha256: digest(seed),
+  }));
+  const stepChanges = descriptors
+    .slice(1)
+    .map((after, index) => [{ after, before: descriptors[index], path: 'one.ts' }]);
+  const endpoints = [{ after: descriptors[3], before: descriptors[0], path: 'one.ts' }];
+  const hostPatch = {
+    byteLength: 128,
+    patchId: '5'.repeat(40),
+    sha256: digest('5'),
+  };
+  const contentSha256 = digest('6');
+  const sourceParent = 'b'.repeat(40);
+  const sourceCommits = ['c'.repeat(40), 'd'.repeat(40), 'e'.repeat(40)];
+  const sourceTrees = ['6'.repeat(40), '7'.repeat(40), '8'.repeat(40)];
+  const appliedCommits = ['9'.repeat(40), 'a'.repeat(40), spikeCommit];
+  const appliedTrees = ['9'.repeat(40), 'a'.repeat(40), 'f'.repeat(40)];
+  const sourceSeries = sourceCommits.map((commit, index) => ({
+    changes: stepChanges[index],
+    commit,
+    deltaSha256: digest(String(index + 7)),
+    hostPatch,
+    parent: index === 0 ? sourceParent : sourceCommits[index - 1],
+    paths: ['one.ts'],
+    tree: sourceTrees[index],
+  }));
+  const appliedSeries = appliedCommits.map((commit, index) => ({
+    changes: stepChanges[index],
+    commit,
+    deltaSha256: sourceSeries[index].deltaSha256,
+    hostPatch,
+    parent: index === 0 ? baselineCommit : appliedCommits[index - 1],
+    paths: ['one.ts'],
+    source: {
+      commit: sourceCommits[index],
+      parent: sourceSeries[index].parent,
+      tree: sourceTrees[index],
+    },
+    tree: appliedTrees[index],
+  }));
+  return {
+    baseline: { commit: baselineCommit, root: baselineRoot },
+    candidate: {
+      commit: sourceCommits[2],
+      parent: sourceParent,
+      parentTree: 'b'.repeat(40),
+      paths: ['one.ts'],
+      ref: 'refs/heads/perf-spike/fixture',
+      series: sourceSeries.map(({ commit, parent, tree }) => ({ commit, parent, tree })),
+      sourceDelta: {
+        contentSha256,
+        endpoints,
+        hostPatch,
+        paths: ['one.ts'],
+        schema: DEV_GENERATION_CANDIDATE_DELTA_SCHEMA,
+        series: sourceSeries,
+      },
+      tree: sourceTrees[2],
+    },
+    schema: DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
+    spike: {
+      appliedDelta: {
+        contentSha256,
+        endpoints,
+        hostPatch,
+        paths: ['one.ts'],
+        schema: DEV_GENERATION_CANDIDATE_DELTA_SCHEMA,
+        series: appliedSeries,
+      },
+      commit: spikeCommit,
+      parent: baselineCommit,
+      root: spikeRoot,
+      series: appliedCommits,
+    },
+  };
+}
+
 function preparedFixture(baselineRoot, spikeRoot) {
   const baseline = sourceState('a'.repeat(40));
   const spike = sourceState('b'.repeat(40));
@@ -1665,12 +1927,12 @@ function preparedFixture(baselineRoot, spikeRoot) {
     spike: productCapability(spike, 'prepared-spike'),
   };
   return {
-    candidateBinding: {
-      baseline: { commit: baseline.commit, root: baselineRoot },
-      candidate: { commit: 'c'.repeat(40), patchId: 'd'.repeat(40), patchSha256: digest('e') },
-      schema: 'kovo-dev-generation-candidate-binding/v5',
-      spike: { commit: spike.commit, parent: baseline.commit, root: spikeRoot },
-    },
+    candidateBinding: candidateBindingFixture(
+      baselineRoot,
+      spikeRoot,
+      baseline.commit,
+      spike.commit,
+    ),
     cleanup() {},
     corpus: { baseline: corpus, spike: corpus },
     frozenInstall: {
