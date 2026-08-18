@@ -364,6 +364,28 @@ describe('runtimeRegistryFacts', () => {
     expect(combinedPostureWire).toContain('registerGeneratedRuntimePostureManifest({');
   });
 
+  it('ignores inherited optional registry fields when serializing committed wire bytes', () => {
+    const facts = { mutationTouches: {}, queryReads: [] };
+    const before = serializeRuntimeRegistryWireModule(facts);
+    const previous = Object.getOwnPropertyDescriptor(Object.prototype, 'cacheInfluence');
+    try {
+      Object.defineProperty(Object.prototype, 'cacheInfluence', {
+        configurable: true,
+        value: { injected: true },
+      });
+      const after = serializeRuntimeRegistryWireModule(facts);
+      expect(after).toBe(before);
+      expect(after).not.toContain('\nregisterGeneratedCacheInfluenceManifest(');
+      expect(after).not.toContain('injected');
+    } finally {
+      if (previous === undefined) {
+        delete (Object.prototype as { cacheInfluence?: unknown }).cacheInfluence;
+      } else {
+        Object.defineProperty(Object.prototype, 'cacheInfluence', previous);
+      }
+    }
+  });
+
   it('projects runtime registry authority despite late build-realm intrinsic poison', () => {
     const graph = {
       queries: [{ domains: ['inventory', 'account'], query: 'queries/private-account' }],

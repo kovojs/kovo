@@ -879,6 +879,36 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     expect(buildRegistry).not.toContain('https://a.example.test');
   });
 
+  it('keeps committed registry bytes stable across late inherited optional facts', async () => {
+    const root = await fixture({
+      'src/components/registry-image.tsx': BROWSER_RUNTIME_REGISTRY_SOURCE_A,
+    });
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    await plugin.configResolved({ command: 'build', root });
+    const registryId = await plugin.resolveId(
+      'virtual:kovo-runtime-registry:/src/app.tsx',
+      join(root, 'src/app.tsx'),
+    );
+    const before = await plugin.load(registryId as string);
+    const previous = Object.getOwnPropertyDescriptor(Object.prototype, 'cacheInfluence');
+    try {
+      Object.defineProperty(Object.prototype, 'cacheInfluence', {
+        configurable: true,
+        value: { injected: true },
+      });
+      const after = await plugin.load(registryId as string);
+      expect(after).toBe(before);
+      expect(after).not.toContain('\nregisterGeneratedCacheInfluenceManifest(');
+      expect(after).not.toContain('injected');
+    } finally {
+      if (previous === undefined) {
+        delete (Object.prototype as { cacheInfluence?: unknown }).cacheInfluence;
+      } else {
+        Object.defineProperty(Object.prototype, 'cacheInfluence', previous);
+      }
+    }
+  });
+
   it('commits a complete registry synchronously on the split-owner HMR path', async () => {
     const root = await fixture({
       'src/components/registry-image.tsx': BROWSER_RUNTIME_REGISTRY_SOURCE_A,

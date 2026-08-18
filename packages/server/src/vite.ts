@@ -54,7 +54,6 @@ import {
   type DataPlaneSourceFile,
   type DataPlaneAnalysisDisposition,
   type DataPlaneDiagnostic,
-  type DataPlaneRuntimeRegistryFacts as RuntimeRegistryFacts,
   type QueryShapeFact as DataPlaneQueryShapeFact,
   type ViteDataPlaneAnalysisSnapshot,
 } from './internal/data-plane-static-analysis.ts';
@@ -407,7 +406,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       return staticAnalysisCanonicalJson({
         mutationFacts: snapshot.mutationFacts,
         queryFacts: snapshot.queryFacts,
-        runtimeRegistryFacts: snapshot.runtimeRegistryFacts,
+        runtimeRegistryModule: snapshot.runtimeRegistryModule,
       });
     } catch {
       // An unserializable fact set can never prove "unchanged"; fall back to a unique token so
@@ -1026,7 +1025,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
             'Kovo runtime registry was requested before a whole-project analysis snapshot was committed.',
           );
         }
-        return serializeRuntimeRegistryWireModule(committed.snapshot.runtimeRegistryFacts);
+        return committed.snapshot.runtimeRegistryModule;
       }
       if (externalCompilerPlugin !== undefined) return null;
       return (await compilerPlugin()).load?.(id) ?? null;
@@ -1548,7 +1547,7 @@ interface ViteProjectAnalysisSnapshot {
   readonly files: readonly DataPlaneSourceFile[];
   readonly mutationFacts: ProjectMutationRegistryFacts;
   readonly queryFacts: readonly CompilerViteQueryShapeFact[];
-  readonly runtimeRegistryFacts: RuntimeRegistryFacts;
+  readonly runtimeRegistryModule: string;
   readonly sourceIdentity: string;
 }
 
@@ -1573,7 +1572,9 @@ async function collectViteProjectAnalysisSnapshot(
     files: analysis.files,
     mutationFacts: compilerOwnedProjectMutationRegistryFactsFromFiles(mutationSourceFiles, root),
     queryFacts: compilerViteQueryShapeFacts(analysis.queryShapeFacts),
-    runtimeRegistryFacts: analysis.runtimeRegistryFacts,
+    // SPEC §9.5.1: commit the exact immutable virtual-module bytes beside every other project
+    // fact. Later `load()` calls must not re-read mutable prototypes or a retained fact graph.
+    runtimeRegistryModule: serializeRuntimeRegistryWireModule(analysis.runtimeRegistryFacts),
     sourceIdentity: analysis.sourceIdentity,
   });
   assertViteProjectAnalysisDiagnosticSources(snapshot, root);

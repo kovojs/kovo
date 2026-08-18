@@ -712,25 +712,73 @@ export function runtimeRegistryWireFactsFromGraph(
 
 /** @internal Serialize the runtime registry virtual module consumed by dev and production. */
 export function serializeRuntimeRegistryWireModule(registry: RuntimeRegistryWireFacts): string {
-  const browserPosture =
-    registry.browserPosture === undefined
+  if (registry === null || typeof registry !== 'object') {
+    throw new TypeError('Runtime registry wire facts must be an object.');
+  }
+  // SPEC §6.6 / §9.5.1: authored modules share this realm in development. Snapshot every
+  // wire field through own data descriptors before producing bytes so an inherited late value
+  // cannot change a compiler-owned committed registry generation.
+  const browserPostureProperty = buildOwnDataProperty(
+    registry,
+    'browserPosture',
+    'runtime registry wire facts.browserPosture',
+  );
+  const cacheInfluenceProperty = buildOwnDataProperty(
+    registry,
+    'cacheInfluence',
+    'runtime registry wire facts.cacheInfluence',
+  );
+  const mutationTouchesProperty = buildOwnDataProperty(
+    registry,
+    'mutationTouches',
+    'runtime registry wire facts.mutationTouches',
+  );
+  const queryReadsProperty = buildOwnDataProperty(
+    registry,
+    'queryReads',
+    'runtime registry wire facts.queryReads',
+  );
+  const runtimePostureProperty = buildOwnDataProperty(
+    registry,
+    'runtimePosture',
+    'runtime registry wire facts.runtimePosture',
+  );
+  const tableSecurityProperty = buildOwnDataProperty(
+    registry,
+    'tableSecurity',
+    'runtime registry wire facts.tableSecurity',
+  );
+  if (!mutationTouchesProperty.present || mutationTouchesProperty.value === undefined) {
+    throw new TypeError('Runtime registry mutation touches must be an own data property.');
+  }
+  if (!queryReadsProperty.present || queryReadsProperty.value === undefined) {
+    throw new TypeError('Runtime registry query reads must be an own data property.');
+  }
+  const browserPosture = browserPostureProperty.present ? browserPostureProperty.value : undefined;
+  const cacheInfluence = cacheInfluenceProperty.present ? cacheInfluenceProperty.value : undefined;
+  const mutationTouches = mutationTouchesProperty.value;
+  const queryReads = queryReadsProperty.value;
+  const runtimePosture = runtimePostureProperty.present ? runtimePostureProperty.value : undefined;
+  const tableSecurity = tableSecurityProperty.present ? tableSecurityProperty.value : undefined;
+  const browserPostureSource =
+    browserPosture === undefined
       ? ''
-      : `registerGeneratedBrowserPostureManifest(${buildSecuritySourceLiteral(registry.browserPosture)});\n`;
-  const cacheInfluence =
-    registry.cacheInfluence === undefined
+      : `registerGeneratedBrowserPostureManifest(${buildSecuritySourceLiteral(browserPosture)});\n`;
+  const cacheInfluenceSource =
+    cacheInfluence === undefined
       ? ''
-      : `registerGeneratedCacheInfluenceManifest(${buildSecuritySourceLiteral(registry.cacheInfluence)});\n`;
-  const queryReads = buildSecuritySourceLiteral(registry.queryReads);
-  const mutationTouches = buildSecuritySourceLiteral(registry.mutationTouches);
-  const tableSecurity =
-    registry.tableSecurity === undefined
+      : `registerGeneratedCacheInfluenceManifest(${buildSecuritySourceLiteral(cacheInfluence)});\n`;
+  const queryReadsSource = buildSecuritySourceLiteral(queryReads);
+  const mutationTouchesSource = buildSecuritySourceLiteral(mutationTouches);
+  const tableSecuritySource =
+    tableSecurity === undefined
       ? ''
-      : `registerGeneratedTableSecurityManifest(${buildSecuritySourceLiteral(registry.tableSecurity)});\n`;
-  const runtimePosture =
-    registry.runtimePosture === undefined
+      : `registerGeneratedTableSecurityManifest(${buildSecuritySourceLiteral(tableSecurity)});\n`;
+  const runtimePostureSource =
+    runtimePosture === undefined
       ? ''
-      : `registerGeneratedRuntimePostureManifest(${buildSecuritySourceLiteral(registry.runtimePosture)});\n`;
-  return `import { registerGeneratedBrowserPostureManifest, registerGeneratedCacheInfluenceManifest, registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedRuntimePostureManifest, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';\n${browserPosture}${cacheInfluence}${tableSecurity}${runtimePosture}registerGeneratedQueryReadRegistry(${queryReads});\nregisterGeneratedMutationTouchRegistry(${mutationTouches});\n`;
+      : `registerGeneratedRuntimePostureManifest(${buildSecuritySourceLiteral(runtimePosture)});\n`;
+  return `import { registerGeneratedBrowserPostureManifest, registerGeneratedCacheInfluenceManifest, registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedRuntimePostureManifest, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';\n${browserPostureSource}${cacheInfluenceSource}${tableSecuritySource}${runtimePostureSource}registerGeneratedQueryReadRegistry(${queryReadsSource});\nregisterGeneratedMutationTouchRegistry(${mutationTouchesSource});\n`;
 }
 
 function snapshotOptionalArray(
