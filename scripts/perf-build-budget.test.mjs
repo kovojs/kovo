@@ -885,6 +885,7 @@ function comparisonReport({ corpusSize, run, sourceCommit }) {
     analysis[metricKey(corpusSize, mode, 'peakRssBytes')] = metricSummary(180 + run, 100 + run);
     analysis[metricKey(corpusSize, mode, 'artifactBytes')] = metricSummary(1_000 + run, 900 + run);
   }
+  const source = { commit: sourceCommit, dirty: false, dirtyPaths: [], locks };
   return {
     analysis,
     execution,
@@ -908,7 +909,8 @@ function comparisonReport({ corpusSize, run, sourceCommit }) {
       sourceCommit,
     }),
     schema: 'kovo-next-performance-comparison/v1',
-    source: { commit: sourceCommit, dirty: false, dirtyPaths: [], locks },
+    source,
+    sourceAfter: structuredClone(source),
     verdict: { reasons: [], status: 'measured' },
     workloadIdentity: workload,
   };

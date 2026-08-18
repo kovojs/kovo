@@ -109,6 +109,18 @@ describe('performance baseline ratification', () => {
     expect(result.metrics).toEqual({});
   });
 
+  it('rejects comparison evidence whose source changed during the run', () => {
+    const entries = [100, 102, 104, 106, 108].map((durationMs, index) =>
+      entryFixture(index, durationMs),
+    );
+    entries[0].report.sourceAfter.commit = 'b'.repeat(40);
+
+    const result = ratifyPerformanceBaseline(entries, { requireProvider: 'any' });
+
+    expect(result.verdict.status).toBe('unproven');
+    expect(result.verdict.reasons).toContain('report[0] source changed during the run');
+  });
+
   it('requires five reports and the configured execution provider', () => {
     const result = ratifyPerformanceBaseline([entryFixture(0, 100)], {
       requireProvider: 'github-actions',
@@ -322,6 +334,16 @@ function entryFixture(index, durationMs) {
     provider: 'local',
     startedAt: `2026-08-13T12:00:0${String(index)}.000Z`,
   };
+  const source = {
+    commit: 'a'.repeat(40),
+    dirty: false,
+    dirtyPaths: [],
+    locks: {
+      'benchmarks/harness/pnpm-lock.yaml': digest('harness lock'),
+      'benchmarks/nextjs/pnpm-lock.yaml': digest('next lock'),
+      'pnpm-lock.yaml': digest('root lock'),
+    },
+  };
   const report = {
     analysis: {
       'matched-runtime/server/dynamic.durationMs': metricFixture(durationMs),
@@ -348,16 +370,8 @@ function entryFixture(index, durationMs) {
       workloadAuthenticated: true,
     },
     schema: 'kovo-next-performance-comparison/v1',
-    source: {
-      commit: 'a'.repeat(40),
-      dirty: false,
-      dirtyPaths: [],
-      locks: {
-        'benchmarks/harness/pnpm-lock.yaml': digest('harness lock'),
-        'benchmarks/nextjs/pnpm-lock.yaml': digest('next lock'),
-        'pnpm-lock.yaml': digest('root lock'),
-      },
-    },
+    source,
+    sourceAfter: structuredClone(source),
     verdict: { reasons: [], status: 'measured' },
     workloadIdentity: {
       complete: true,

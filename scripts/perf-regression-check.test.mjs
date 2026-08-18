@@ -105,6 +105,36 @@ describe('performance regression comparator', () => {
     expect(comparePerformanceReports(reportFixture(), report).verdict.status).toBe('unproven');
   });
 
+  it('returns unproven for missing, malformed, dirty, or lock-drifted sourceAfter', () => {
+    const mutations = [
+      (report) => {
+        delete report.sourceAfter;
+      },
+      (report) => {
+        report.sourceAfter = 'malformed';
+      },
+      (report) => {
+        report.sourceAfter.dirty = true;
+        report.sourceAfter.dirtyPaths = [' M package.json'];
+      },
+      (report) => {
+        report.sourceAfter.locks['pnpm-lock.yaml'] = digest('drifted lock');
+      },
+    ];
+    for (const mutate of mutations) {
+      const report = reportFixture();
+      mutate(report);
+
+      expect(performanceReportFindings(report, 'candidate')).toContain(
+        'candidate source changed during the run',
+      );
+      expect(comparePerformanceReports(reportFixture(), report).verdict).toMatchObject({
+        reasons: expect.arrayContaining(['candidate source changed during the run']),
+        status: 'unproven',
+      });
+    }
+  });
+
   it('uses the terminal server quiet-host admission without erasing earlier polls', () => {
     const report = reportFixture();
     report.hostSamples = [
@@ -278,6 +308,16 @@ function reportFixture({
       warmups: 3,
     },
   };
+  const source = {
+    commit: 'a'.repeat(40),
+    dirty: false,
+    dirtyPaths: [],
+    locks: {
+      'benchmarks/harness/pnpm-lock.yaml': digest('harness lock'),
+      'benchmarks/nextjs/pnpm-lock.yaml': digest('next lock'),
+      'pnpm-lock.yaml': digest('root lock'),
+    },
+  };
   return {
     analysis: {
       'matched-runtime/server/dynamic.durationMs': metricFixture(durationMs),
@@ -314,16 +354,8 @@ function reportFixture({
     policy: workloadFacts.policies,
     rawCells: [{ cell: 'server' }],
     schema: 'kovo-next-performance-comparison/v1',
-    source: {
-      commit: 'a'.repeat(40),
-      dirty: false,
-      dirtyPaths: [],
-      locks: {
-        'benchmarks/harness/pnpm-lock.yaml': digest('harness lock'),
-        'benchmarks/nextjs/pnpm-lock.yaml': digest('next lock'),
-        'pnpm-lock.yaml': digest('root lock'),
-      },
-    },
+    source,
+    sourceAfter: structuredClone(source),
     verdict: { reasons: [], status: 'measured' },
     workloadIdentity: {
       complete: true,

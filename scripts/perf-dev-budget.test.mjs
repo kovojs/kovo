@@ -488,6 +488,7 @@ function comparisonReport({ corpusSize, run, sourceCommit }) {
     const samples = suffix.startsWith('ready.') ? 15 : 30;
     analysis[metricKey(corpusSize, suffix)] = metricSummary(1, 1, samples, { p95Offset: 0 });
   }
+  const source = { commit: sourceCommit, dirty: false, dirtyPaths: [], locks };
   return {
     analysis,
     execution,
@@ -511,7 +512,8 @@ function comparisonReport({ corpusSize, run, sourceCommit }) {
       sourceCommit,
     }),
     schema: 'kovo-next-performance-comparison/v1',
-    source: { commit: sourceCommit, dirty: false, dirtyPaths: [], locks },
+    source,
+    sourceAfter: structuredClone(source),
     verdict: { reasons: [], status: 'measured' },
     workloadIdentity: workload,
   };

@@ -159,6 +159,7 @@ export async function runComparison(options = {}) {
       schema: COMPARE_SCHEMA,
       serverPreparation: [],
       source: provenance,
+      sourceAfter: provenance,
       workloadIdentity,
     };
     report.verdict = comparisonVerdict(report);
@@ -631,6 +632,7 @@ export async function runComparison(options = {}) {
       schema: COMPARE_SCHEMA,
       serverPreparation,
       source: provenance,
+      sourceAfter: finalProvenance,
       workloadIdentity,
     };
     report.integrity.comparatorMatched = report.integrity.comparator.matched;
@@ -655,7 +657,12 @@ export async function runComparison(options = {}) {
 export function comparisonVerdict(report) {
   const reasons = [];
   if (report.source?.dirty) reasons.push('source provenance is dirty');
-  if (report.integrity?.sourceStable !== true) reasons.push('source provenance changed during run');
+  if (
+    report.integrity?.sourceStable !== true ||
+    canonicalJson(report.source) !== canonicalJson(report.sourceAfter)
+  ) {
+    reasons.push('source provenance changed during run');
+  }
   if (report.integrity?.comparatorMatched !== true)
     reasons.push('comparator pairing is incomplete');
   for (const reason of report.integrity?.comparator?.reasons ?? []) reasons.push(reason);

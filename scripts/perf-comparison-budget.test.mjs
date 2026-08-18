@@ -713,6 +713,7 @@ function reportEntry(index, subject) {
       ? { rawCells: browserRawCells() }
       : { rawCells: serverBrotliRawCells() }),
     source,
+    sourceAfter: structuredClone(source),
     verdict: { reasons: [], status: 'measured' },
     workloadIdentity: {
       complete: true,

@@ -738,6 +738,24 @@ describe('serialized comparison analysis', () => {
       ],
       status: 'unproven',
     });
+
+    const source = { commit: 'a'.repeat(40), dirty: false, dirtyPaths: [], locks: {} };
+    expect(
+      comparisonVerdict({
+        integrity: {
+          comparatorMatched: true,
+          executionAuthenticated: true,
+          serialized: true,
+          sourceStable: true,
+          workloadAuthenticated: true,
+        },
+        source,
+        sourceAfter: { ...source, commit: 'b'.repeat(40) },
+      }),
+    ).toMatchObject({
+      reasons: expect.arrayContaining(['source provenance changed during run']),
+      status: 'unproven',
+    });
   });
 
   it('uses truthful per-framework script contracts for default and matched fixtures', () => {

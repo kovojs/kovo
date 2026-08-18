@@ -99,6 +99,9 @@ export function performanceReportFindings(report, label, policy = {}) {
   if (report.source?.dirty !== false || report.source?.dirtyPaths?.length !== 0) {
     findings.push(`${label} source is dirty`);
   }
+  if (canonicalJson(report.source) !== canonicalJson(report.sourceAfter)) {
+    findings.push(`${label} source changed during the run`);
+  }
   for (const lock of requiredLocks) {
     if (!digestPattern.test(report.source?.locks?.[lock] ?? '')) {
       findings.push(`${label} ${lock} digest is unavailable`);
