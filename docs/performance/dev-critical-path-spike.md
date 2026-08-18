@@ -176,28 +176,56 @@ authorizes integration.
 
 ## Repaired candidate status
 
-Status: **awaiting the hosted N=24 and N=216 decision; no result is claimed yet**.
+Status: **rejected; do not integrate the repaired async-analysis series**.
 
-[Run `32187892588`, N=24 job
-`95875635162`](https://github.com/kovojs/kovo/actions/runs/32187892588/job/95875635162) is
-authenticated diagnostic evidence only. It checked out exact source
-`a69f823ccb34aa41ec13b4215e95eb23da6d1197`, fetched the exact durable candidate ref, verified the
-three source parents, and cleanly created the three-commit applied series, but failed before its
-first benchmark sample because v5 compared Git-version-dependent combined diff constants. Clean
-local worktrees at the same source reproduced zero drift on all six candidate paths. The clean
-applied series was `406210810a1a3731e118a73540ce32bee60f327e` →
-`11adfd50e3a3f0c06ebc8ceb6d7fcb3cbd2fa821` →
-`fd52ed21565fd04567280c1f0b43a3b006ee1aa5`, with final tree
-`50c0d5f6836518e667cc745be316749d3f1c43cc`; its canonical delta digest exactly matched the source
-digest above. The reproduction proved that the two raw identities describe the same source and
-applied blob transitions. The run cannot be treated as `accept` or `reject`; a new v6 run is
-required.
+[Run `32191978426`](https://github.com/kovojs/kovo/actions/runs/32191978426) checked out exact clean
+source `85a9feddc50340c8c17df2144140e11211be1beb`, authenticated the durable ref at exact tip
+`1c591eca2fa7d1ba9c5cf90673cea36c54ee158f`, and reproduced the three declared source commits,
+parents, trees, six-path blob census, and canonical delta digest `sha256:73d211d9…`. Fresh external
+baseline/candidate worktrees independently replayed the same applied trees. The N=24 and N=216
+jobs ran separately on the same normalized AMD EPYC 7763 hosted-runner posture:
 
-The workflow prepares clean committed baseline and candidate worktrees, applies the exact bound
-three-commit series, and runs the unchanged serialized `B,S,S,B` contract independently for both
-corpora. Only two complete reports that each say `accept` can authorize integration.
-Candidate binding is evidence identity, not publication authority; a separate independent review
-of the repaired tip must also complete before the candidate ref is published.
+- [N=24 job `95888055564`](https://github.com/kovojs/kovo/actions/runs/32191978426/job/95888055564),
+  [artifact `9345412871`](https://github.com/kovojs/kovo/actions/runs/32191978426/artifacts/9345412871):
+  ZIP SHA-256 `f97cf7bd2248daa17dcad4b64d5377c5fc96e9ef10f3e602f188eccf1d318433`, report SHA-256
+  `11d37fd373aa1c9c64e609b102dd47a7630dd4c8976e49c85f6ad43c71a2ab64`.
+- [N=216 job `95888055524`](https://github.com/kovojs/kovo/actions/runs/32191978426/job/95888055524),
+  [artifact `9346485781`](https://github.com/kovojs/kovo/actions/runs/32191978426/artifacts/9346485781):
+  ZIP SHA-256 `64ea0bf504814e3f51cbf66ba9c64a4816a90d5da2e5df8347c5ffa339ff30f9`, report SHA-256
+  `0e93792fd48e3f0e349a2b987c18860926967ae99cc5dc513c3da6c077bf9c7c`.
+
+Both ZIPs contain exactly `report.json` and the four CRC-valid raw `B,S,S,B` reports. Independent
+aggregation replay reproduced each checked-in analysis. Both decisions are complete measured
+`reject` results, not infrastructure or evidence failures:
+
+| Browser-visible metric |       N=24 median, baseline → candidate |        N=216 median, baseline → candidate |
+| ---------------------- | --------------------------------------: | ----------------------------------------: |
+| Fresh ready            | 26,934.78 → 28,194.30 ms (4.68% slower) | 74,833.50 → 111,834.20 ms (49.44% slower) |
+| Leaf edit-to-paint     |  4,164.27 → 2,280.28 ms (45.24% faster) |    8,597.17 → 2,413.40 ms (71.93% faster) |
+| Entry edit-to-paint    |  4,147.14 → 2,252.29 ms (45.69% faster) |    8,532.63 → 2,347.06 ms (72.49% faster) |
+| Data edit-to-paint     |  4,114.16 → 2,245.37 ms (45.42% faster) |    8,580.26 → 2,296.89 ms (73.23% faster) |
+| Recovery               |   2,182.20 → 2,148.64 ms (1.54% faster) |    2,803.16 → 2,312.72 ms (17.50% faster) |
+
+N=24 fails three declared conditions: recovery improves only 1.54%, its paired 95% confidence
+interval `[-133.80, +125.43] ms` crosses zero, recovery p95 is 2,382.57 ms, and syntax median
+regresses 8.99%. N=216 fails fresh-ready decisively: median and p95 regress 49.44% and 49.09%, with
+paired baseline-minus-candidate confidence interval `[-37,993.60, -36,240.01] ms`; its recovery
+p95 is also 2,476.41 ms. N=216's four causal edit medians and confidence intervals otherwise pass,
+as do its syntax and RSS guardrails. N=24's leaf, entry, and data causal checks pass, but that cannot
+override its recovery and syntax failures.
+
+Each report retains the exact four-cell schedule, 15 fresh-ready samples, 30 measured edits per
+class, and three warmups per lane. All host admissions passed; product-boundary verification covered
+all eight cells; and there were zero adapter errors, unproven cells, misses, browser request
+failures, unexpected browser errors, or state-loss events. Every class survived state 60/60 per
+corpus and produced all 60 syntax diagnostics. The workflow jobs conclude `failure` only because a
+measured rejection exits nonzero; both commit-pinned artifact uploads succeeded.
+
+Earlier [run `32187892588`](https://github.com/kovojs/kovo/actions/runs/32187892588) remains
+diagnostic evidence only. It authenticated the same source transition but stopped before sampling
+because v5 treated a Git-version-dependent textual patch rendering as durable identity. V6 replaced
+that check with the canonical object-format-bound blob census used by the final run above; the
+earlier run is neither an accept nor an additional rejection.
 
 ## Historical rejected candidate result
 
@@ -261,6 +289,6 @@ SPEC §4.1, so `2da4640f1` must not be pushed, measured, or integrated.
 
 The repaired series bound above keeps only the separately profiled async whole-project analysis
 settlement for ordinary edits, removes dependency-sensitive query reuse entirely, and adds the
-atomic registry publication and frozen-byte repairs. It is a new sealed candidate, not a retry of
-either rejected patch, and remains unmeasured until it independently passes the same full
-packed-product N=24 and N=216 contract.
+atomic registry publication and frozen-byte repairs. It is a distinct sealed candidate, not a retry
+of either earlier patch, but the complete N=24 and N=216 measurements above reject it. None of its
+three commits may enter production history under this decision.

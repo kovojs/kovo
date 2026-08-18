@@ -1,6 +1,6 @@
 # Competitive performance: Kovo vs Next.js
 
-Updated 2026-08-14. Owner: performance. This is the single active performance ledger. Framework
+Updated 2026-08-18. Owner: performance. This is the single active performance ledger. Framework
 behaviour remains governed by `SPEC.md`; especially §1.1 goal 3, §4.4, §5.2, §8, §9.5, and §11.4.
 The full 2026-08-07/08 investigation remains in git history through `f6e2256af` and its calibrated
 Kovo-only baseline remains in `reports/perf-baseline-2026-08-08.json`.
@@ -169,10 +169,16 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     stale generated `queryNames` crossing the bound generation stage, contrary to SPEC §4.1's
     source-derived, fail-closed identity boundary. Commit/tree/patch custody and the repro are in
     `docs/performance/dev-critical-path-spike.md`.
-- [ ] Decide a fail-closed async-analysis-only refinement. Retain the profiled ordinary-edit win
+- [x] Decide a fail-closed async-analysis-only refinement. Retain the profiled ordinary-edit win
       from moving whole-project teaching/proof convergence off the HMR blocking path, but do not
       cache or reuse dependency-sensitive query identities. Run the same full packed-product N=24
       and N=216 contract independently before integration.
+  - Rejected; do not integrate `1aea7dd06` → `07d6e5b23` → `1c591eca2`.
+    [Run `32191978426`](https://github.com/kovojs/kovo/actions/runs/32191978426) authenticated both
+    exact `B,S,S,B` corpora with complete packed-product/correctness evidence. N=24 failed recovery
+    causal/2 s p95 and syntax-regression gates; N=216 regressed ready median 49.44% and had 2.476 s
+    recovery p95. Artifact custody and exact metrics are in
+    `docs/performance/dev-critical-path-spike.md`.
 - [x] Spike authenticated in-session closure reuse for `kovo check --watch` by exposing serializable
       producer seams for trust/static/style facts in `build-export.ts`.
   - SPEC §11.4 constraints: always freshly evaluate app modules and rebuild runtime/app objects;
@@ -303,18 +309,20 @@ packages/server/src/node.test.ts --reporter=dot` passed 88/88 and covers private
       statistically ratified family.
 - [ ] Store raw reports as CI artifacts and commit only a clean reviewed baseline summary. A dirty,
       null, load-shed, wrong-posture, or integrity-failed run cannot update budgets.
-- [ ] Ratify budgets from at least five independent baseline runs in one exact normalized hosted-runner
-      cohort using median, MAD, p95, and the acceptance rules above; replace rationale-only sample
-      arrays for the realistic seven-family tier with the 21 linked derived baseline, budget, and
-      holdout-evaluation documents. The separate deterministic `perf-budgets.json` tier remains
-      authoritative for the five exact production-byte gates and is linked through the required
-      publication sidecar above.
+- [ ] Ratify budgets from at least five independent baseline runs in one exact normalized
+      per-family hosted-runner/workload cohort using median, MAD, p95, and the acceptance rules
+      above; replace the rationale-only arrays for the realistic seven-family tier with the 21
+      linked derived baseline, budget, and holdout-evaluation documents. The separate deterministic
+      `perf-budgets.json` tier remains authoritative for the five exact production-byte gates and is
+      linked through the required publication sidecar above.
 - [x] Add a regression comparator that requires matching source/lock/workload identities and reports
       `unproven` rather than pass when load, sample count, or identity is outside policy.
   - Evidence: `faf00c5de`, `49f83a2a9`, `3aabc77ae`; comparator/ratifier tests passed 26/26 and
     reject dirty, short, busy, duplicate-execution, or identity-mismatched evidence.
-- [ ] Publish Kovo-vs-Next claims only after both default and capability-matched lanes pass; describe
-      architectural differences beside the numbers and link the exact report and fixture sources.
+- [ ] Publish Kovo-vs-Next claims only after both default and capability-matched first-milestone
+      gates pass; keep stronger competitive follow-on misses literal and separately reported rather
+      than relabeling them as completion failures or wins. Describe architectural differences beside
+      the numbers and link the exact report and fixture sources.
 
 ## Standing constraints
 
