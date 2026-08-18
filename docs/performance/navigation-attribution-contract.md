@@ -80,15 +80,19 @@ independent claim that a self-hash proves the browser produced the evidence.
 
 The publication gate therefore rechecks every raw matched-L1 navigation sample in all five
 baseline reports and the independent holdout. Kovo must have an observed
-`application/vnd.kovo.document-parts+json` primary response and
-`navDocumentReplaced === 0`; Next must have an observed `text/html` primary response authenticated
-as a document navigation and `navDocumentReplaced === 1`. “Authenticated” here means the raw sample
-passes the same v3 attribution validator as the benchmark harness: the attribution digest,
-top-level trace response, Playwright network-witness digest, request/timing identity, trace event
-census, clock boundary, and phase contract must all agree. A self-asserted media type, resource
-type, or navigation flag is insufficient. The gate also reads every raw cold sample to prove Kovo's
-default/matched-L0 zero-script and zero-JavaScript-byte posture and the script-bearing posture of
-the other lanes. These facts are not inferred from aggregate medians or a resealed report.
+`application/vnd.kovo.document-parts+json` primary response whose trace and Playwright witnesses are
+both `fetch` requests with `isNavigationRequest === false`, plus `navDocumentReplaced === 0`. Next
+must have an observed `text/html` primary response authenticated by both witnesses as a document
+navigation and `navDocumentReplaced === 1`. Both entrants must retain a successful `GET` and bind
+the trace target, primary-response URL, and Playwright-witness URL to the exact measured detail path,
+`/matched/l1/product/linen-field-jacket`, without a query or fragment. “Authenticated” here means
+the raw sample passes the same v3 attribution validator as the benchmark harness: the attribution
+digest, top-level trace response, Playwright network-witness digest, request/timing identity, trace
+event census, clock boundary, and phase contract must all agree. A consistently resealed alternate
+route, self-asserted media type, resource type, or navigation flag is insufficient. The gate also
+reads every raw cold sample to prove Kovo's default/matched-L0 zero-script and zero-JavaScript-byte
+posture and the script-bearing posture of the other lanes. These facts are not inferred from
+aggregate medians or a resealed report.
 
 ## Interpretation
 

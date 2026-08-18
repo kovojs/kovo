@@ -392,6 +392,72 @@ describe('browser/server comparison budgets', () => {
     ).toThrow(/navigation attribution primary response is invalid/u);
   });
 
+  it('rejects a consistently resealed matched-L1 response for the wrong destination route', () => {
+    const attack = (report) => {
+      const attribution = matchedL1Attribution(report, 'nextjs', 'mobile');
+      const primary = attribution.primaryResponse;
+      primary.url = 'http://localhost:4820/not-the-measured-detail-route';
+      primary.traceContext.targetPath = '/not-the-measured-detail-route';
+      primary.networkWitness.facts.url = primary.url;
+      resealNavigationAttribution(attribution);
+    };
+    const entries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    attack(entries[0].report);
+    refreshEntry(entries[0]);
+    const baseline = ratifyPerformanceBaseline(entries);
+    expect(baseline.verdict.status).toBe('ratified');
+    expect(() => deriveComparisonPerformanceBudget(baseline, { baselineEntries: entries })).toThrow(
+      /matched-L1 navigation is not bound to the exact measured detail target/u,
+    );
+
+    const clean = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    const budget = deriveComparisonPerformanceBudget(ratifyPerformanceBaseline(clean), {
+      baselineEntries: clean,
+    });
+    const holdout = reportEntry(5, 'browser').report;
+    attack(holdout);
+    expect(evaluateComparisonPerformanceBudget(budget, holdout).verdict).toMatchObject({
+      reasons: expect.arrayContaining([
+        expect.stringMatching(
+          /matched-L1 navigation is not bound to the exact measured detail target/u,
+        ),
+      ]),
+      status: 'unproven',
+    });
+  });
+
+  it('rejects a consistently resealed Kovo document-navigation witness', () => {
+    const attack = (report) => {
+      const attribution = matchedL1Attribution(report, 'kovo', 'desktop');
+      const primary = attribution.primaryResponse;
+      primary.resourceType = 'document';
+      primary.networkWitness.facts.resourceType = 'document';
+      primary.networkWitness.facts.isNavigationRequest = true;
+      resealNavigationAttribution(attribution);
+    };
+    const entries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    attack(entries[0].report);
+    refreshEntry(entries[0]);
+    const baseline = ratifyPerformanceBaseline(entries);
+    expect(baseline.verdict.status).toBe('ratified');
+    expect(() => deriveComparisonPerformanceBudget(baseline, { baselineEntries: entries })).toThrow(
+      /Kovo document-parts fetch posture is not proved/u,
+    );
+
+    const clean = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    const budget = deriveComparisonPerformanceBudget(ratifyPerformanceBaseline(clean), {
+      baselineEntries: clean,
+    });
+    const holdout = reportEntry(5, 'browser').report;
+    attack(holdout);
+    expect(evaluateComparisonPerformanceBudget(budget, holdout).verdict).toMatchObject({
+      reasons: expect.arrayContaining([
+        expect.stringMatching(/Kovo document-parts fetch posture is not proved/u),
+      ]),
+      status: 'unproven',
+    });
+  });
+
   it('requires cold-load JavaScript and total bytes for every lane and form factor', () => {
     for (const requiredMetric of [
       'default/browser//desktop.coldLoad.bytes.js',
@@ -1007,6 +1073,25 @@ function refreshEntry(entry) {
   workload.digest = digest(canonicalJson(workload.identity));
   entry.rawText = `${JSON.stringify(entry.report)}\n`;
   entry.contentDigest = digest(entry.rawText);
+}
+
+function matchedL1Attribution(report, framework, formFactor) {
+  const cell = report.rawCells.find(
+    (candidate) => candidate.framework === framework && candidate.lane === 'matched-l1',
+  );
+  return cell.report.apps[0].conditions[formFactor].navigation.iterations[0].navAttribution;
+}
+
+function resealNavigationAttribution(attribution) {
+  const primary = attribution.primaryResponse;
+  primary.networkWitness.identity = digest(canonicalJson(primary.networkWitness.facts));
+  const primaryFacts = { ...primary };
+  delete primaryFacts.identity;
+  delete primaryFacts.status;
+  primary.identity = digest(canonicalJson(primaryFacts));
+  const attributionFacts = { ...attribution };
+  delete attributionFacts.evidenceDigest;
+  attribution.evidenceDigest = digest(canonicalJson(attributionFacts));
 }
 
 function metric(kovo, nextjs, samples) {

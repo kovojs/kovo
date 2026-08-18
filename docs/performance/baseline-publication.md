@@ -115,10 +115,13 @@ JavaScript bytes; every matched-L1 cold sample must retain a script element; and
 cannot exceed total bytes. Kovo matched L1 must show document-parts without replacing the document;
 Next matched L1 must show a `text/html` document navigation that replaces it. Every matched-L1
 sample must also pass the authoritative navigation-attribution schema, digest, primary-response,
-network-witness, trace, timing, and observation-boundary validation. Resealing an aggregate cannot
-replace this raw posture proof. The check report uses the same authenticated execution, source/lock,
-normalized host-v2, quiet-host, and workload identities as the comparison reports. A dirty, busy,
-incomplete, duplicate, or identity-mismatched report produces `unproven`.
+network-witness, trace, timing, and observation-boundary validation. Its trace target and both
+response URLs must be the exact `/matched/l1/product/linen-field-jacket` detail route, and the
+successful `GET` must retain Kovo's fetch/non-navigation witness or Next's document/navigation
+witness. Resealing an aggregate or a different internally consistent route cannot replace this raw
+posture proof. The check report uses the same authenticated execution, source/lock, normalized
+host-v2, quiet-host, and workload identities as the comparison reports. A dirty, busy, incomplete,
+duplicate, or identity-mismatched report produces `unproven`.
 
 Baseline jobs request 90-day Actions retention, while the PR-only Production-bytes artifact requests
 14 days. Collect and publish the selected sidecar before that shorter window closes. The canonical

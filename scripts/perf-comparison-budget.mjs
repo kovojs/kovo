@@ -44,6 +44,7 @@ const SERVER_MODES = Object.freeze(['HIT', '304', 'dynamic']);
 const SERVER_ROUTES = Object.freeze(['listing', 'detail']);
 const BROWSER_FORM_FACTORS = Object.freeze(['desktop', 'mobile']);
 const BROWSER_ROUTES = Object.freeze(['listing', 'detail']);
+const BROWSER_MATCHED_L1_DETAIL_PATH = '/matched/l1/product/linen-field-jacket';
 const BROWSER_NAVIGATION_ATTRIBUTION_PHASES = Object.freeze([
   'server',
   'transfer',
@@ -759,28 +760,70 @@ function splitBrowserOccurrenceTotal(total) {
 
 function matchedL1RawNavigationPostureFindings(sample, framework, label) {
   const primary = sample?.navAttribution?.primaryResponse;
+  const witness = primary?.networkWitness?.facts;
   const mediaType =
     typeof primary?.contentType === 'string'
       ? primary.contentType.split(';', 1)[0].trim().toLowerCase()
       : '';
-  if (framework === 'kovo') {
-    return primary?.status === 'observed' &&
-      primary?.selection === 'kovo-document-parts-media-type' &&
-      mediaType === 'application/vnd.kovo.document-parts+json' &&
-      sample?.navDocumentReplaced === 0
-      ? []
-      : [`${label} Kovo document-parts in-document navigation posture is not proved`];
+  const findings = [];
+  if (
+    primary?.traceContext?.targetPath !== BROWSER_MATCHED_L1_DETAIL_PATH ||
+    !exactBrowserResponseUrl(primary?.url, BROWSER_MATCHED_L1_DETAIL_PATH) ||
+    !exactBrowserResponseUrl(witness?.url, BROWSER_MATCHED_L1_DETAIL_PATH)
+  ) {
+    findings.push(
+      `${label} matched-L1 navigation is not bound to the exact measured detail target`,
+    );
   }
-  const witness = primary?.networkWitness?.facts;
-  return primary?.status === 'observed' &&
-    primary?.selection === 'document-resource' &&
-    mediaType === 'text/html' &&
-    primary?.resourceType === 'document' &&
-    witness?.resourceType === 'document' &&
-    witness?.isNavigationRequest === true &&
-    sample?.navDocumentReplaced === 1
-    ? []
-    : [`${label} Next text/html document-replacement navigation posture is not proved`];
+  if (
+    primary?.method !== 'GET' ||
+    primary?.httpStatus !== '200' ||
+    witness?.method !== 'GET' ||
+    witness?.httpStatus !== '200'
+  ) {
+    findings.push(`${label} matched-L1 navigation is not an authenticated successful GET`);
+  }
+  if (framework === 'kovo') {
+    if (
+      primary?.status !== 'observed' ||
+      primary?.selection !== 'kovo-document-parts-media-type' ||
+      mediaType !== 'application/vnd.kovo.document-parts+json' ||
+      primary?.resourceType !== 'fetch' ||
+      witness?.resourceType !== 'fetch' ||
+      witness?.isNavigationRequest !== false ||
+      sample?.navDocumentReplaced !== 0
+    ) {
+      findings.push(`${label} Kovo document-parts fetch posture is not proved`);
+    }
+    return findings;
+  }
+  if (
+    primary?.status !== 'observed' ||
+    primary?.selection !== 'document-resource' ||
+    mediaType !== 'text/html' ||
+    primary?.resourceType !== 'document' ||
+    witness?.resourceType !== 'document' ||
+    witness?.isNavigationRequest !== true ||
+    sample?.navDocumentReplaced !== 1
+  ) {
+    findings.push(`${label} Next text/html document-replacement navigation posture is not proved`);
+  }
+  return findings;
+}
+
+function exactBrowserResponseUrl(value, expectedPath) {
+  if (typeof value !== 'string') return false;
+  try {
+    const parsed = new URL(value);
+    return (
+      ['http:', 'https:'].includes(parsed.protocol) &&
+      parsed.pathname === expectedPath &&
+      parsed.search === '' &&
+      parsed.hash === ''
+    );
+  } catch {
+    return false;
+  }
 }
 
 function serverPublicationMetricFindings(metrics, label) {
