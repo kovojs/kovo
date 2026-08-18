@@ -588,7 +588,7 @@ describe('seven-family performance publication gate', () => {
     ).rejects.toThrow('uncommitted or untracked changes');
   });
 
-  it('blocks publication when a measured family misses either baseline or holdout targets', () => {
+  it('reports a dev competitive-target miss without blocking the completion gate', () => {
     const options = fixtureDerivationOptions();
     options.operations['dev-n216'] = {
       ...options.operations['dev-n216'],
@@ -606,11 +606,221 @@ describe('seven-family performance publication gate', () => {
     const authenticated = authenticatedFixture();
     const result = derivePerformancePublication(authenticated, options);
 
-    expect(result.publication.verdict.status).toBe('blocked');
-    expect(result.publication.families['dev-n216'].targetAssessment.holdout.status).toBe('fail');
-    expect(result.publication.verdict.failures).toContain(
-      'dev-n216:holdout:corpus-n216/dev//ready.durationMs.median-vs-next',
+    const family = result.publication.families['dev-n216'];
+    expect(result.publication.verdict).toMatchObject({ failures: [], status: 'publishable' });
+    expect(family).toMatchObject({
+      holdoutEvaluation: {
+        blockingFailures: [],
+        failures: ['corpus-n216/dev//ready.durationMs.median-vs-next'],
+        followOnFailures: ['corpus-n216/dev//ready.durationMs.median-vs-next'],
+        status: 'regression',
+      },
+      status: 'pass',
+      targetAssessment: {
+        blockingFailures: [],
+        blockingStatus: 'pass',
+        followOnFailures: ['holdout:corpus-n216/dev//ready.durationMs.median-vs-next'],
+        followOnStatus: 'fail',
+        status: 'fail',
+      },
+    });
+    const markdown = renderFixturePublication(result, { authenticated, options });
+    expect(markdown).toContain(
+      'holdout [follow-on] corpus-n216/dev//ready.durationMs.median-vs-next: 2.5000 <= 2 — fail',
     );
+    expect(markdown).toContain('## Reported follow-on misses (non-blocking)');
+  });
+
+  it('keeps browser navigation blocking while session bytes remain a failed follow-on', () => {
+    const authenticated = authenticatedFixture();
+    const sessionOptions = fixtureDerivationOptions();
+    sessionOptions.operations.browser = {
+      ...sessionOptions.operations.browser,
+      evaluate: (budget, candidate) => {
+        const evaluation = fixtureEvaluation('browser', budget, candidate);
+        const id =
+          'matched-l1/browser//mobile.navigation.sessionBytes.throughDestinationPaint.total.median-vs-next';
+        const check = evaluation.checks.find((entry) => entry.id === id);
+        check.status = 'fail';
+        check.value = 0.75;
+        evaluation.verdict = { failures: [id], reasons: [], status: 'regression' };
+        return evaluation;
+      },
+    };
+    const sessionResult = derivePerformancePublication(authenticated, sessionOptions);
+    expect(sessionResult.publication).toMatchObject({
+      families: {
+        browser: {
+          status: 'pass',
+          targetAssessment: { blockingStatus: 'pass', followOnStatus: 'fail', status: 'fail' },
+        },
+      },
+      verdict: { failures: [], status: 'publishable' },
+    });
+    expect(
+      renderFixturePublication(sessionResult, { authenticated, options: sessionOptions }),
+    ).toContain(
+      'holdout [follow-on] matched-l1/browser//mobile.navigation.sessionBytes.throughDestinationPaint.total.median-vs-next: 0.7500 <= 0.5000 — fail',
+    );
+
+    const navigationOptions = fixtureDerivationOptions();
+    navigationOptions.operations.browser = {
+      ...navigationOptions.operations.browser,
+      evaluate: (budget, candidate) => {
+        const evaluation = fixtureEvaluation('browser', budget, candidate);
+        const id = 'matched-l1/browser//mobile.navigation.navToPaintMs.median-vs-next';
+        const check = evaluation.checks.find((entry) => entry.id === id);
+        check.status = 'fail';
+        check.value = 2.5;
+        evaluation.verdict = { failures: [id], reasons: [], status: 'regression' };
+        return evaluation;
+      },
+    };
+    const navigationResult = derivePerformancePublication(authenticated, navigationOptions);
+    expect(navigationResult.publication.families.browser).toMatchObject({
+      status: 'blocked',
+      targetAssessment: { blockingStatus: 'fail', followOnStatus: 'pass', status: 'fail' },
+    });
+    expect(navigationResult.publication.verdict).toMatchObject({
+      failures: expect.arrayContaining([
+        'browser:matched-l1/browser//mobile.navigation.navToPaintMs.median-vs-next',
+        'browser:holdout:matched-l1/browser//mobile.navigation.navToPaintMs.median-vs-next',
+      ]),
+      status: 'blocked',
+    });
+  });
+
+  it('reports server competitive misses while regression and unknown failures stay blocking', () => {
+    const authenticated = authenticatedFixture();
+    const baselineOptions = fixtureDerivationOptions();
+    baselineOptions.operations.server = {
+      ...baselineOptions.operations.server,
+      derive: (baseline) => {
+        const budget = fixtureBudget('server', baseline);
+        const check = budget.targetAssessment.checks[0];
+        check.observed = check.limit - 0.1;
+        check.status = 'fail';
+        budget.targetAssessment.failures = [check.id];
+        budget.targetAssessment.status = 'fail';
+        return budget;
+      },
+    };
+    const baselineResult = derivePerformancePublication(authenticated, baselineOptions);
+    expect(baselineResult.publication).toMatchObject({
+      families: {
+        server: {
+          status: 'pass',
+          targetAssessment: {
+            blockingStatus: 'not-applicable',
+            followOnFailures: [expect.stringMatching(/^baseline:/u)],
+            followOnStatus: 'fail',
+          },
+        },
+      },
+      verdict: { failures: [], status: 'publishable' },
+    });
+
+    const competitiveOptions = fixtureDerivationOptions();
+    competitiveOptions.operations.server = {
+      ...competitiveOptions.operations.server,
+      evaluate: (budget, candidate) => {
+        const evaluation = fixtureEvaluation('server', budget, candidate);
+        const id =
+          'matched-runtime/server/dynamic-detail-identity-c32/requestsPerSecond.median-vs-next';
+        const check = evaluation.checks.find((entry) => entry.id === id);
+        check.status = 'fail';
+        check.value = 0.7;
+        evaluation.verdict = { failures: [id], reasons: [], status: 'regression' };
+        return evaluation;
+      },
+    };
+    const competitiveResult = derivePerformancePublication(authenticated, competitiveOptions);
+    expect(competitiveResult.publication).toMatchObject({
+      families: {
+        server: {
+          holdoutEvaluation: { blockingFailures: [], followOnFailures: [expect.any(String)] },
+          status: 'pass',
+          targetAssessment: { blockingStatus: 'not-applicable', followOnStatus: 'fail' },
+        },
+      },
+      verdict: { failures: [], status: 'publishable' },
+    });
+
+    const unknownOptions = fixtureDerivationOptions();
+    unknownOptions.operations.server = {
+      ...unknownOptions.operations.server,
+      evaluate: (budget, candidate) => {
+        const evaluation = fixtureEvaluation('server', budget, candidate);
+        const id = 'server/future-unclassified-check';
+        evaluation.checks.push({ id, kind: 'future-kind', limit: 1, status: 'fail', value: 2 });
+        evaluation.verdict = { failures: [id], reasons: [], status: 'regression' };
+        return evaluation;
+      },
+    };
+    const unknownResult = derivePerformancePublication(authenticated, unknownOptions);
+    expect(unknownResult.publication.families.server).toMatchObject({
+      holdoutEvaluation: {
+        blockingFailures: ['server/future-unclassified-check'],
+        followOnFailures: [],
+      },
+      status: 'blocked',
+    });
+    expect(unknownResult.publication.verdict).toMatchObject({
+      failures: ['server:server/future-unclassified-check'],
+      status: 'blocked',
+    });
+  });
+
+  it.each([
+    ['build-n24', 'build-n24.target'],
+    ['check', 'check.target'],
+  ])('keeps %s milestone/product failures publication-blocking', (familyName, id) => {
+    const authenticated = authenticatedFixture();
+    const options = fixtureDerivationOptions();
+    options.operations[familyName] = {
+      ...options.operations[familyName],
+      evaluate: (budget, candidate) => {
+        const evaluation = fixtureEvaluation(familyName, budget, candidate);
+        const check = evaluation.checks.find((entry) => entry.id === id);
+        check.status = 'fail';
+        check.value = check.limit + 1;
+        evaluation.verdict = { failures: [id], reasons: [], status: 'regression' };
+        return evaluation;
+      },
+    };
+    const result = derivePerformancePublication(authenticated, options);
+    expect(result.publication.families[familyName]).toMatchObject({
+      holdoutEvaluation: { blockingFailures: [id], followOnFailures: [] },
+      status: 'blocked',
+      targetAssessment: { blockingStatus: 'fail', followOnStatus: 'not-applicable' },
+    });
+    expect(result.publication.verdict).toMatchObject({
+      failures: expect.arrayContaining([`${familyName}:${id}`, `${familyName}:holdout:${id}`]),
+      status: 'blocked',
+    });
+  });
+
+  it('keeps dev absolute-latency targets publication-blocking', () => {
+    const authenticated = authenticatedFixture();
+    const options = fixtureDerivationOptions();
+    options.operations['dev-n24'] = {
+      ...options.operations['dev-n24'],
+      evaluate: (budget, candidate) => {
+        const evaluation = fixtureEvaluation('dev-n24', budget, candidate);
+        const id = 'corpus-n24/dev//edit.syntaxErrorMs.p95-target';
+        const check = evaluation.checks.find((entry) => entry.id === id);
+        check.status = 'fail';
+        check.value = 1_001;
+        evaluation.verdict = { failures: [id], reasons: [], status: 'regression' };
+        return evaluation;
+      },
+    };
+    const result = derivePerformancePublication(authenticated, options);
+    expect(result.publication.families['dev-n24']).toMatchObject({
+      status: 'blocked',
+      targetAssessment: { blockingStatus: 'fail', followOnStatus: 'pass' },
+    });
+    expect(result.publication.verdict.status).toBe('blocked');
   });
 
   it('reports unproven when the holdout reuses a baseline workflow run', () => {
@@ -1160,7 +1370,7 @@ describe('seven-family performance publication gate', () => {
     });
     expect(performancePublicationFindings(result.publication)).toEqual([]);
     expect(renderFixturePublication(result, { authenticated, options })).toContain(
-      'holdout corpus-n24/dev//edit.dataMs.p95',
+      'holdout [completion] corpus-n24/dev//edit.dataMs.p95',
     );
   });
 
@@ -1228,6 +1438,32 @@ describe('seven-family performance publication gate', () => {
     resealPublication(fabricated);
     expect(performancePublicationFindings(fabricated)).toContain(
       'server holdout target check census differs from policy',
+    );
+  });
+
+  it('rejects a resealed attempt to relabel a blocking failure as follow-on', () => {
+    const authenticated = authenticatedFixture();
+    const options = fixtureDerivationOptions();
+    options.operations['dev-n24'] = {
+      ...options.operations['dev-n24'],
+      evaluate: (budget, candidate) => {
+        const evaluation = fixtureEvaluation('dev-n24', budget, candidate);
+        const id = 'corpus-n24/dev//edit.dataMs.p95';
+        const check = evaluation.checks.find((entry) => entry.id === id);
+        check.status = 'fail';
+        check.value = check.limit + 1;
+        evaluation.verdict = { failures: [id], reasons: [], status: 'regression' };
+        return evaluation;
+      },
+    };
+    const publication = derivePerformancePublication(authenticated, options).publication;
+    const evaluation = publication.families['dev-n24'].holdoutEvaluation;
+    evaluation.followOnFailures = [...evaluation.blockingFailures];
+    evaluation.blockingFailures = [];
+    resealPublication(publication);
+
+    expect(performancePublicationFindings(publication)).toContain(
+      'dev-n24 holdout evaluation blocking/follow-on partition is not derived from policy',
     );
   });
 
@@ -1793,8 +2029,11 @@ function fixtureDevEvaluationChecks(budget) {
 function fixtureComparisonTargetChecks(familyName) {
   return comparisonTargetCheckSpecifications(familyName).map((specification) => ({
     id: specification.id,
+    kind: specification.kind,
     limit: specification.limit,
     observed: passingTargetObservation(specification),
+    operator: specification.operator,
+    publicationImpact: specification.kind === 'competitive-target' ? 'follow-on' : 'completion',
     status: 'pass',
   }));
 }
@@ -1806,6 +2045,8 @@ function passingTargetObservation(specification) {
 function targetKinds(familyName) {
   if (familyName.startsWith('dev-')) return ['competitive-target', 'regression', 'target'];
   if (familyName.startsWith('build-')) return ['milestone'];
+  if (familyName === 'browser') return ['milestone', 'competitive-target'];
+  if (familyName === 'server') return ['competitive-target'];
   return ['target'];
 }
 

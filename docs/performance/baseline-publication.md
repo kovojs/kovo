@@ -160,8 +160,10 @@ artifact links by digest, revalidates every raw report, and reproduces the ratif
 writing a budget.
 
 Browser and server use the common comparison derivation. `--markdown-out` creates a clean linked
-Kovo-vs-Next table, derives the 5% regression envelope, records the ratified target assessment, and
-preserves the architectural lane/posture warning:
+Kovo-vs-Next table, derives the 5% regression envelope, records every ratified target with its
+`completion` or `follow-on` role, and preserves the architectural lane/posture warning. A failed
+follow-on row remains `fail`; the role says how the aggregate publication gate uses that result and
+does not rewrite the result itself:
 
 ```sh
 vp exec node scripts/perf-comparison-budget.mjs derive \
@@ -200,7 +202,9 @@ vp exec node scripts/perf-check-budget.mjs derive \
 
 Use `scripts/perf-dev-budget.mjs` and `scripts/perf-build-budget.mjs` for each corpus size as
 documented in `dev-budget-policy.md` and `build-budget-policy.md`. Those specialized derivations add
-the plan's ready/edit/recovery and wall/RSS competitive targets to the same five-run evidence rule.
+the plan's ready/edit/recovery and wall/RSS targets to the same five-run evidence rule. The aggregate
+publication policy, described below, keeps the first-milestone completion floor distinct from the
+stronger competitive follow-on goals.
 
 Commit only the reviewed baseline/budget JSON and concise publication Markdown. Keep the raw reports
 in their linked Actions artifacts; local download paths are not evidence locations.
@@ -404,7 +408,9 @@ it creates an evidence, JSON, Markdown, staging, or output path. A requested in-
 therefore created only after the whole measured checkout has passed every clean-source check; using
 the external directory above avoids coupling collection and publication to repository state.
 
-The output schema is `kovo-performance-publication/v6`. Its root contains exactly 23 regular files:
+The output schema is `kovo-performance-publication/v7`. Browser/server budget and holdout documents
+use `kovo-comparison-performance-budget/v2` and
+`kovo-comparison-performance-evaluation/v2`. The output root contains exactly 23 regular files:
 `performance-publication.json`, `performance-publication.md`, and exactly 21 JSON files under
 `evidence/` (baseline, budget, and independent holdout evaluation for each of seven families).
 There is no Production-bytes family document; the authenticated sidecar remains in the aggregate.
@@ -415,9 +421,10 @@ digest, execution, source, lock, host, and workload identity. The aggregate also
 preregistered boundary,
 every authenticated run and literal publication-artifact identity, the complete Production-bytes
 chronology, every authenticated family/byte candidate reference, the independently re-derived
-cohort selection, and the earliest selected candidate. Its Markdown surfaces baseline and holdout target
-assessments for all seven families, links exact fixture sources at the measured commit, and preserves
-the architectural lane warning beside each subject. It also embeds and renders the cross-corpus
+cohort selection, and the earliest selected candidate. Its Markdown surfaces baseline and holdout
+completion and follow-on assessments for all seven families, links exact fixture sources at the
+measured commit, and preserves the architectural lane warning beside each subject. It also embeds
+and renders the cross-corpus
 foreground build-session assessment, including its four milestone/residual cells and any
 custody-authenticated profile references. The same aggregate JSON and Markdown retain the selected
 Production-bytes artifact custody, the exact `perf-budgets.json` byte length and SHA-256 from the
@@ -447,6 +454,25 @@ and p95 regression census for leaf, entry, data-plane, syntax-error, recovery, r
 process-tree RSS metrics, followed by the fixed competitive/latency targets. `edit.dataMs` is not an
 optional diagnostic: a missing row makes the publication malformed, and a measured data-plane
 regression blocks the aggregate even when every other developer-loop row passes.
+
+Publication eligibility follows the completion floor in `plans/good-perf.md`; stronger competitive
+targets are retained as separately reported follow-on checks:
+
+- Browser matched-L1 mobile navigation at no more than 2x Next is completion-blocking. Matched-L1
+  session bytes at no more than 50% of Next is follow-on.
+- Server identity HIT at least 0.9x Next and forced-dynamic throughput at least 0.8x Next are
+  follow-on. The full authenticated matrix, holdout correctness, and ratified regression envelope
+  still prevent publication when unproven or failing.
+- Dev ready at no more than 2x Next, leaf edit at no more than 2x, and entry edit at no more than 3x
+  are follow-on. Syntax-error p95 at most 1 second, recovery p95 at most 2 seconds, all regression
+  checks, and correctness remain completion-blocking.
+- The build 6x wall / 2x RSS milestones and the check/product targets remain completion-blocking.
+
+The six-run publication campaign has no authenticated historical-current-Kovo comparator for the
+dev 30% ready and 20% leaf/entry improvement rows or the server 10% forced-dynamic improvement row.
+Those historical deltas are therefore explicitly unassessed in the rendered architecture notes;
+the gate never infers them from a Kovo-vs-Next ratio. Browser session-byte and cached-server
+“establish baseline” milestones are instead proved by the required metric and raw-evidence census.
 
 The foreground-session assessment has three distinct aggregate effects. `not-warranted` is a
 complete decision and adds no publication failure. `profile-required` and `unproven` leave the
@@ -496,7 +522,8 @@ integrity, `suite=bytes`, `componentCount=24`, and five-metric census.
 
 Before writing, the aggregate gate re-ratifies every baseline from its five authenticated raw
 reports, re-derives each family budget, and re-evaluates each holdout. It recomputes the exact target
-assessment and the byte and semantic digests for all 21 baseline/budget/evaluation documents. The
+assessment, including each check's completion/follow-on role and separate failure partitions, and
+the byte and semantic digests for all 21 baseline/budget/evaluation documents. The
 Markdown renderer accepts only that complete `{documents, publication}` result and repeats the
 authenticated derivation; it never renders a bare aggregate merely because its self-hash is valid.
 After writing, it reads those 21 files and the aggregate JSON back, verifies canonical bytes and
@@ -505,8 +532,11 @@ document plus a recomputed aggregate self-hash therefore cannot produce exit sta
 `perf-budgets.json` from a clean checkout whose `HEAD` equals the measured source, requires disk
 bytes to equal `git show HEAD:perf-budgets.json`, evaluates exactly the five deterministic byte
 metrics, and canonically reproduces the sidecar assessment during result and readback validation.
-Every metric must be `pass`; a `fail` blocks publication, while any missing, unbudgeted, malformed,
-or otherwise undecidable value is unproven. The same result gate
+Every check remains an explicit `pass` or `fail`. A completion/regression/milestone failure blocks
+publication; a competitive follow-on failure stays visible in JSON and Markdown but does not by
+itself block the first-milestone publication. Any missing, unbudgeted, malformed, unclassified, or
+otherwise undecidable failure is treated as blocking or unproven, never as follow-on by default. The
+same result gate
 re-derives the foreground-build assessment from the exact N=24/N=216 budgets and authenticated
 profiles. For each optional mode it reads every mode-prefixed original `.cpuprofile` directly from
 the authenticated ZIP and checks each report-declared member, PID, role, byte length, and SHA-256.
@@ -536,8 +566,10 @@ descendant census, unauthenticated executable, negative CPU residual, or positiv
 the uncertainty bound makes the diagnostic unproven. Phase-clock durations are never converted
 into CPU samples.
 
-Exit status is `0` only for `publishable`, `1` for measured evidence blocked by a target, regression,
-or warranted-but-not-yet-measured foreground-session implementation, and `2` for unproven custody,
+Exit status is `0` only for `publishable`, including a result whose only misses are explicitly
+classified competitive follow-on checks. Exit status `1` is for measured evidence blocked by a
+completion target, regression, milestone, product check, unknown failure, or
+warranted-but-not-yet-measured foreground-session implementation; status `2` is for unproven custody,
 identity, workload, or integrity. The command must run from the clean
 measured-source checkout with authenticated `gh` network access. It live-fetches every canonical
 artifact, run, all-attempt jobs, and commit-addressed workflow-file endpoint. The first three live

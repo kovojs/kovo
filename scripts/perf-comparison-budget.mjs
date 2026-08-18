@@ -15,8 +15,8 @@ import {
   workloadIdentityFindings,
 } from './perf-regression-check.mjs';
 
-export const PERF_COMPARISON_BUDGET_SCHEMA = 'kovo-comparison-performance-budget/v1';
-export const PERF_COMPARISON_EVALUATION_SCHEMA = 'kovo-comparison-performance-evaluation/v1';
+export const PERF_COMPARISON_BUDGET_SCHEMA = 'kovo-comparison-performance-budget/v2';
+export const PERF_COMPARISON_EVALUATION_SCHEMA = 'kovo-comparison-performance-evaluation/v2';
 
 const BASELINE_SCHEMA = 'kovo-performance-baseline/v1';
 const COMPARISON_SCHEMA = 'kovo-next-performance-comparison/v1';
@@ -960,7 +960,7 @@ function targetChecks(budget, candidate) {
   return targetCheckSpecifications(budget.subject.kind, budget.policy.targets).map((spec) =>
     spec.operator === '<='
       ? ratioCheck(spec.id, candidate.analysis[spec.metric], spec.limit, spec.kind)
-      : inverseRatioCheck(spec.id, candidate.analysis[spec.metric], spec.limit),
+      : inverseRatioCheck(spec.id, candidate.analysis[spec.metric], spec.limit, spec.kind),
   );
 }
 
@@ -989,11 +989,20 @@ export function renderComparisonBudgetMarkdown(budget) {
     '',
     architecture,
     '',
-    `Baseline target assessment: **${budget.targetAssessment.status}**${
+    `Baseline reported-target assessment: **${budget.targetAssessment.status}**${
       budget.targetAssessment.failures.length > 0
         ? ` (${budget.targetAssessment.failures.join(', ')})`
         : ''
     }.`,
+    '',
+    'A failed row stays failed. `completion` rows are publication milestones; `follow-on` rows are reported competitive goals and do not by themselves block the aggregate publication gate.',
+    '',
+    '| Target | Role | Observed | Operator | Limit | Verdict |',
+    '| --- | --- | ---: | --- | ---: | --- |',
+    ...budget.targetAssessment.checks.map(
+      (check) =>
+        `| ${check.id} | ${check.publicationImpact} | ${formatNumber(check.observed)} | ${check.operator} | ${formatNumber(check.limit)} | ${check.status} |`,
+    ),
     '',
     'Raw evidence:',
     '',
@@ -1011,8 +1020,11 @@ function baselineTargetAssessment(subject, metrics, targets) {
     const ratio = ratioFromBudgetEvidence(metrics[spec.metric]?.baseline);
     return {
       id: spec.id,
+      kind: spec.kind,
       limit: spec.limit,
       observed: ratio,
+      operator: spec.operator,
+      publicationImpact: targetPublicationImpact(spec.kind),
       status:
         Number.isFinite(ratio) && Number.isFinite(spec.limit)
           ? spec.operator === '<='
@@ -1036,11 +1048,13 @@ function targetCheckSpecifications(subject, targets) {
         'matched-l1/browser//mobile.navigation.navToPaintMs',
         targets?.matchedL1MobileNavigationMaximumRatio,
         '<=',
+        'milestone',
       ),
       targetCheckSpecification(
         'matched-l1/browser//mobile.navigation.sessionBytes.throughDestinationPaint.total',
         targets?.matchedL1TotalSessionBytesMaximumRatio,
         '<=',
+        'competitive-target',
       ),
     ];
   }
@@ -1058,6 +1072,7 @@ function targetCheckSpecifications(subject, targets) {
               ? targets?.forcedDynamicThroughputMinimumRatio
               : targets?.cachedThroughputMinimumRatio,
             '>=',
+            'competitive-target',
           ),
         );
       }
@@ -1066,14 +1081,18 @@ function targetCheckSpecifications(subject, targets) {
   return specifications;
 }
 
-function targetCheckSpecification(metric, limit, operator) {
+function targetCheckSpecification(metric, limit, operator, kind) {
   return {
     id: `${metric}.median-vs-next`,
-    kind: 'target',
+    kind,
     limit,
     metric,
     operator,
   };
+}
+
+function targetPublicationImpact(kind) {
+  return kind === 'competitive-target' ? 'follow-on' : 'completion';
 }
 
 function ratioFromBudgetEvidence(evidence) {
@@ -1152,14 +1171,14 @@ function ratioCheck(id, analysis, maximum, kind) {
   return { id, kind, limit: maximum, observed: ratio, status: ratio <= maximum ? 'pass' : 'fail' };
 }
 
-function inverseRatioCheck(id, analysis, minimum) {
+function inverseRatioCheck(id, analysis, minimum, kind) {
   const ratio =
     analysis.nextjs.median === 0
       ? Number.POSITIVE_INFINITY
       : analysis.kovo.median / analysis.nextjs.median;
   return {
     id,
-    kind: 'target',
+    kind,
     limit: minimum,
     observed: ratio,
     status: ratio >= minimum ? 'pass' : 'fail',

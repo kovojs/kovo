@@ -34,6 +34,13 @@ describe('browser/server comparison budgets', () => {
       'matched-l1/browser//mobile.navigation.navToPaintMs.median-vs-next',
       'matched-l1/browser//mobile.navigation.sessionBytes.throughDestinationPaint.total.median-vs-next',
     ]);
+    expect(budget.targetAssessment.checks).toEqual([
+      expect.objectContaining({ kind: 'milestone', publicationImpact: 'completion' }),
+      expect.objectContaining({
+        kind: 'competitive-target',
+        publicationImpact: 'follow-on',
+      }),
+    ]);
     expect(budget.metrics['matched-l1/browser//mobile.navigation.navToPaintMs']).toMatchObject({
       direction: 'lower-is-better',
       kind: 'ratified-regression-ceiling',
@@ -62,6 +69,8 @@ describe('browser/server comparison budgets', () => {
     expect(markdown).toContain('capability-matched');
     expect(markdown).toContain('same-document navigation');
     expect(markdown).toContain('bfcache.applicable');
+    expect(markdown).toContain('| Target | Role | Observed | Operator | Limit | Verdict |');
+    expect(markdown).toContain('| follow-on |');
   });
 
   it('evaluates a new same-subject report and enforces the matched L1 navigation target', () => {
@@ -70,7 +79,20 @@ describe('browser/server comparison budgets', () => {
     const budget = deriveComparisonPerformanceBudget(baseline, { baselineEntries: entries });
     const candidate = reportEntry(5, 'browser').report;
 
-    expect(evaluateComparisonPerformanceBudget(budget, candidate).verdict.status).toBe('pass');
+    const passing = evaluateComparisonPerformanceBudget(budget, candidate);
+    expect(passing.verdict.status).toBe('pass');
+    expect(
+      passing.checks.find((check) =>
+        check.id.endsWith('mobile.navigation.navToPaintMs.median-vs-next'),
+      ),
+    ).toMatchObject({ kind: 'milestone' });
+    expect(
+      passing.checks.find((check) =>
+        check.id.endsWith(
+          'mobile.navigation.sessionBytes.throughDestinationPaint.total.median-vs-next',
+        ),
+      ),
+    ).toMatchObject({ kind: 'competitive-target' });
     candidate.analysis['matched-l1/browser//mobile.navigation.navToPaintMs'].kovo.median = 250;
     expect(evaluateComparisonPerformanceBudget(budget, candidate).verdict).toMatchObject({
       status: 'regression',
@@ -89,6 +111,11 @@ describe('browser/server comparison budgets', () => {
     expect(budget.targetAssessment.checks.every((check) => check.id.includes('-identity-'))).toBe(
       true,
     );
+    expect(
+      budget.targetAssessment.checks.every(
+        (check) => check.kind === 'competitive-target' && check.publicationImpact === 'follow-on',
+      ),
+    ).toBe(true);
     expect(budget.policy.representations).toEqual({
       cachedComparisonEncoding: 'identity',
       forcedDynamicComparisonEncoding: 'identity',

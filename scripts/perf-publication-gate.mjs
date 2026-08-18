@@ -73,7 +73,7 @@ import {
 } from './perf-gate.mjs';
 
 export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v5';
-export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v6';
+export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v7';
 export const PERF_PUBLICATION_REPOSITORY = 'kovojs/kovo';
 
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
@@ -168,7 +168,7 @@ const FAMILY_NAMES = Object.freeze([
 const FAMILY_CONFIG = Object.freeze({
   browser: familyConfig({
     architecture:
-      'Default/as-shipped, matched L0, and matched L1 remain separate. Zero JavaScript is proved only for Kovo L0; Next matched L0 still ships JavaScript. Same-document and document-replacing navigation are not conflated.',
+      'Default/as-shipped, matched L0, and matched L1 remain separate. Zero JavaScript is proved only for Kovo L0; Next matched L0 still ships JavaScript. Same-document and document-replacing navigation are not conflated. Matched-L1 mobile navigation at no more than 2x Next is the blocking first milestone; session bytes at no more than 50% of Next remain a separately reported follow-on target.',
     artifactName: 'kovo-perf-browser-matrix',
     baselineFindings: comparisonBudgetBaselineFindings,
     budgetFindings: comparisonBudgetFindings,
@@ -176,7 +176,7 @@ const FAMILY_CONFIG = Object.freeze({
     derive: deriveComparisonPerformanceBudget,
     evaluate: evaluateComparisonPerformanceBudget,
     reportMember: 'comparison.json',
-    targetKinds: ['target'],
+    targetKinds: ['milestone', 'competitive-target'],
     workflowJob: workflowJob({
       artifactName: 'kovo-perf-browser-matrix',
       artifactPath: '${{ runner.temp }}/kovo-perf/browser',
@@ -186,7 +186,7 @@ const FAMILY_CONFIG = Object.freeze({
   }),
   'dev-n24': familyConfig({
     architecture:
-      'The generated N=24 corpus is capability matched. Ready, edit-to-paint, diagnostic, recovery, state-survival, and process-tree RSS evidence remain one indivisible subject.',
+      'The generated N=24 corpus is capability matched. Ready, edit-to-paint, diagnostic, recovery, state-survival, and process-tree RSS evidence remain one indivisible subject. This campaign has no authenticated historical-current-Kovo comparator for the 30% ready and 20% leaf/entry improvement milestones, so those deltas remain explicitly unassessed; the Kovo-vs-Next ratios are separate reported follow-on targets.',
     artifactName: 'kovo-perf-dev-n24',
     baselineFindings: devBudgetBaselineFindings,
     budgetFindings: devBudgetFindings,
@@ -205,7 +205,7 @@ const FAMILY_CONFIG = Object.freeze({
   }),
   'dev-n216': familyConfig({
     architecture:
-      'The generated N=216 corpus is capability matched. Ready, edit-to-paint, diagnostic, recovery, state-survival, and process-tree RSS evidence remain one indivisible subject.',
+      'The generated N=216 corpus is capability matched. Ready, edit-to-paint, diagnostic, recovery, state-survival, and process-tree RSS evidence remain one indivisible subject. This campaign has no authenticated historical-current-Kovo comparator for the 30% ready and 20% leaf/entry improvement milestones, so those deltas remain explicitly unassessed; the Kovo-vs-Next ratios are separate reported follow-on targets.',
     artifactName: 'kovo-perf-dev-n216',
     baselineFindings: devBudgetBaselineFindings,
     budgetFindings: devBudgetFindings,
@@ -262,7 +262,7 @@ const FAMILY_CONFIG = Object.freeze({
   }),
   server: familyConfig({
     architecture:
-      'Proved HIT, conditional 304, and forced-dynamic cells remain separate across route, encoding, and concurrency. Competitive HIT and forced-dynamic checks use representation-matched identity responses; Kovo Brotli remains required raw measurement evidence because Next Brotli is unsupported, never a fabricated paired win.',
+      'Proved HIT, conditional 304, and forced-dynamic cells remain separate across route, encoding, and concurrency. Competitive HIT and forced-dynamic checks use representation-matched identity responses and are reported follow-on targets; Kovo Brotli remains required raw measurement evidence because Next Brotli is unsupported, never a fabricated paired win. This campaign has no authenticated historical-current-Kovo comparator for the 10% forced-dynamic improvement milestone, so that delta remains explicitly unassessed rather than inferred from a Kovo-vs-Next ratio.',
     artifactName: 'kovo-perf-server-matrix',
     baselineFindings: comparisonBudgetBaselineFindings,
     budgetFindings: comparisonBudgetFindings,
@@ -270,7 +270,7 @@ const FAMILY_CONFIG = Object.freeze({
     derive: deriveComparisonPerformanceBudget,
     evaluate: evaluateComparisonPerformanceBudget,
     reportMember: 'comparison.json',
-    targetKinds: ['target'],
+    targetKinds: ['competitive-target'],
     workflowJob: workflowJob({
       artifactName: 'kovo-perf-server-matrix',
       artifactPath: '${{ runner.temp }}/kovo-perf/server',
@@ -2103,10 +2103,12 @@ export function derivePerformancePublication(
         throw new TypeError(`target assessment is invalid: ${targetFindings.join('; ')}`);
       }
       const evaluationStatus = evaluation?.verdict?.status;
+      const holdoutEvaluation = evaluationReference(evaluation, targetAssessment);
       const familyStatus =
-        evaluationStatus === 'unproven'
+        evaluationStatus === 'unproven' || targetAssessment.status === 'unproven'
           ? 'unproven'
-          : evaluationStatus === 'pass' && targetAssessment.status === 'pass'
+          : holdoutEvaluation.blockingFailures.length === 0 &&
+              ['pass', 'not-applicable'].includes(targetAssessment.blockingStatus)
             ? 'pass'
             : 'blocked';
       if (!['pass', 'regression', 'unproven'].includes(evaluationStatus)) {
@@ -2132,7 +2134,7 @@ export function derivePerformancePublication(
           holdout: evidenceReference(evidence.holdout),
         },
         host: baseline.identity.host,
-        holdoutEvaluation: evaluationReference(evaluation),
+        holdoutEvaluation,
         status: familyStatus,
         targetAssessment,
         workload: baseline.identity.workload,
@@ -2408,7 +2410,13 @@ export function performancePublicationFindings(publication) {
         findings.push(`${familyName} holdout reuses a baseline workflow run`);
       }
       findings.push(...targetAssessmentFindings(family.targetAssessment, familyName));
-      findings.push(...evaluationReferenceFindings(family.holdoutEvaluation, familyName));
+      findings.push(
+        ...evaluationReferenceFindings(
+          family.holdoutEvaluation,
+          familyName,
+          family.targetAssessment,
+        ),
+      );
       if (
         family.holdoutEvaluation?.candidate?.execution !== family.evidence.holdout.execution ||
         family.holdoutEvaluation?.candidate?.sourceCommit !== family.evidence.holdout.sourceCommit
@@ -2416,10 +2424,11 @@ export function performancePublicationFindings(publication) {
         findings.push(`${familyName} holdout evaluation candidate differs from its evidence`);
       }
       const expectedFamilyStatus =
-        family.holdoutEvaluation?.status === 'unproven'
+        family.holdoutEvaluation?.status === 'unproven' ||
+        family.targetAssessment?.status === 'unproven'
           ? 'unproven'
-          : family.holdoutEvaluation?.status === 'pass' &&
-              family.targetAssessment?.status === 'pass'
+          : family.holdoutEvaluation?.blockingFailures?.length === 0 &&
+              ['pass', 'not-applicable'].includes(family.targetAssessment?.blockingStatus)
             ? 'pass'
             : 'blocked';
       if (family.status !== expectedFamilyStatus) {
@@ -2514,15 +2523,15 @@ export function renderPerformancePublicationMarkdown(result, validation = {}) {
     '',
     `Verdict: **${publication.verdict.status}**. Source: \`${publication.identity.sourceCommit}\`.`,
     '',
-    'A Kovo-vs-Next claim is eligible only when all seven rows pass. The check row is deliberately Kovo-only and does not manufacture a Next.js comparison.',
+    'A Kovo-vs-Next first-milestone publication is eligible only when all seven family gates pass. The check row is deliberately Kovo-only and does not manufacture a Next.js comparison. Competitive follow-on misses remain reported as failures, but do not masquerade as completion failures or block this first-milestone gate.',
     '',
-    '| Family | Posture | Host | Workload | Baseline targets | Holdout targets | Holdout gate |',
-    '| --- | --- | --- | --- | --- | --- | --- |',
+    '| Family | Posture | Host | Workload | Baseline completion | Baseline follow-on | Holdout completion | Holdout follow-on | Publication gate |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   ];
   for (const familyName of FAMILY_NAMES) {
     const family = publication.families[familyName];
     lines.push(
-      `| ${familyName} | ${family.comparisonPosture} | ${code(family.host)} | ${code(family.workload)} | ${family.targetAssessment?.baseline?.status ?? 'unproven'} | ${family.targetAssessment?.holdout?.status ?? 'unproven'} | ${family.status} |`,
+      `| ${familyName} | ${family.comparisonPosture} | ${code(family.host)} | ${code(family.workload)} | ${family.targetAssessment?.baseline?.blockingStatus ?? 'unproven'} | ${family.targetAssessment?.baseline?.followOnStatus ?? 'unproven'} | ${family.targetAssessment?.holdout?.blockingStatus ?? 'unproven'} | ${family.targetAssessment?.holdout?.followOnStatus ?? 'unproven'} | ${family.status} |`,
     );
   }
   const productionBytes = publication.productionBytes;
@@ -2590,11 +2599,16 @@ export function renderPerformancePublicationMarkdown(result, validation = {}) {
       lines.push('Evidence is unproven; no claim may be published.');
       continue;
     }
-    lines.push('Target assessment:', '');
+    lines.push(
+      `Completion floor: baseline **${family.targetAssessment.baseline.blockingStatus}**, holdout **${family.targetAssessment.holdout.blockingStatus}**. Reported follow-on targets: baseline **${family.targetAssessment.baseline.followOnStatus}**, holdout **${family.targetAssessment.holdout.followOnStatus}**.`,
+      '',
+      'Target assessment (a follow-on miss remains `fail`; its role is reported separately):',
+      '',
+    );
     for (const phase of ['baseline', 'holdout']) {
       for (const check of family.targetAssessment[phase].checks) {
         lines.push(
-          `- ${phase} ${check.id}: ${formatNumber(check.observed)} ${check.operator} ${formatNumber(check.limit)} — ${check.status}`,
+          `- ${phase} [${check.publicationImpact}] ${check.id}: ${formatNumber(check.observed)} ${check.operator} ${formatNumber(check.limit)} — ${check.status}`,
         );
       }
     }
@@ -2613,6 +2627,15 @@ export function renderPerformancePublicationMarkdown(result, validation = {}) {
   if (publication.verdict.failures.length > 0) {
     lines.push('', '## Blocking failures', '');
     for (const failure of publication.verdict.failures) lines.push(`- ${failure}`);
+  }
+  const followOnFailures = FAMILY_NAMES.flatMap((familyName) =>
+    (publication.families[familyName]?.targetAssessment?.followOnFailures ?? []).map(
+      (failure) => `${familyName}:${failure}`,
+    ),
+  ).sort((left, right) => left.localeCompare(right));
+  if (followOnFailures.length > 0) {
+    lines.push('', '## Reported follow-on misses (non-blocking)', '');
+    for (const failure of followOnFailures) lines.push(`- ${failure}`);
   }
   lines.push('');
   return lines.join('\n');
@@ -2699,11 +2722,17 @@ function renderBrowserComparisonMarkdownLines(result) {
       );
     }
   }
-  lines.push('', 'Browser target assessment:', '');
+  lines.push(
+    '',
+    `Browser completion floor: baseline **${family.targetAssessment.baseline.blockingStatus}**, holdout **${family.targetAssessment.holdout.blockingStatus}**. Reported follow-on targets: baseline **${family.targetAssessment.baseline.followOnStatus}**, holdout **${family.targetAssessment.holdout.followOnStatus}**.`,
+    '',
+    'Browser target assessment (a follow-on miss remains `fail`; its role is reported separately):',
+    '',
+  );
   for (const phase of ['baseline', 'holdout']) {
     for (const check of family.targetAssessment[phase].checks) {
       lines.push(
-        `- ${phase} ${check.id}: ${formatNumber(check.observed)} ${check.operator} ${formatNumber(check.limit)} — ${check.status}`,
+        `- ${phase} [${check.publicationImpact}] ${check.id}: ${formatNumber(check.observed)} ${check.operator} ${formatNumber(check.limit)} — ${check.status}`,
       );
     }
   }
@@ -2945,11 +2974,7 @@ async function assertCanonicalExistingPublicationPath(value, label) {
 
 function baselineTargetAssessment(familyName, budget) {
   if (familyName === 'browser' || familyName === 'server') {
-    return normalizeTargetAssessment(
-      budget.targetAssessment,
-      familyName === 'server' ? '>=' : '<=',
-      'target',
-    );
+    return normalizeTargetAssessment(budget.targetAssessment);
   }
   if (familyName.startsWith('dev-')) return devBaselineTargetAssessment(budget);
   if (familyName.startsWith('build-')) return buildBaselineTargetAssessment(budget);
@@ -3047,8 +3072,12 @@ function checkBaselineTargetAssessment(budget) {
 function holdoutTargetAssessment(config, evaluation) {
   if (evaluation?.verdict?.status === 'unproven') {
     return {
+      blockingFailures: [],
+      blockingStatus: 'unproven',
       checks: [],
       failures: [],
+      followOnFailures: [],
+      followOnStatus: 'unproven',
       reasons: sortedUniqueStrings(evaluation?.verdict?.reasons ?? []),
       status: 'unproven',
     };
@@ -3067,21 +3096,22 @@ function holdoutTargetAssessment(config, evaluation) {
   return assessmentFromChecks(checks);
 }
 
-function normalizeTargetAssessment(value, operator, kind) {
+function normalizeTargetAssessment(value) {
   if (!ownRecord(value) || !Array.isArray(value.checks)) {
     throw new TypeError('baseline target assessment is unavailable');
   }
   const normalized = assessmentFromChecks(
     value.checks.map((check) => ({
       id: check.id,
-      kind,
+      kind: check.kind,
       limit: check.limit,
       observed: check.observed,
-      operator,
+      operator: check.operator,
       status: check.status,
     })),
   );
   if (
+    canonicalJson(value.checks) !== canonicalJson(normalized.checks) ||
     canonicalJson(value.failures) !== canonicalJson(normalized.failures) ||
     value.status !== normalized.status
   ) {
@@ -3095,10 +3125,28 @@ function combineTargetAssessments(baseline, holdout) {
     ...baseline.failures.map((failure) => `baseline:${failure}`),
     ...holdout.failures.map((failure) => `holdout:${failure}`),
   ];
+  const blockingFailures = [
+    ...baseline.blockingFailures.map((failure) => `baseline:${failure}`),
+    ...holdout.blockingFailures.map((failure) => `holdout:${failure}`),
+  ];
+  const followOnFailures = [
+    ...baseline.followOnFailures.map((failure) => `baseline:${failure}`),
+    ...holdout.followOnFailures.map((failure) => `holdout:${failure}`),
+  ];
   const reasons = holdout.reasons ?? [];
   return {
     baseline,
+    blockingFailures,
+    blockingStatus: combineAssessmentCategoryStatus(
+      baseline.blockingStatus,
+      holdout.blockingStatus,
+    ),
     failures,
+    followOnFailures,
+    followOnStatus: combineAssessmentCategoryStatus(
+      baseline.followOnStatus,
+      holdout.followOnStatus,
+    ),
     holdout,
     reasons,
     status:
@@ -3114,7 +3162,11 @@ function assessmentFromChecks(checks) {
   if (!Array.isArray(checks) || checks.length === 0) {
     throw new TypeError('target assessment has no checks');
   }
-  for (const check of checks) {
+  const classifiedChecks = checks.map((check) => ({
+    ...check,
+    publicationImpact: targetPublicationImpact(check?.kind),
+  }));
+  for (const check of classifiedChecks) {
     if (
       !nonEmptyString(check?.id) ||
       !nonEmptyString(check?.kind) ||
@@ -3135,8 +3187,41 @@ function assessmentFromChecks(checks) {
       throw new TypeError(`target check ${String(check?.id)} is malformed`);
     }
   }
-  const failures = checks.filter((check) => check.status === 'fail').map((check) => check.id);
-  return { checks, failures, status: failures.length === 0 ? 'pass' : 'fail' };
+  const failures = classifiedChecks
+    .filter((check) => check.status === 'fail')
+    .map((check) => check.id);
+  const blockingFailures = classifiedChecks
+    .filter((check) => check.status === 'fail' && check.publicationImpact === 'completion')
+    .map((check) => check.id);
+  const followOnFailures = classifiedChecks
+    .filter((check) => check.status === 'fail' && check.publicationImpact === 'follow-on')
+    .map((check) => check.id);
+  const blockingCheckCount = classifiedChecks.filter(
+    (check) => check.publicationImpact === 'completion',
+  ).length;
+  const followOnCheckCount = classifiedChecks.length - blockingCheckCount;
+  return {
+    blockingFailures,
+    blockingStatus:
+      blockingCheckCount === 0 ? 'not-applicable' : blockingFailures.length === 0 ? 'pass' : 'fail',
+    checks: classifiedChecks,
+    failures,
+    followOnFailures,
+    followOnStatus:
+      followOnCheckCount === 0 ? 'not-applicable' : followOnFailures.length === 0 ? 'pass' : 'fail',
+    status: failures.length === 0 ? 'pass' : 'fail',
+  };
+}
+
+function combineAssessmentCategoryStatus(left, right) {
+  if (left === 'unproven' || right === 'unproven') return 'unproven';
+  if (left === 'fail' || right === 'fail') return 'fail';
+  if (left === 'not-applicable' && right === 'not-applicable') return 'not-applicable';
+  return 'pass';
+}
+
+function targetPublicationImpact(kind) {
+  return kind === 'competitive-target' ? 'follow-on' : 'completion';
 }
 
 function ratioBudgetCheck(id, evidence, limit, kind) {
@@ -3319,15 +3404,31 @@ function evidenceReference(entry) {
   };
 }
 
-function evaluationReference(evaluation) {
+function evaluationReference(evaluation, targetAssessment) {
+  const failures = sortedUniqueStrings(evaluation?.verdict?.failures ?? []);
+  const partitions = evaluationFailurePartitions(failures, targetAssessment);
   return {
+    blockingFailures: partitions.blockingFailures,
     candidate: {
       execution: evaluation?.candidate?.execution ?? null,
       sourceCommit: evaluation?.candidate?.sourceCommit ?? null,
     },
-    failures: sortedUniqueStrings(evaluation?.verdict?.failures ?? []),
+    failures,
+    followOnFailures: partitions.followOnFailures,
     reasons: sortedUniqueStrings(evaluation?.verdict?.reasons ?? []),
     status: evaluation?.verdict?.status ?? null,
+  };
+}
+
+function evaluationFailurePartitions(failures, targetAssessment) {
+  const followOnIds = new Set(
+    (targetAssessment?.holdout?.checks ?? [])
+      .filter((check) => check?.publicationImpact === 'follow-on')
+      .map((check) => check.id),
+  );
+  return {
+    blockingFailures: failures.filter((failure) => !followOnIds.has(failure)),
+    followOnFailures: failures.filter((failure) => followOnIds.has(failure)),
   };
 }
 
@@ -3353,8 +3454,8 @@ function blockingFailures(families) {
     if (family?.status !== 'blocked') return [];
     return [
       ...new Set([
-        ...(family.targetAssessment?.failures ?? []),
-        ...(family.holdoutEvaluation?.failures ?? []),
+        ...(family.targetAssessment?.blockingFailures ?? []),
+        ...(family.holdoutEvaluation?.blockingFailures ?? []),
       ]),
     ].map((failure) => `${familyName}:${failure}`);
   }).sort();
@@ -4626,6 +4727,24 @@ function targetAssessmentFindings(value, familyName) {
   if (!ownRecord(value) || !['pass', 'fail', 'unproven'].includes(value.status)) {
     return [`${familyName} target assessment is unavailable`];
   }
+  if (
+    canonicalJson(Object.keys(value).sort()) !==
+    canonicalJson(
+      [
+        'baseline',
+        'blockingFailures',
+        'blockingStatus',
+        'failures',
+        'followOnFailures',
+        'followOnStatus',
+        'holdout',
+        'reasons',
+        'status',
+      ].sort(),
+    )
+  ) {
+    findings.push(`${familyName} combined target assessment field census differs from policy`);
+  }
   const assessments = {};
   for (const phase of ['baseline', 'holdout']) {
     const assessment = value[phase];
@@ -4637,8 +4756,23 @@ function targetAssessmentFindings(value, familyName) {
       findings.push(`${familyName} ${phase} target assessment is empty`);
       continue;
     }
+    if (
+      canonicalJson(Object.keys(assessment).sort()) !==
+      canonicalJson(
+        [
+          'blockingFailures',
+          'blockingStatus',
+          'checks',
+          'failures',
+          'followOnFailures',
+          'followOnStatus',
+          'status',
+        ].sort(),
+      )
+    ) {
+      findings.push(`${familyName} ${phase} target assessment field census differs from policy`);
+    }
     const checkIds = new Set();
-    const expectedFailures = [];
     for (const check of assessment.checks) {
       if (
         !nonEmptyString(check?.id) ||
@@ -4646,6 +4780,7 @@ function targetAssessmentFindings(value, familyName) {
         !['<=', '>='].includes(check?.operator) ||
         !Number.isFinite(check?.limit) ||
         !['pass', 'fail'].includes(check?.status) ||
+        check?.publicationImpact !== targetPublicationImpact(check?.kind) ||
         checkIds.has(check?.id)
       ) {
         findings.push(`${familyName} ${phase} target check is malformed or duplicated`);
@@ -4660,7 +4795,6 @@ function targetAssessmentFindings(value, familyName) {
       if (check.status !== expectedStatus) {
         findings.push(`${familyName} ${phase} target check ${check.id} status is not derived`);
       }
-      if (expectedStatus === 'fail') expectedFailures.push(check.id);
     }
     if (familyName === 'browser' || familyName === 'server') {
       const expectedCensus = comparisonTargetCheckSpecifications(familyName).map(
@@ -4696,29 +4830,48 @@ function targetAssessmentFindings(value, familyName) {
         }
       }
     }
-    const expectedPhaseStatus = expectedFailures.length === 0 ? 'pass' : 'fail';
-    if (
-      canonicalJson(assessment.failures) !== canonicalJson(expectedFailures) ||
-      assessment.status !== expectedPhaseStatus
-    ) {
+    let expectedAssessment;
+    try {
+      expectedAssessment = assessmentFromChecks(
+        assessment.checks.map(({ id, kind, limit, observed, operator, status }) => ({
+          id,
+          kind,
+          limit,
+          observed,
+          operator,
+          status,
+        })),
+      );
+    } catch {
+      findings.push(`${familyName} ${phase} target verdict is not derived from its checks`);
+      continue;
+    }
+    if (canonicalJson(assessment) !== canonicalJson(expectedAssessment)) {
       findings.push(`${familyName} ${phase} target verdict is not derived from its checks`);
     }
-    assessments[phase] = { failures: expectedFailures, status: expectedPhaseStatus };
+    assessments[phase] = expectedAssessment;
   }
   if (assessments.baseline && assessments.holdout) {
-    const expectedFailures = [
-      ...assessments.baseline.failures.map((failure) => `baseline:${failure}`),
-      ...assessments.holdout.failures.map((failure) => `holdout:${failure}`),
-    ];
-    const expectedStatus =
-      assessments.baseline.status === 'pass' && assessments.holdout.status === 'pass'
-        ? 'pass'
-        : 'fail';
+    const expected = combineTargetAssessments(assessments.baseline, assessments.holdout);
     if (
-      canonicalJson(value.failures) !== canonicalJson(expectedFailures) ||
-      value.status !== expectedStatus ||
-      !Array.isArray(value.reasons) ||
-      value.reasons.length !== 0
+      canonicalJson({
+        blockingFailures: value.blockingFailures,
+        blockingStatus: value.blockingStatus,
+        failures: value.failures,
+        followOnFailures: value.followOnFailures,
+        followOnStatus: value.followOnStatus,
+        reasons: value.reasons,
+        status: value.status,
+      }) !==
+      canonicalJson({
+        blockingFailures: expected.blockingFailures,
+        blockingStatus: expected.blockingStatus,
+        failures: expected.failures,
+        followOnFailures: expected.followOnFailures,
+        followOnStatus: expected.followOnStatus,
+        reasons: expected.reasons,
+        status: expected.status,
+      })
     ) {
       findings.push(`${familyName} combined target verdict is not derived from both phases`);
     }
@@ -4770,14 +4923,22 @@ function devTargetCheckSpecifications(familyName) {
   ];
 }
 
-function evaluationReferenceFindings(value, familyName) {
+function evaluationReferenceFindings(value, familyName, targetAssessment) {
   if (!ownRecord(value) || !['pass', 'regression', 'unproven'].includes(value.status)) {
     return [`${familyName} holdout evaluation summary is unavailable`];
   }
   const findings = [];
+  if (
+    canonicalJson(Object.keys(value).sort()) !==
+    canonicalJson(
+      ['blockingFailures', 'candidate', 'failures', 'followOnFailures', 'reasons', 'status'].sort(),
+    )
+  ) {
+    findings.push(`${familyName} holdout evaluation summary field census differs from policy`);
+  }
   const failures = Array.isArray(value.failures) ? value.failures : [];
   const reasons = Array.isArray(value.reasons) ? value.reasons : [];
-  for (const field of ['failures', 'reasons']) {
+  for (const field of ['blockingFailures', 'failures', 'followOnFailures', 'reasons']) {
     if (
       !Array.isArray(value[field]) ||
       value[field].some((item) => !nonEmptyString(item)) ||
@@ -4798,6 +4959,15 @@ function evaluationReferenceFindings(value, familyName) {
     (value.status === 'unproven' && reasons.length === 0)
   ) {
     findings.push(`${familyName} holdout evaluation verdict is internally inconsistent`);
+  }
+  const expectedPartitions = evaluationFailurePartitions(failures, targetAssessment);
+  if (
+    canonicalJson(value.blockingFailures) !== canonicalJson(expectedPartitions.blockingFailures) ||
+    canonicalJson(value.followOnFailures) !== canonicalJson(expectedPartitions.followOnFailures)
+  ) {
+    findings.push(
+      `${familyName} holdout evaluation blocking/follow-on partition is not derived from policy`,
+    );
   }
   return findings;
 }
