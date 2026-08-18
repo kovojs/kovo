@@ -378,6 +378,13 @@ describe('metrics-blind performance publication collection', () => {
           resealWorkloadAndArchive(fixture);
         },
       ],
+      [
+        'post-run source drift',
+        (fixture) => {
+          fixture.report.sourceAfter.commit = 'b'.repeat(40);
+          resealWorkloadAndArchive(fixture);
+        },
+      ],
     ];
     for (const [label, mutate] of cases) {
       const fixture = campaignFixture([{ family: 'browser', runId: 1001 }]).byRun.get(1001);
@@ -1419,6 +1426,7 @@ function reportFixture({
     digest: digest(canonicalJson(executionFacts)),
     schema: 'kovo-performance-execution/v1',
   };
+  const source = { commit: SOURCE, dirty: false, dirtyPaths: [], locks };
   const report = {
     ...(policy.reportSchema === 'kovo-perf-report/v1'
       ? { metrics: { fixture: { value: index } }, suite: 'check-scaling' }
@@ -1441,7 +1449,8 @@ function reportFixture({
       ? {}
       : { productArtifact: policy.packedProduct ? productArtifact : null }),
     schema: policy.reportSchema,
-    source: { commit: SOURCE, dirty: false, dirtyPaths: [], locks },
+    source,
+    sourceAfter: structuredClone(source),
     verdict: { reasons: [], status: 'measured' },
     workloadIdentity,
   };

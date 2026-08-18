@@ -154,6 +154,21 @@ describe('seven-family performance publication gate', () => {
       ),
     ).rejects.toThrow(/wrong or dirty/u);
 
+    const sourceDriftedUnselected = writeCampaignAuthenticationFixture();
+    const sourceDriftedCandidate = sourceDriftedUnselected.campaign.familyCandidates
+      .filter(({ family }) => family === 'browser')
+      .at(-1);
+    const sourceDriftedEvidence = await sourceDriftedUnselected.authenticateArtifactEvidence(
+      sourceDriftedCandidate.descriptor,
+    );
+    sourceDriftedEvidence.report.sourceAfter.commit = 'b'.repeat(40);
+    await expect(
+      authenticatePerformancePublicationCampaign(
+        sourceDriftedUnselected.campaign,
+        await campaignAuthenticationOptions(sourceDriftedUnselected),
+      ),
+    ).rejects.toThrow(/source changed during measurement/u);
+
     const unmeasured = writeCampaignAuthenticationFixture();
     const unmeasuredCandidate = unmeasured.campaign.familyCandidates
       .filter(({ family }) => family === 'server')
@@ -2358,6 +2373,7 @@ function writeCampaignAuthenticationFixture() {
         provider: 'github-actions',
         startedAt: new Date(Date.parse(runCreatedAt) + familyIndex).toISOString(),
       };
+      const source = { commit: sourceCommit, dirty: false, dirtyPaths: [], locks };
       const report = {
         execution: {
           ...executionFacts,
@@ -2380,7 +2396,8 @@ function writeCampaignAuthenticationFixture() {
             : { productArtifact: null }),
         schema:
           familyName === 'check' ? 'kovo-perf-report/v1' : 'kovo-next-performance-comparison/v1',
-        source: { commit: sourceCommit, dirty: false, dirtyPaths: [], locks },
+        source,
+        sourceAfter: structuredClone(source),
         ...(familyName === 'check' ? { suite: 'check-scaling' } : {}),
         verdict: { reasons: [], status: 'measured' },
         workloadIdentity,

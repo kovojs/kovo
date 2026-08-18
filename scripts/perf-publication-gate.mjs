@@ -1215,6 +1215,9 @@ function campaignFamilyCandidateFindings(candidate, authenticated, sourceSha, { 
   ) {
     findings.push(`${familyName} report source is wrong or dirty`);
   }
+  if (canonicalJson(report?.source) !== canonicalJson(report?.sourceAfter)) {
+    findings.push(`${familyName} report source changed during measurement`);
+  }
   if (
     !ownRecord(report?.source?.locks) ||
     REQUIRED_LOCKS.some((lock) => !DIGEST_PATTERN.test(report.source.locks[lock] ?? ''))
