@@ -228,12 +228,12 @@ unzip -p "$kovo_perf_custody/run-1/browser.zip" comparison.json \
   > "$kovo_perf_custody/run-1/comparison.json"
 ```
 
-The input manifest is `kovo-performance-publication-input/v4`. This abridged, non-runnable example
+The input manifest is `kovo-performance-publication-input/v5`. This abridged, non-runnable example
 shows one family's shape:
 
 ```json
 {
-  "schema": "kovo-performance-publication-input/v4",
+  "schema": "kovo-performance-publication-input/v5",
   "repository": "kovojs/kovo",
   "campaign": {
     "boundary": { "firstRunId": 1001, "lastRunId": 1006 },
@@ -313,11 +313,20 @@ The example expands only `browser` for readability. A real manifest must contain
 five-plus-one shape for `browser`, `dev-n24`, `dev-n216`, `build-n24`, `build-n216`, `server`, and
 `check`, plus exactly one top-level `productionBytes` descriptor and the complete campaign custody
 object. Missing or additional families, a missing sidecar, or an omitted campaign run/candidate fail
-before publication. Every path is canonical and relative to the manifest directory. The gate opens
-only contained, non-symlink, single-link regular files, checks read stability, and rejects path or
-inode reuse across descriptors. Before live API access and again after all descriptor
-authentication, it recursively requires the directory to equal the manifest references exactly;
-extra or missing files/directories and non-regular nodes fail closed.
+before publication. Every path is canonical and relative to the manifest directory. Before live
+API access, the gate recursively opens every exact file without following symlinks, including the
+manifest, and pins its SHA-256, device, inode, mode, link count, size, modification time, and change
+time. Each contained, single-link descriptor read must match that opening identity and digest; path
+or inode reuse across descriptors fails closed. After all descriptor authentication, the gate
+independently re-hashes the exact recursive tree, requires the closing census to equal the opening
+census byte-for-byte, and completes a final no-follow path/identity sweep against the closing
+snapshots. Extra or missing files/directories, non-regular nodes, unlink/recreate replacement,
+same-inode rewriting, and attempted timestamp restoration all fail closed.
+
+The filesystem checks establish custody through the final sweep; they are not an atomic snapshot or
+an external timestamp. The operator must prevent concurrent writes throughout the gate invocation
+and preserve the input directory after return for later audit or reproduction. Any writer allowed
+to race a completed per-file check is outside this local custody assumption.
 
 If the build-persistence predicate returns `profile-required`, add the two current N=216 profile
 reports under the optional top-level `buildProfiles` object. The two descriptors may share only the

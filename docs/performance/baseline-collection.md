@@ -89,12 +89,21 @@ Production-bytes sidecar, and one exact-source workflow-run census. Campaign aut
 two files per run, and complete candidate custody contributes five files per family or byte
 candidate. Unselected seventh-or-later family reports and later byte candidates are retained.
 
-Before any live GitHub request, and again after every descriptor has been read and authenticated,
-the gate recursively enumerates the manifest directory without following symlinks. The observed
-tree must equal the manifest plus all referenced raw files exactly. Missing or extra files and
-directories, traversal, symlinks, hardlinks, FIFOs, sockets, devices, and file/directory
-substitution fail closed. This is an exact local custody boundary at both observations, not a claim
-that inert files are cryptographically timestamped between them. Run
+Before any live GitHub request, the gate recursively opens every exact file without following
+symlinks, including the manifest, and records its SHA-256 plus device, inode, mode, link count,
+size, modification time, and change time. Every later descriptor read must match that opening
+identity and digest. After authentication, the gate independently repeats the recursive hash and
+identity census, requires it to equal the opening census byte-for-byte, then performs one more
+complete no-follow path/identity sweep to catch a file changed after its closing hash but before
+its final identity check. The tree must equal the manifest plus all referenced raw files exactly.
+Missing or extra files and directories, traversal, unlink/recreate, same-inode rewrites, metadata
+restoration attempts, symlinks, hardlinks, FIFOs, sockets, devices, and file/directory substitution
+fail closed.
+
+This is a local custody proof through the final sweep, not an atomic filesystem snapshot or an
+external timestamp. The operator must exclude concurrent writers for the entire gate invocation
+and preserve the custody directory after the gate returns if it is to remain reproducible audit
+evidence. Run
 `scripts/perf-publication-gate.mjs` from the same clean measured checkout; that gate remains the
 authority for live GitHub/workflow authentication, re-ratification, budget derivation, holdout
 evaluation, and the final publishable/blocked/unproven verdict. Optional N=216 build-profile

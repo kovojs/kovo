@@ -22,6 +22,7 @@ import {
   createPerformanceArtifactDescriptorCustody,
   loadLocalTrustedPerformanceWorkflow,
   readZipMember,
+  snapshotPerformanceArtifactCustodyFile,
 } from './perf-artifact-custody.mjs';
 
 const temporaryDirectories = [];
@@ -104,6 +105,49 @@ describe('performance artifact custody', () => {
         },
       }),
     ).rejects.toThrow('changed while being read');
+  });
+
+  it('cross-links every descriptor read to its opening identity and content snapshot', async () => {
+    const accepted = writeArtifactFixture();
+    const acceptedOpeningFiles = await Promise.all(
+      Object.values(accepted.evidence)
+        .sort((left, right) => left.localeCompare(right))
+        .map((relativePath) =>
+          snapshotPerformanceArtifactCustodyFile(relativePath, {
+            baseDirectory: accepted.directory,
+            label: `${relativePath} opening fixture`,
+          }),
+        ),
+    );
+    const acceptedCustody = await createPerformanceArtifactDescriptorCustody({
+      baseDirectory: accepted.directory,
+      openingFileCensus: acceptedOpeningFiles,
+    });
+    await expect(
+      authenticateFixture(accepted, { descriptorCustody: acceptedCustody }),
+    ).resolves.toBeDefined();
+
+    const tampered = writeArtifactFixture();
+    const tamperedOpeningFiles = await Promise.all(
+      Object.values(tampered.evidence)
+        .sort((left, right) => left.localeCompare(right))
+        .map((relativePath) =>
+          snapshotPerformanceArtifactCustodyFile(relativePath, {
+            baseDirectory: tampered.directory,
+            label: `${relativePath} opening fixture`,
+          }),
+        ),
+    );
+    const sameLengthBytes = Buffer.from(tampered.reportText);
+    sameLengthBytes[0] ^= 0x01;
+    writeFileSync(tampered.reportPath, sameLengthBytes);
+    const tamperedCustody = await createPerformanceArtifactDescriptorCustody({
+      baseDirectory: tampered.directory,
+      openingFileCensus: tamperedOpeningFiles,
+    });
+    await expect(
+      authenticateFixture(tampered, { descriptorCustody: tamperedCustody }),
+    ).rejects.toThrow(/opening custody census/u);
   });
 
   it('binds the API record, ZIP digest, exact member, report, run, repository, and source', async () => {

@@ -44,6 +44,18 @@ const MAX_API_RESPONSE_BYTES = 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_REPORT_BYTES = 128 * 1024 * 1024;
 const MAX_AUXILIARY_MEMBERS = 128;
+const CUSTODY_HASH_CHUNK_BYTES = 64 * 1024;
+const CUSTODY_FILE_SNAPSHOT_KEYS = Object.freeze([
+  'contentDigest',
+  'ctimeMs',
+  'dev',
+  'ino',
+  'mode',
+  'mtimeMs',
+  'nlink',
+  'path',
+  'size',
+]);
 const execFileAsync = promisify(execFile);
 
 /**
@@ -1386,6 +1398,7 @@ function validateExpectedArchiveMembers(value, expectedReportMember) {
  */
 export async function createPerformanceArtifactDescriptorCustody({
   baseDirectory = process.cwd(),
+  openingFileCensus,
 } = {}) {
   const requestedRoot = path.resolve(baseDirectory);
   const [facts, resolvedRoot] = await Promise.all([lstat(requestedRoot), realpath(requestedRoot)]);
@@ -1395,41 +1408,31 @@ export async function createPerformanceArtifactDescriptorCustody({
   return {
     baseDirectory: resolvedRoot,
     inodes: new Map(),
+    openingFiles: validateOpeningFileCensus(openingFileCensus),
     paths: new Map(),
   };
 }
 
-export async function readPerformanceArtifactCustodyFile(
+/**
+ * Hash one exact custody file through a no-follow handle while pinning its complete filesystem
+ * identity. Publication uses this for both its opening and closing recursive censuses.
+ */
+export async function snapshotPerformanceArtifactCustodyFile(
   relativePath,
-  { custody, descriptorKey, label, maximumBytes = MAX_API_RESPONSE_BYTES, readHook, shareGroup },
+  { baseDirectory, label, maximumBytes = MAX_API_RESPONSE_BYTES },
 ) {
   if (!validDescriptorRelativePath(relativePath)) {
-    throw new TypeError(`${String(descriptorKey)} is not a canonical safe relative path`);
+    throw new TypeError(`${label} is not a canonical safe relative path`);
   }
-  if (
-    !ownRecord(custody) ||
-    !nonEmptyString(custody.baseDirectory) ||
-    !(custody.paths instanceof Map) ||
-    !(custody.inodes instanceof Map)
-  ) {
-    throw new TypeError('shared artifact descriptor custody registry is required');
-  }
-  if (!nonEmptyString(descriptorKey) || !nonEmptyString(label)) {
-    throw new TypeError('artifact descriptor key and label are required');
+  if (!nonEmptyString(baseDirectory) || !nonEmptyString(label)) {
+    throw new TypeError('artifact snapshot root and label are required');
   }
   if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) {
-    throw new TypeError('artifact custody byte bound is invalid');
+    throw new TypeError('artifact snapshot byte bound is invalid');
   }
-  if (
-    shareGroup !== undefined &&
-    (descriptorKey !== 'archive' || shareGroup !== 'build-profile-archive')
-  ) {
-    throw new TypeError('only the exact build-profile archive may use shared descriptor custody');
-  }
-  const file = path.resolve(custody.baseDirectory, ...relativePath.split('/'));
-  if (!containedBy(custody.baseDirectory, file)) {
-    throw new TypeError(`${label} escapes its custody root`);
-  }
+  const root = await realpath(path.resolve(baseDirectory));
+  const file = path.resolve(root, ...relativePath.split('/'));
+  if (!containedBy(root, file)) throw new TypeError(`${label} escapes its custody root`);
   const beforePath = await lstat(file);
   if (
     !beforePath.isFile() ||
@@ -1451,9 +1454,149 @@ export async function readPerformanceArtifactCustodyFile(
     ) {
       throw new TypeError(`${label} changed, aliases another inode, or is reached through a link`);
     }
+    const contentDigest = await hashOpenFile(handle, beforeHandle.size, label);
+    const [afterHandle, afterPath, afterResolvedPath] = await Promise.all([
+      handle.stat(),
+      lstat(file),
+      realpath(file),
+    ]);
+    if (
+      afterResolvedPath !== file ||
+      afterPath.isSymbolicLink() ||
+      afterPath.nlink !== 1 ||
+      !sameStableFile(beforeHandle, afterHandle) ||
+      !sameStableFile(beforeHandle, afterPath)
+    ) {
+      throw new TypeError(`${label} changed while its custody snapshot was hashed`);
+    }
+    return fileSnapshot(relativePath, afterHandle, contentDigest);
+  } finally {
+    await handle?.close();
+  }
+}
+
+/** Re-open one hashed census member without following links and prove its path and identity remain. */
+export async function verifyPerformanceArtifactCustodyFileSnapshot(
+  snapshot,
+  { baseDirectory, label },
+) {
+  if (
+    !validFileSnapshotEntry(snapshot) ||
+    !nonEmptyString(baseDirectory) ||
+    !nonEmptyString(label)
+  ) {
+    throw new TypeError('artifact custody snapshot verification input is malformed');
+  }
+  const root = await realpath(path.resolve(baseDirectory));
+  const file = path.resolve(root, ...snapshot.path.split('/'));
+  if (!containedBy(root, file)) throw new TypeError(`${label} escapes its custody root`);
+  const beforePath = await lstat(file);
+  if (
+    !beforePath.isFile() ||
+    beforePath.isSymbolicLink() ||
+    beforePath.nlink !== 1 ||
+    !snapshotMatchesFile(snapshot, beforePath, snapshot.path)
+  ) {
+    throw new TypeError(`${label} filesystem identity differs from its hashed custody census`);
+  }
+  let handle;
+  try {
+    handle = await open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    const [handleFacts, resolvedPath] = await Promise.all([handle.stat(), realpath(file)]);
+    if (
+      resolvedPath !== file ||
+      !sameStableFile(beforePath, handleFacts) ||
+      !snapshotMatchesFile(snapshot, handleFacts, snapshot.path)
+    ) {
+      throw new TypeError(
+        `${label} path or handle identity differs from its hashed custody census`,
+      );
+    }
+    const [afterHandle, afterPath, afterResolvedPath] = await Promise.all([
+      handle.stat(),
+      lstat(file),
+      realpath(file),
+    ]);
+    if (
+      afterResolvedPath !== file ||
+      afterPath.isSymbolicLink() ||
+      !sameStableFile(handleFacts, afterHandle) ||
+      !sameStableFile(handleFacts, afterPath) ||
+      !snapshotMatchesFile(snapshot, afterHandle, snapshot.path)
+    ) {
+      throw new TypeError(`${label} changed during final custody identity verification`);
+    }
+  } finally {
+    await handle?.close();
+  }
+}
+
+export async function readPerformanceArtifactCustodyFile(
+  relativePath,
+  { custody, descriptorKey, label, maximumBytes = MAX_API_RESPONSE_BYTES, readHook, shareGroup },
+) {
+  if (!validDescriptorRelativePath(relativePath)) {
+    throw new TypeError(`${String(descriptorKey)} is not a canonical safe relative path`);
+  }
+  if (
+    !ownRecord(custody) ||
+    !nonEmptyString(custody.baseDirectory) ||
+    !(custody.paths instanceof Map) ||
+    !(custody.inodes instanceof Map) ||
+    (custody.openingFiles !== null && !(custody.openingFiles instanceof Map))
+  ) {
+    throw new TypeError('shared artifact descriptor custody registry is required');
+  }
+  if (!nonEmptyString(descriptorKey) || !nonEmptyString(label)) {
+    throw new TypeError('artifact descriptor key and label are required');
+  }
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) {
+    throw new TypeError('artifact custody byte bound is invalid');
+  }
+  if (
+    shareGroup !== undefined &&
+    (descriptorKey !== 'archive' || shareGroup !== 'build-profile-archive')
+  ) {
+    throw new TypeError('only the exact build-profile archive may use shared descriptor custody');
+  }
+  const file = path.resolve(custody.baseDirectory, ...relativePath.split('/'));
+  if (!containedBy(custody.baseDirectory, file)) {
+    throw new TypeError(`${label} escapes its custody root`);
+  }
+  const beforePath = await lstat(file);
+  const openingFile = custody.openingFiles?.get(relativePath);
+  if (custody.openingFiles !== null && openingFile === undefined) {
+    throw new TypeError(`${label} is absent from the immutable opening custody census`);
+  }
+  if (
+    !beforePath.isFile() ||
+    beforePath.isSymbolicLink() ||
+    beforePath.nlink !== 1 ||
+    beforePath.size < 1 ||
+    beforePath.size > maximumBytes
+  ) {
+    throw new TypeError(`${label} is not a bounded regular file with unique inode custody`);
+  }
+  if (openingFile !== undefined && !snapshotMatchesFile(openingFile, beforePath, relativePath)) {
+    throw new TypeError(`${label} filesystem identity differs from the opening custody census`);
+  }
+  let handle;
+  try {
+    handle = await open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    const [beforeHandle, resolvedPath] = await Promise.all([handle.stat(), realpath(file)]);
+    if (
+      resolvedPath !== file ||
+      !sameStableFile(beforePath, beforeHandle) ||
+      beforeHandle.nlink !== 1
+    ) {
+      throw new TypeError(`${label} changed, aliases another inode, or is reached through a link`);
+    }
     const bytes = await handle.readFile();
     if (bytes.length !== beforeHandle.size || bytes.length < 1 || bytes.length > maximumBytes) {
       throw new TypeError(`${label} changed or exceeded its bound while being read`);
+    }
+    if (openingFile !== undefined && sha256Bytes(bytes) !== openingFile.contentDigest) {
+      throw new TypeError(`${label} content differs from the opening custody census`);
     }
     if (readHook !== undefined) {
       if (typeof readHook !== 'function') throw new TypeError('descriptor read hook is invalid');
@@ -1473,6 +1616,9 @@ export async function readPerformanceArtifactCustodyFile(
     ) {
       throw new TypeError(`${label} changed while being read`);
     }
+    if (openingFile !== undefined && !snapshotMatchesFile(openingFile, afterHandle, relativePath)) {
+      throw new TypeError(`${label} filesystem identity changed from the opening custody census`);
+    }
     registerDescriptorCustody(custody, {
       descriptorKey,
       file,
@@ -1483,6 +1629,92 @@ export async function readPerformanceArtifactCustodyFile(
   } finally {
     await handle?.close();
   }
+}
+
+function validateOpeningFileCensus(value) {
+  if (value === undefined) return null;
+  if (!Array.isArray(value) || value.length < 1) {
+    throw new TypeError('opening artifact custody file census is unavailable');
+  }
+  const result = new Map();
+  const inodes = new Set();
+  for (const entry of value) {
+    if (!validFileSnapshotEntry(entry)) {
+      throw new TypeError('opening artifact custody file census contains malformed facts');
+    }
+    const inode = `${String(entry.dev)}:${String(entry.ino)}`;
+    if (result.has(entry.path) || inodes.has(inode)) {
+      throw new TypeError('opening artifact custody file census aliases a path or inode');
+    }
+    result.set(entry.path, Object.freeze({ ...entry }));
+    inodes.add(inode);
+  }
+  return result;
+}
+
+function validFileSnapshotEntry(entry) {
+  return (
+    ownRecord(entry) &&
+    JSON.stringify(Object.keys(entry).sort()) === JSON.stringify(CUSTODY_FILE_SNAPSHOT_KEYS) &&
+    validDescriptorRelativePath(entry.path) &&
+    DIGEST_PATTERN.test(entry.contentDigest ?? '') &&
+    validFileSnapshotNumber(entry.dev) &&
+    validFileSnapshotNumber(entry.ino) &&
+    validFileSnapshotNumber(entry.mode) &&
+    entry.nlink === 1 &&
+    Number.isSafeInteger(entry.size) &&
+    entry.size >= 1 &&
+    Number.isFinite(entry.mtimeMs) &&
+    Number.isFinite(entry.ctimeMs)
+  );
+}
+
+function validFileSnapshotNumber(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+function snapshotMatchesFile(snapshot, facts, relativePath) {
+  return (
+    snapshot.path === relativePath &&
+    snapshot.dev === facts.dev &&
+    snapshot.ino === facts.ino &&
+    snapshot.mode === facts.mode &&
+    snapshot.nlink === facts.nlink &&
+    snapshot.size === facts.size &&
+    snapshot.mtimeMs === facts.mtimeMs &&
+    snapshot.ctimeMs === facts.ctimeMs
+  );
+}
+
+function fileSnapshot(relativePath, facts, contentDigest) {
+  return Object.freeze({
+    contentDigest,
+    ctimeMs: facts.ctimeMs,
+    dev: facts.dev,
+    ino: facts.ino,
+    mode: facts.mode,
+    mtimeMs: facts.mtimeMs,
+    nlink: facts.nlink,
+    path: relativePath,
+    size: facts.size,
+  });
+}
+
+async function hashOpenFile(handle, size, label) {
+  const digest = createHash('sha256');
+  const buffer = Buffer.allocUnsafe(Math.min(CUSTODY_HASH_CHUNK_BYTES, size));
+  let offset = 0;
+  while (offset < size) {
+    const length = Math.min(buffer.length, size - offset);
+    const { bytesRead } = await handle.read(buffer, 0, length, offset);
+    if (bytesRead < 1) throw new TypeError(`${label} changed while its custody bytes were hashed`);
+    digest.update(buffer.subarray(0, bytesRead));
+    offset += bytesRead;
+  }
+  const overflow = Buffer.allocUnsafe(1);
+  const { bytesRead } = await handle.read(overflow, 0, 1, size);
+  if (bytesRead !== 0) throw new TypeError(`${label} grew while its custody bytes were hashed`);
+  return `sha256:${digest.digest('hex')}`;
 }
 
 function registerDescriptorCustody(custody, facts) {

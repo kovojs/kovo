@@ -9,9 +9,11 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  rename,
   rm,
   symlink,
   unlink,
+  utimes,
   writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
@@ -750,7 +752,8 @@ describe('metrics-blind performance publication collection', () => {
         await expect(readFile(path.join(publication, relative))).resolves.not.toHaveLength(0);
       }
     }
-    expect((await regularFileCensus(publication)).length - 1).toBe(
+    const publicationFiles = await regularFileCensus(publication);
+    expect(publicationFiles.length - 1).toBe(
       performancePublicationManifestRawFileCount({
         candidateCount: {
           families: result.manifest.campaign.familyCandidates.length,
@@ -760,12 +763,26 @@ describe('metrics-blind performance publication collection', () => {
       }),
     );
     const manifestPath = path.join(publication, 'performance-publication-input.json');
-    await expect(
-      authenticateManifestFilesystemCensus(result.manifest, {
-        baseDirectory: publication,
-        manifestPath,
-      }),
-    ).resolves.toBe('performance-publication-input.json');
+    const manifestCensus = await authenticateManifestFilesystemCensus(result.manifest, {
+      baseDirectory: publication,
+      manifestPath,
+    });
+    expect(manifestCensus).toMatchObject({
+      files: expect.any(Array),
+      manifestRelativePath: 'performance-publication-input.json',
+    });
+    expect(manifestCensus.files).toHaveLength(publicationFiles.length);
+    expect(manifestCensus.files).toContainEqual({
+      contentDigest: digest(await readFile(manifestPath)),
+      ctimeMs: expect.any(Number),
+      dev: expect.any(Number),
+      ino: expect.any(Number),
+      mode: expect.any(Number),
+      mtimeMs: expect.any(Number),
+      nlink: 1,
+      path: 'performance-publication-input.json',
+      size: (await lstat(manifestPath)).size,
+    });
 
     const extra = path.join(publication, 'unused.bin');
     await writeFile(extra, 'unused');
@@ -872,6 +889,184 @@ describe('metrics-blind performance publication collection', () => {
     expect(injected).toBe(true);
     expect(networkCalls).toBeGreaterThan(0);
     await unlink(extra);
+
+    await expect(
+      authenticatePerformancePublicationInput(result.manifest, {
+        ...gateOperations,
+        baseDirectory: publication,
+        manifestPath,
+      }),
+    ).resolves.toMatchObject({ repository: REPOSITORY });
+
+    const firstSelectedReport = path.join(
+      publication,
+      result.manifest.families.browser.baseline[0].report,
+    );
+    const firstSelectedReportBytes = await readFile(firstSelectedReport);
+    const firstSelectedReportOpeningInode = (await lstat(firstSelectedReport)).ino;
+    const secondSelectedApi = result.manifest.families.browser.baseline[1].apiMetadata;
+    let replacedAfterRead = false;
+    await expect(
+      authenticatePerformancePublicationInput(result.manifest, {
+        ...gateOperations,
+        baseDirectory: publication,
+        async descriptorReadHook({ relativePath }) {
+          if (replacedAfterRead || relativePath !== secondSelectedApi) return;
+          replacedAfterRead = true;
+          const replacement = `${firstSelectedReport}.replacement`;
+          await writeFile(replacement, firstSelectedReportBytes);
+          await unlink(firstSelectedReport);
+          await rename(replacement, firstSelectedReport);
+        },
+        manifestPath,
+      }),
+    ).rejects.toThrow(/opening and closing census/u);
+    expect(replacedAfterRead).toBe(true);
+    expect((await lstat(firstSelectedReport)).ino).not.toBe(firstSelectedReportOpeningInode);
+    await unlink(firstSelectedReport);
+    await writeFile(firstSelectedReport, firstSelectedReportBytes);
+
+    const manifestBytes = await readFile(manifestPath);
+    const manifestOpeningInode = (await lstat(manifestPath)).ino;
+    let replacedManifest = false;
+    await expect(
+      authenticatePerformancePublicationInput(result.manifest, {
+        ...gateOperations,
+        baseDirectory: publication,
+        async descriptorReadHook({ relativePath }) {
+          if (
+            replacedManifest ||
+            relativePath !== result.manifest.families.browser.baseline[0].apiMetadata
+          ) {
+            return;
+          }
+          replacedManifest = true;
+          const replacement = `${manifestPath}.replacement`;
+          await writeFile(replacement, manifestBytes);
+          await unlink(manifestPath);
+          await rename(replacement, manifestPath);
+        },
+        manifestPath,
+      }),
+    ).rejects.toThrow(/opening and closing census/u);
+    expect(replacedManifest).toBe(true);
+    expect((await lstat(manifestPath)).ino).not.toBe(manifestOpeningInode);
+    await unlink(manifestPath);
+    await writeFile(manifestPath, manifestBytes);
+
+    const sameLengthTamper = Buffer.from(firstSelectedReportBytes);
+    sameLengthTamper[0] = sameLengthTamper[0] === 0x7b ? 0x5b : 0x7b;
+    const originalSelectedFacts = await lstat(firstSelectedReport);
+    let rewroteInPlace = false;
+    await expect(
+      authenticatePerformancePublicationInput(result.manifest, {
+        ...gateOperations,
+        baseDirectory: publication,
+        async descriptorReadHook({ relativePath }) {
+          if (rewroteInPlace || relativePath !== secondSelectedApi) return;
+          rewroteInPlace = true;
+          await writeFile(firstSelectedReport, sameLengthTamper);
+          await writeFile(firstSelectedReport, firstSelectedReportBytes);
+          await utimes(
+            firstSelectedReport,
+            originalSelectedFacts.atime,
+            originalSelectedFacts.mtime,
+          );
+        },
+        manifestPath,
+      }),
+    ).rejects.toThrow(/opening and closing census/u);
+    expect(rewroteInPlace).toBe(true);
+    expect(await readFile(firstSelectedReport)).toEqual(firstSelectedReportBytes);
+    const restoredSelectedFacts = await lstat(firstSelectedReport);
+    expect(restoredSelectedFacts.ino).toBe(originalSelectedFacts.ino);
+    expect(restoredSelectedFacts.ctimeMs).not.toBe(originalSelectedFacts.ctimeMs);
+
+    let rewroteBeforeDescriptorAuthentication = false;
+    await expect(
+      authenticatePerformancePublicationInput(result.manifest, {
+        ...gateOperations,
+        baseDirectory: publication,
+        async descriptorReadHook({ descriptorKey }) {
+          if (rewroteBeforeDescriptorAuthentication || descriptorKey !== 'manifest') return;
+          rewroteBeforeDescriptorAuthentication = true;
+          await writeFile(firstSelectedReport, sameLengthTamper);
+        },
+        manifestPath,
+      }),
+    ).rejects.toThrow(/opening custody census/u);
+    expect(rewroteBeforeDescriptorAuthentication).toBe(true);
+    await writeFile(firstSelectedReport, firstSelectedReportBytes);
+
+    const latestBytesCandidate = result.manifest.campaign.productionBytesCandidates.at(-1);
+    const latestReport = path.join(publication, latestBytesCandidate.descriptor.report);
+    const latestReportBytes = await readFile(latestReport);
+    const latestReportOpeningInode = (await lstat(latestReport)).ino;
+    let replacedLatestRead = false;
+    await expect(
+      authenticatePerformancePublicationInput(result.manifest, {
+        ...gateOperations,
+        baseDirectory: publication,
+        async fetchArtifactApi(options) {
+          const response = await gateOperations.fetchArtifactApi(options);
+          if (!replacedLatestRead && options.artifactId === latestBytesCandidate.artifactId) {
+            replacedLatestRead = true;
+            const replacement = `${latestReport}.replacement`;
+            await writeFile(replacement, latestReportBytes);
+            await unlink(latestReport);
+            await rename(replacement, latestReport);
+          }
+          return response;
+        },
+        manifestPath,
+      }),
+    ).rejects.toThrow(/opening and closing census/u);
+    expect(replacedLatestRead).toBe(true);
+    expect((await lstat(latestReport)).ino).not.toBe(latestReportOpeningInode);
+    await unlink(latestReport);
+    await writeFile(latestReport, latestReportBytes);
+
+    let firstClosingRelativePath;
+    let firstClosingBytes;
+    let rewroteAfterClosingHash = false;
+    await expect(
+      authenticatePerformancePublicationInput(result.manifest, {
+        ...gateOperations,
+        baseDirectory: publication,
+        async filesystemCensusHook({ phase, relativePath, stage }) {
+          if (phase !== 'closing' || stage !== 'hashed') return;
+          if (firstClosingRelativePath === undefined) {
+            firstClosingRelativePath = relativePath;
+            firstClosingBytes = await readFile(path.join(publication, relativePath));
+            return;
+          }
+          if (rewroteAfterClosingHash) return;
+          rewroteAfterClosingHash = true;
+          const tampered = Buffer.from(firstClosingBytes);
+          tampered[0] ^= 0x01;
+          await writeFile(path.join(publication, firstClosingRelativePath), tampered);
+        },
+        manifestPath,
+      }),
+    ).rejects.toThrow(/hashed custody census/u);
+    expect(rewroteAfterClosingHash).toBe(true);
+    await writeFile(path.join(publication, firstClosingRelativePath), firstClosingBytes);
+
+    let deletedAfterRead = false;
+    await expect(
+      authenticatePerformancePublicationInput(result.manifest, {
+        ...gateOperations,
+        baseDirectory: publication,
+        async descriptorReadHook({ relativePath }) {
+          if (deletedAfterRead || relativePath !== secondSelectedApi) return;
+          deletedAfterRead = true;
+          await unlink(firstSelectedReport);
+        },
+        manifestPath,
+      }),
+    ).rejects.toThrow(/ENOENT|missing/u);
+    expect(deletedAfterRead).toBe(true);
+    await writeFile(firstSelectedReport, firstSelectedReportBytes);
   });
 });
 

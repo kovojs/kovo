@@ -14,6 +14,8 @@ import {
   fetchGitHubWorkflowArtifactsApiResponse,
   fetchGitHubWorkflowRunApiResponse,
   readPerformanceArtifactCustodyFile,
+  snapshotPerformanceArtifactCustodyFile,
+  verifyPerformanceArtifactCustodyFileSnapshot,
 } from './lib/perf-artifact-custody.mjs';
 import { executionIdentityFindings } from './lib/perf-execution.mjs';
 import {
@@ -70,14 +72,16 @@ import {
   performanceGateWorkloadIdentity,
 } from './perf-gate.mjs';
 
-export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v4';
-export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v4';
+export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v5';
+export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v5';
 export const PERF_PUBLICATION_REPOSITORY = 'kovojs/kovo';
 
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const COMMIT_PATTERN = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u;
 const GIT_BLOB_PATTERN = /^[0-9a-f]{40}$/u;
 const MAX_API_RESPONSE_BYTES = 1024 * 1024;
+const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
+const MAX_REPORT_BYTES = 128 * 1024 * 1024;
 const MAX_CAMPAIGN_RUNS = 100;
 const execFileAsync = promisify(execFile);
 const REQUIRED_LOCKS = Object.freeze([
@@ -303,6 +307,7 @@ export async function authenticatePerformancePublicationInput(
     fetchWorkflowFileApi,
     fetchWorkflowJobsApi,
     fetchWorkflowRunApi,
+    filesystemCensusHook,
     loadPerformanceBudgets = loadCommittedPerformanceBudgets,
     loadTrustedWorkflow,
     manifestPath = path.join(baseDirectory, 'performance-publication-input.json'),
@@ -313,11 +318,17 @@ export async function authenticatePerformancePublicationInput(
   validateInputManifest(input);
   validateBuildProfileEvidencePair(input.buildProfiles);
   validateCampaignManifest(input.campaign);
-  const descriptorCustody = await createPerformanceArtifactDescriptorCustody({ baseDirectory });
-  const manifestRelativePath = await authenticateManifestFilesystemCensus(input, {
-    baseDirectory: descriptorCustody.baseDirectory,
+  const openingManifestCensus = await authenticateManifestFilesystemCensus(input, {
+    baseDirectory,
     manifestPath,
+    phase: 'opening',
+    snapshotHook: filesystemCensusHook,
   });
+  const descriptorCustody = await createPerformanceArtifactDescriptorCustody({
+    baseDirectory: openingManifestCensus.baseDirectory,
+    openingFileCensus: openingManifestCensus.files,
+  });
+  const manifestRelativePath = openingManifestCensus.manifestRelativePath;
   const manifestBytes = await readPerformanceArtifactCustodyFile(manifestRelativePath, {
     custody: descriptorCustody,
     descriptorKey: 'manifest',
@@ -480,12 +491,16 @@ export async function authenticatePerformancePublicationInput(
   } catch (error) {
     throw contextualError('campaign chronology', error);
   }
-  const closingManifestRelativePath = await authenticateManifestFilesystemCensus(input, {
+  const closingManifestCensus = await authenticateManifestFilesystemCensus(input, {
     baseDirectory: descriptorCustody.baseDirectory,
     manifestPath,
+    phase: 'closing',
+    snapshotHook: filesystemCensusHook,
   });
-  if (closingManifestRelativePath !== manifestRelativePath) {
-    throw new TypeError('performance publication manifest path changed during authentication');
+  if (canonicalJson(closingManifestCensus) !== canonicalJson(openingManifestCensus)) {
+    throw new TypeError(
+      'performance publication custody identity or content changed between opening and closing census',
+    );
   }
   return { buildProfiles, campaign, families, productionBytes, repository: input.repository };
 }
@@ -503,7 +518,16 @@ function validateBuildProfileEvidencePair(descriptors) {
   }
 }
 
-export async function authenticateManifestFilesystemCensus(input, { baseDirectory, manifestPath }) {
+export async function authenticateManifestFilesystemCensus(
+  input,
+  { baseDirectory, manifestPath, phase = 'standalone', snapshotHook },
+) {
+  if (!['closing', 'opening', 'standalone'].includes(phase)) {
+    throw new TypeError('manifest custody census phase is invalid');
+  }
+  if (snapshotHook !== undefined && typeof snapshotHook !== 'function') {
+    throw new TypeError('manifest custody snapshot hook is invalid');
+  }
   const resolvedBaseDirectory = await realpath(path.resolve(baseDirectory));
   const requestedManifest = path.resolve(manifestPath);
   const manifestFacts = await lstat(requestedManifest);
@@ -517,26 +541,38 @@ export async function authenticateManifestFilesystemCensus(input, { baseDirector
     'manifest',
   );
   const references = manifestCustodyReferences(input);
-  references.push({ kind: 'manifest', path: manifestRelativePath });
+  references.push({
+    kind: 'manifest',
+    maximumBytes: MAX_API_RESPONSE_BYTES,
+    path: manifestRelativePath,
+  });
   const pathUses = new Map();
   for (const reference of references) {
     if (!safeManifestRelativePath(reference.path)) {
       throw new TypeError(`${reference.kind} is not a canonical safe relative path`);
     }
     const uses = pathUses.get(reference.path) ?? [];
-    uses.push(reference.kind);
+    uses.push(reference);
     pathUses.set(reference.path, uses);
   }
   for (const [relativePath, uses] of pathUses) {
     const allowedBuildArchiveShare =
-      uses.length === 2 && uses.every((kind) => kind === 'build-profile archive');
+      uses.length === 2 && uses.every(({ kind }) => kind === 'build-profile archive');
     if (uses.length !== 1 && !allowedBuildArchiveShare) {
       throw new TypeError(`${relativePath} is referenced by multiple manifest custody roles`);
     }
+    if (new Set(uses.map(({ maximumBytes }) => maximumBytes)).size !== 1) {
+      throw new TypeError(`${relativePath} has conflicting manifest custody byte bounds`);
+    }
   }
-  const expectedFiles = new Set(pathUses.keys());
+  const expectedFiles = new Map(
+    [...pathUses].map(([relativePath, uses]) => [
+      relativePath,
+      { kind: uses[0].kind, maximumBytes: uses[0].maximumBytes },
+    ]),
+  );
   const expectedDirectories = new Set();
-  for (const relativePath of expectedFiles) {
+  for (const relativePath of expectedFiles.keys()) {
     const parts = relativePath.split('/');
     for (let index = 1; index < parts.length; index += 1) {
       expectedDirectories.add(parts.slice(0, index).join('/'));
@@ -544,25 +580,61 @@ export async function authenticateManifestFilesystemCensus(input, { baseDirector
   }
   const seenFiles = new Set();
   const seenInodes = new Set();
+  const snapshots = [];
   await walkManifestCustodyDirectory(resolvedBaseDirectory, '', {
     expectedDirectories,
     expectedFiles,
+    rootDirectory: resolvedBaseDirectory,
     seenFiles,
     seenInodes,
+    snapshotHook,
+    snapshots,
+    phase,
   });
   if (
     seenFiles.size !== expectedFiles.size ||
-    [...expectedFiles].some((relativePath) => !seenFiles.has(relativePath))
+    [...expectedFiles.keys()].some((relativePath) => !seenFiles.has(relativePath))
   ) {
     throw new TypeError('manifest custody directory is missing one or more referenced files');
   }
-  return manifestRelativePath;
+  snapshots.sort((left, right) => left.path.localeCompare(right.path));
+  const verifiedFiles = new Set();
+  const verifiedInodes = new Set();
+  const snapshotsByPath = new Map(snapshots.map((snapshot) => [snapshot.path, snapshot]));
+  await verifyManifestCustodyDirectory(resolvedBaseDirectory, '', {
+    expectedDirectories,
+    expectedFiles,
+    rootDirectory: resolvedBaseDirectory,
+    seenFiles: verifiedFiles,
+    seenInodes: verifiedInodes,
+    snapshotsByPath,
+  });
+  if (
+    verifiedFiles.size !== expectedFiles.size ||
+    [...expectedFiles.keys()].some((relativePath) => !verifiedFiles.has(relativePath))
+  ) {
+    throw new TypeError('final manifest custody identity sweep is missing a referenced file');
+  }
+  return Object.freeze({
+    baseDirectory: resolvedBaseDirectory,
+    files: Object.freeze(snapshots),
+    manifestRelativePath,
+  });
 }
 
 async function walkManifestCustodyDirectory(
   absoluteDirectory,
   relativeDirectory,
-  { expectedDirectories, expectedFiles, seenFiles, seenInodes },
+  {
+    expectedDirectories,
+    expectedFiles,
+    phase,
+    rootDirectory,
+    seenFiles,
+    seenInodes,
+    snapshotHook,
+    snapshots,
+  },
 ) {
   const before = await lstat(absoluteDirectory);
   if (!before.isDirectory() || before.isSymbolicLink()) {
@@ -585,23 +657,35 @@ async function walkManifestCustodyDirectory(
       await walkManifestCustodyDirectory(absolutePath, relativePath, {
         expectedDirectories,
         expectedFiles,
+        phase,
+        rootDirectory,
         seenFiles,
         seenInodes,
+        snapshotHook,
+        snapshots,
       });
       continue;
     }
     if (!facts.isFile() || facts.nlink !== 1) {
       throw new TypeError(`${relativePath} is not a unique regular manifest custody file`);
     }
-    if (!expectedFiles.has(relativePath)) {
+    const expected = expectedFiles.get(relativePath);
+    if (expected === undefined) {
       throw new TypeError(`${relativePath} is an unreferenced manifest custody file`);
     }
-    const inode = `${String(facts.dev)}:${String(facts.ino)}`;
+    const snapshot = await snapshotPerformanceArtifactCustodyFile(relativePath, {
+      baseDirectory: rootDirectory,
+      label: `${expected.kind} manifest custody file`,
+      maximumBytes: expected.maximumBytes,
+    });
+    const inode = `${String(snapshot.dev)}:${String(snapshot.ino)}`;
     if (seenInodes.has(inode)) {
       throw new TypeError(`${relativePath} hardlink-aliases another manifest custody file`);
     }
     seenInodes.add(inode);
     seenFiles.add(relativePath);
+    snapshots.push(snapshot);
+    await snapshotHook?.({ phase, relativePath, stage: 'hashed' });
   }
   const after = await lstat(absoluteDirectory);
   if (
@@ -615,6 +699,69 @@ async function walkManifestCustodyDirectory(
   }
 }
 
+async function verifyManifestCustodyDirectory(
+  absoluteDirectory,
+  relativeDirectory,
+  { expectedDirectories, expectedFiles, rootDirectory, seenFiles, seenInodes, snapshotsByPath },
+) {
+  const before = await lstat(absoluteDirectory);
+  if (!before.isDirectory() || before.isSymbolicLink()) {
+    throw new TypeError('final manifest custody sweep encountered a non-directory or symlink');
+  }
+  const entries = (await readdir(absoluteDirectory)).sort((left, right) =>
+    left.localeCompare(right),
+  );
+  for (const name of entries) {
+    const relativePath = relativeDirectory === '' ? name : `${relativeDirectory}/${name}`;
+    const absolutePath = path.join(absoluteDirectory, name);
+    const facts = await lstat(absolutePath);
+    if (facts.isSymbolicLink()) {
+      throw new TypeError(
+        `${relativePath} is an untrusted symlink in final manifest custody sweep`,
+      );
+    }
+    if (facts.isDirectory()) {
+      if (!expectedDirectories.has(relativePath)) {
+        throw new TypeError(`${relativePath} is an unreferenced final manifest custody directory`);
+      }
+      await verifyManifestCustodyDirectory(absolutePath, relativePath, {
+        expectedDirectories,
+        expectedFiles,
+        rootDirectory,
+        seenFiles,
+        seenInodes,
+        snapshotsByPath,
+      });
+      continue;
+    }
+    const expected = expectedFiles.get(relativePath);
+    const snapshot = snapshotsByPath.get(relativePath);
+    if (!facts.isFile() || facts.nlink !== 1 || expected === undefined || snapshot === undefined) {
+      throw new TypeError(`${relativePath} differs from the final manifest custody file census`);
+    }
+    await verifyPerformanceArtifactCustodyFileSnapshot(snapshot, {
+      baseDirectory: rootDirectory,
+      label: `${expected.kind} final manifest custody file`,
+    });
+    const inode = `${String(snapshot.dev)}:${String(snapshot.ino)}`;
+    if (seenFiles.has(relativePath) || seenInodes.has(inode)) {
+      throw new TypeError(`${relativePath} aliases final manifest custody identity`);
+    }
+    seenFiles.add(relativePath);
+    seenInodes.add(inode);
+  }
+  const after = await lstat(absoluteDirectory);
+  if (
+    after.dev !== before.dev ||
+    after.ino !== before.ino ||
+    after.mode !== before.mode ||
+    after.mtimeMs !== before.mtimeMs ||
+    after.ctimeMs !== before.ctimeMs
+  ) {
+    throw new TypeError('manifest custody directory changed during final identity sweep');
+  }
+}
+
 function manifestCustodyReferences(input) {
   const references = [];
   const addDescriptor = (descriptor, prefix, { buildProfile = false } = {}) => {
@@ -622,6 +769,12 @@ function manifestCustodyReferences(input) {
     for (const key of ['apiMetadata', 'archive', 'jobsApiMetadata', 'report', 'runApiMetadata']) {
       references.push({
         kind: buildProfile && key === 'archive' ? 'build-profile archive' : `${prefix} ${key}`,
+        maximumBytes:
+          key === 'archive'
+            ? MAX_ARCHIVE_BYTES
+            : key === 'report'
+              ? MAX_REPORT_BYTES
+              : MAX_API_RESPONSE_BYTES,
         path: descriptor[key],
       });
     }
@@ -636,15 +789,21 @@ function manifestCustodyReferences(input) {
   addDescriptor(input.productionBytes, 'Production bytes');
   references.push({
     kind: 'campaign workflow-runs API',
+    maximumBytes: MAX_API_RESPONSE_BYTES,
     path: input.campaign.workflowRunsApiMetadata.path,
   });
   for (const run of input.campaign.runs) {
     references.push(
       {
         kind: `campaign run ${String(run.runId)} artifacts API`,
+        maximumBytes: MAX_API_RESPONSE_BYTES,
         path: run.artifactsApiMetadata.path,
       },
-      { kind: `campaign run ${String(run.runId)} run API`, path: run.runApiMetadata.path },
+      {
+        kind: `campaign run ${String(run.runId)} run API`,
+        maximumBytes: MAX_API_RESPONSE_BYTES,
+        path: run.runApiMetadata.path,
+      },
     );
   }
   for (const candidate of input.campaign.familyCandidates) {
