@@ -50,7 +50,7 @@ import { validReadyRouteProbe } from './lib/perf-ready-route.mjs';
 export const DEV_GENERATION_SPIKE_SCHEMA = 'kovo-dev-generation-spike-comparison/v3';
 export const DEV_GENERATION_SPIKE_PREPARE_SCHEMA = 'kovo-dev-generation-spike-prepare/v3';
 export const DEV_GENERATION_ADAPTER_FAILURE_SCHEMA = 'kovo-dev-generation-adapter-failure/v3';
-export const DEV_GENERATION_CANDIDATE_BINDING_SCHEMA = 'kovo-dev-generation-candidate-binding/v3';
+export const DEV_GENERATION_CANDIDATE_BINDING_SCHEMA = 'kovo-dev-generation-candidate-binding/v5';
 export const DEV_GENERATION_PRODUCT_BOUNDARY_SCHEMA =
   'kovo-dev-generation-packed-product-boundary/v3';
 export const DEV_GENERATION_PRODUCT_POLICY_SCHEMA = 'kovo-dev-generation-packed-product-policy/v3';
@@ -67,19 +67,38 @@ export const DEV_GENERATION_PRODUCT_POLICY = Object.freeze({
 });
 export { DEV_GENERATION_CELL_PORT_STRIDE };
 export const DEV_CRITICAL_PATH_CANDIDATE = Object.freeze({
-  commit: '336925d40e11024b54206908997dbdfe0f43a391',
+  commit: '1c591eca2fa7d1ba9c5cf90673cea36c54ee158f',
   parent: 'eb16f11734a2ab635a8207f2e6ece4612713f248',
-  patchId: '5e5fb7c71081a556bf8c83824ab3858637714547',
-  patchSha256: 'sha256:766a13947b40a065b67013ae4b357c24b036bfb2a0f373cb5f9b93658989b913',
+  patchBytes: 113_296,
+  patchId: '7ca973eed5467af294c601d41f3ddb1ade04fbff',
+  patchSha256: 'sha256:ef119100be9f3a03d2de44a18a0114a988d0875cde324d23fa8b3cba60181c96',
   paths: Object.freeze([
-    'packages/compiler/src/query-runtime-identities.test.ts',
-    'packages/compiler/src/scan/query-runtime-identities.ts',
-    'packages/compiler/src/vite.test.ts',
-    'packages/compiler/src/vite.ts',
+    'packages/server/src/internal/data-plane-static-analysis.test.ts',
+    'packages/server/src/internal/data-plane-static-analysis.ts',
+    'packages/server/src/internal/runtime-registry-wire.ts',
+    'packages/server/src/registry-facts.test.ts',
     'packages/server/src/vite-data-plane-gate.test.ts',
     'packages/server/src/vite.ts',
   ]),
-  tree: 'a0fe15cde24918aad0ce69a759441586bfd1663b',
+  ref: 'refs/heads/perf-spike/dev-async-analysis-only-20260814',
+  series: Object.freeze([
+    Object.freeze({
+      commit: '1aea7dd0678254ceeaa869c537b8f5317777cb08',
+      parent: 'eb16f11734a2ab635a8207f2e6ece4612713f248',
+      tree: '2b9ecbca08f6ebc7777a21163eead9dd9b3205e4',
+    }),
+    Object.freeze({
+      commit: '07d6e5b23245df0d48fc071f78397329750705ee',
+      parent: '1aea7dd0678254ceeaa869c537b8f5317777cb08',
+      tree: '4c9a0aaa38ce39ddf73c839e083660f131bd951b',
+    }),
+    Object.freeze({
+      commit: '1c591eca2fa7d1ba9c5cf90673cea36c54ee158f',
+      parent: '07d6e5b23245df0d48fc071f78397329750705ee',
+      tree: 'c409518713e7ae1451b4eb3d3524b17b4ac823fa',
+    }),
+  ]),
+  tree: 'c409518713e7ae1451b4eb3d3524b17b4ac823fa',
 });
 
 const ADAPTER_SCHEMA = 'kovo-dev-loop-report/v1';
@@ -201,33 +220,99 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
       )} spike=${JSON.stringify(spikeDirtyPaths)}`,
     );
   }
-  if (git(spikeRoot, ['rev-parse', 'HEAD^']) !== baselineCommit) {
-    throw new Error('spike HEAD must be one direct commit atop baseline HEAD');
+  if (!Array.isArray(candidate.series) || candidate.series.length !== 3) {
+    throw new Error('profile-driven candidate must bind the exact three-commit series');
+  }
+  const series = candidate.series;
+  if (
+    candidate.parent !== series[0]?.parent ||
+    candidate.commit !== series[series.length - 1]?.commit ||
+    candidate.tree !== series[series.length - 1]?.tree ||
+    series.some(
+      (entry, index) =>
+        entry.parent !== (index === 0 ? candidate.parent : series[index - 1].commit),
+    )
+  ) {
+    throw new Error('profile-driven candidate series declaration is internally inconsistent');
+  }
+  if (git(spikeRoot, ['rev-parse', `HEAD~${series.length}`]) !== baselineCommit) {
+    throw new Error(`spike HEAD must be exactly ${series.length} commits atop baseline HEAD`);
   }
   if (git(spikeRoot, ['merge-base', baselineCommit, spikeCommit]) !== baselineCommit) {
     throw new Error('baseline must be the exact merge base of the spike');
   }
-  if (git(spikeRoot, ['rev-list', '--count', `${baselineCommit}..${spikeCommit}`]) !== '1') {
-    throw new Error('spike range must contain exactly one commit');
+  if (
+    git(spikeRoot, ['rev-list', '--count', `${baselineCommit}..${spikeCommit}`]) !==
+    String(series.length)
+  ) {
+    throw new Error(`spike range must contain exactly ${series.length} commits`);
+  }
+  const spikeSeries = git(spikeRoot, [
+    'rev-list',
+    '--reverse',
+    `${baselineCommit}..${spikeCommit}`,
+  ]).split(/\r?\n/u);
+  if (spikeSeries.length !== series.length) {
+    throw new Error('spike range does not expose the exact candidate series boundaries');
   }
 
+  const candidateRefCommit = git(candidateRepository, [
+    'rev-parse',
+    '--verify',
+    `${candidate.ref}^{commit}`,
+  ]);
   const candidateCommit = git(candidateRepository, ['rev-parse', `${candidate.commit}^{commit}`]);
-  const candidateParent = git(candidateRepository, ['rev-parse', `${candidate.commit}^`]);
   const candidateTree = git(candidateRepository, ['rev-parse', `${candidate.commit}^{tree}`]);
   if (
+    candidateRefCommit !== candidate.commit ||
     candidateCommit !== candidate.commit ||
-    candidateParent !== candidate.parent ||
     candidateTree !== candidate.tree
   ) {
     throw new Error('profile-driven candidate object identity is unavailable or unexpected');
+  }
+  const candidateRange = git(candidateRepository, [
+    'rev-list',
+    '--reverse',
+    `${candidate.parent}..${candidate.commit}`,
+  ]).split(/\r?\n/u);
+  if (
+    !sameStrings(
+      candidateRange,
+      series.map((entry) => entry.commit),
+    )
+  ) {
+    throw new Error('profile-driven candidate ref does not contain the exact declared series');
+  }
+  for (const entry of series) {
+    const commit = git(candidateRepository, ['rev-parse', `${entry.commit}^{commit}`]);
+    const parent = git(candidateRepository, ['rev-parse', `${entry.commit}^`]);
+    const tree = git(candidateRepository, ['rev-parse', `${entry.commit}^{tree}`]);
+    if (commit !== entry.commit || parent !== entry.parent || tree !== entry.tree) {
+      throw new Error(
+        'profile-driven candidate series object identity is unavailable or unexpected',
+      );
+    }
+  }
+  for (const [index, entry] of series.entries()) {
+    const expectedCommitPatch = patch(candidateRepository, entry.parent, entry.commit);
+    const observedCommitPatch = patch(
+      spikeRoot,
+      index === 0 ? baselineCommit : spikeSeries[index - 1],
+      spikeSeries[index],
+    );
+    if (!observedCommitPatch.equals(expectedCommitPatch)) {
+      throw new Error('spike commits do not preserve the exact candidate series patch boundaries');
+    }
   }
   const expectedPatch = patch(candidateRepository, candidate.parent, candidate.commit);
   const observedPatch = patch(spikeRoot, baselineCommit, spikeCommit);
   const expectedPatchSha256 = sha256(expectedPatch);
   const observedPatchSha256 = sha256(observedPatch);
-  const expectedPatchId = patchId(candidateRepository, candidate.commit);
-  const observedPatchId = patchId(spikeRoot, spikeCommit);
+  const expectedPatchId = patchId(candidateRepository, candidate.parent, candidate.commit);
+  const observedPatchId = patchId(spikeRoot, baselineCommit, spikeCommit);
   if (
+    expectedPatch.byteLength !== candidate.patchBytes ||
+    observedPatch.byteLength !== candidate.patchBytes ||
     expectedPatchSha256 !== candidate.patchSha256 ||
     expectedPatchId !== candidate.patchId ||
     observedPatchSha256 !== candidate.patchSha256 ||
@@ -250,14 +335,21 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
     candidate: {
       commit: candidate.commit,
       parent: candidate.parent,
-      patchBytes: expectedPatch.byteLength,
+      patchBytes: candidate.patchBytes,
       patchId: candidate.patchId,
       patchSha256: candidate.patchSha256,
       paths: [...candidate.paths],
+      ref: candidate.ref,
+      series: candidate.series.map((entry) => ({ ...entry })),
       tree: candidate.tree,
     },
     schema: DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
-    spike: { commit: spikeCommit, parent: baselineCommit, root: spikeRoot },
+    spike: {
+      commit: spikeCommit,
+      parent: baselineCommit,
+      root: spikeRoot,
+      series: spikeSeries,
+    },
   };
 }
 
@@ -1940,18 +2032,11 @@ function gitPatchBytes(root, from, to) {
   return Buffer.from(result.stdout);
 }
 
-function gitPatchId(root, commit) {
-  const patch = spawnSync(
-    'git',
-    ['-C', root, 'show', '--pretty=format:', '--binary', '--no-ext-diff', commit],
-    { encoding: null, maxBuffer: MAX_COMMAND_OUTPUT_BYTES, stdio: ['ignore', 'pipe', 'pipe'] },
-  );
-  if (patch.status !== 0 || patch.signal || patch.error) {
-    throw new Error(`could not read patch-id input: ${boundedDiagnostic(patch.stderr)}`);
-  }
+function gitPatchId(root, from, to) {
+  const patch = gitPatchBytes(root, from, to);
   const result = spawnSync('git', ['patch-id', '--stable'], {
     encoding: 'utf8',
-    input: patch.stdout,
+    input: patch,
     maxBuffer: MAX_COMMAND_OUTPUT_BYTES,
     stdio: ['pipe', 'pipe', 'pipe'],
   });

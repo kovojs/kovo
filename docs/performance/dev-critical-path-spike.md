@@ -1,21 +1,27 @@
 # Profile-driven development critical-path spike
 
-This is the packed-product v3 decision contract for the candidate selected from the authenticated
-development edit profiles. It supersedes the source-checkout v2 runner as well as the rejected
-fresh-generation v1 comparison. A v1 or v2 outer report, preparation report, retained-failure
-envelope, candidate binding, or product-boundary policy is not valid input to this decision.
+This is the packed-product v3 decision contract for the repaired async-analysis candidate selected
+from the authenticated development edit profiles. It supersedes the source-checkout v2 runner and
+the rejected fresh-generation v1 comparison. The outer, preparation, retained-failure, and product
+boundary schemas remain v3. Candidate identity is now `kovo-dev-generation-candidate-binding/v5`;
+an earlier candidate binding cannot be reinterpreted as evidence for this three-commit series.
 
 ## Causal basis
 
-The candidate is limited to the two costs established by the clean N=24 and N=216 profile census in
+The production optimization is limited to the whole-project asynchronous proof-convergence cost
+established by the clean N=24 and N=216 profile census in
 [`dev-edit-profile.md`](./dev-edit-profile.md):
 
 - Whole-project asynchronous proof convergence starts before HMR has published its outcome and
   competes with the leaf, entry, and data edit-to-paint critical path.
-- Recovery repeatedly builds a TypeScript program to recover the same component query runtime
-  identity. Reuse is permitted only for an exact plugin-scoped binding preimage; dependency,
-  configuration, or other-file uncertainty must take the full fail-closed resolver path (SPEC
-  §4.1, §5.2, and §9.5).
+
+The second and third commits are correctness repairs required by the optimization: compiler/runtime
+registry state is assembled as a complete generation and published atomically after compilation,
+then the exact virtual-module bytes are frozen into that committed generation. Consumers cannot
+observe a mixed generation, silently replace compiler-derived state with a disk recensus, or
+re-serialize retained mutable facts during a later module load. The repaired series contains no
+dependency-sensitive query-runtime identity reuse and claims no win from that separately observed
+recovery hotspot (SPEC §4.1, §5.2, and §9.5).
 
 The causal source is hosted run
 [`31799441158`](https://github.com/kovojs/kovo/actions/runs/31799441158) at exact clean commit
@@ -30,27 +36,36 @@ guardrail, not a metric from which the candidate may claim a causal win.
 ## Candidate binding
 
 The durable candidate ref is
-`refs/heads/perf-spike/dev-critical-path-profile-20260814`. The adversarially reviewed production
-commit is bound as:
+`refs/heads/perf-spike/dev-async-analysis-only-20260814`. The exact linear series is bound as:
 
-- commit: `336925d40e11024b54206908997dbdfe0f43a391`
-- parent: `eb16f11734a2ab635a8207f2e6ece4612713f248`
-- tree: `a0fe15cde24918aad0ce69a759441586bfd1663b`
-- stable patch ID: `5e5fb7c71081a556bf8c83824ab3858637714547`
-- 108,321-byte raw binary/full-index patch SHA-256:
-  `sha256:766a13947b40a065b67013ae4b357c24b036bfb2a0f373cb5f9b93658989b913`
+- series parent: `eb16f11734a2ab635a8207f2e6ece4612713f248`, tree
+  `66aa1edca7a8112ebd708511e462e24bbd9b80b6`
+- optimization commit: `1aea7dd0678254ceeaa869c537b8f5317777cb08`, parent
+  `eb16f11734a2ab635a8207f2e6ece4612713f248`, tree
+  `2b9ecbca08f6ebc7777a21163eead9dd9b3205e4`
+- atomic-publication repair: `07d6e5b23245df0d48fc071f78397329750705ee`, parent
+  `1aea7dd0678254ceeaa869c537b8f5317777cb08`, tree
+  `4c9a0aaa38ce39ddf73c839e083660f131bd951b`
+- repaired series tip: `1c591eca2fa7d1ba9c5cf90673cea36c54ee158f`, parent
+  `07d6e5b23245df0d48fc071f78397329750705ee`, tree
+  `c409518713e7ae1451b4eb3d3524b17b4ac823fa`
+- stable combined patch ID: `7ca973eed5467af294c601d41f3ddb1ade04fbff`
+- 113,296-byte raw binary/full-index combined patch SHA-256:
+  `sha256:ef119100be9f3a03d2de44a18a0114a988d0875cde324d23fa8b3cba60181c96`
 - changed paths, all simple modifications:
-  `packages/compiler/src/query-runtime-identities.test.ts`,
-  `packages/compiler/src/scan/query-runtime-identities.ts`,
-  `packages/compiler/src/vite.test.ts`, `packages/compiler/src/vite.ts`,
+  `packages/server/src/internal/data-plane-static-analysis.test.ts`,
+  `packages/server/src/internal/data-plane-static-analysis.ts`,
+  `packages/server/src/internal/runtime-registry-wire.ts`,
+  `packages/server/src/registry-facts.test.ts`,
   `packages/server/src/vite-data-plane-gate.test.ts`, and `packages/server/src/vite.ts`.
 
-The baseline and spike are separate clean committed worktrees. The spike must be exactly one commit
-above the selected baseline. Its raw binary patch bytes, stable patch ID, and simple-modification
-path census must exactly match the durable candidate commit. This allows a measurement source that
-contains newer unrelated harness or documentation changes while preventing any unrelated path from
-entering the timed candidate. A conflict-resolved cherry-pick is a different candidate and must not
-be measured under this binding.
+The baseline and spike are separate clean committed worktrees. The spike must be exactly three
+commits above the selected baseline, produced by cherry-picking the bound commits in order. The
+durable ref, all three source commit/parent/tree identities, combined raw binary patch byte count
+and SHA-256, stable patch ID, and simple-modification path census must all match. This allows a
+measurement source that contains newer unrelated harness or documentation changes while preventing
+any unrelated path from entering the timed candidate. A conflict-resolved cherry-pick is a
+different candidate and must not be measured under this binding.
 
 ## Serialized measurement
 
@@ -132,13 +147,24 @@ incorrect, load-shed, source-unstable, or candidate-mismatched evidence is `unpr
 performance loss. Acceptance requires both corpus reports to say `accept`; neither result alone
 authorizes integration.
 
-## Result
+## Repaired candidate status
 
-Packed-product v3 status: **rejected; do not integrate candidate `336925d40`**.
+Status: **awaiting the hosted N=24 and N=216 decision; no result is claimed yet**.
+
+The workflow prepares clean committed baseline and candidate worktrees, applies the exact bound
+three-commit series, and runs the unchanged serialized `B,S,S,B` contract independently for both
+corpora. Only two complete reports that each say `accept` can authorize integration.
+Candidate binding is evidence identity, not publication authority; a separate independent review
+of the repaired tip must also complete before the candidate ref is published.
+
+## Historical rejected candidate result
+
+The superseded six-path candidate `336925d40e11024b54206908997dbdfe0f43a391` was rejected and must
+not be integrated. Its result does not apply to the repaired candidate bound above.
 
 [Run `31821573222`](https://github.com/kovojs/kovo/actions/runs/31821573222) checked out exact clean
-source `1e1300962bcb2862d29a65d7c6bf5ab2bfd67b52` and authenticated the sealed candidate binding above
-in both independent hosted jobs. N=24
+source `1e1300962bcb2862d29a65d7c6bf5ab2bfd67b52` and authenticated the then-current superseded
+six-path candidate in both independent hosted jobs. N=24
 [artifact `9228112748`](https://github.com/kovojs/kovo/actions/runs/31821573222/artifacts/9228112748)
 has ZIP SHA-256 `362dcb0f3f5d72b2214bfdeb0ef47fcb5f71c84ef0b2300211af52760eaada16`
 and unpacked report SHA-256
@@ -171,7 +197,7 @@ verification covered all eight cells; and there were zero adapter errors, unprov
 browser failures, unexpected browser errors, or state-loss events. This is a measured guardrail
 rejection, not missing evidence, and an identical rerun cannot authorize integration.
 
-## Ready-neutral follow-up
+## Why the earlier ready-neutral candidate is excluded
 
 The first ready-neutral refinement was sealed as commit
 `2da4640f18af0dd37ae851658dddace5c3fa96c5`, parent
@@ -191,7 +217,8 @@ provide a global cross-file notification fence that could make the component eve
 for those dependencies. That is a concrete fail-closed/source-derived identity violation under
 SPEC §4.1, so `2da4640f1` must not be pushed, measured, or integrated.
 
-The next candidate keeps only the separately profiled async whole-project analysis settlement for
-ordinary edits and removes dependency-sensitive query reuse entirely. It is a new sealed candidate,
-not a retry of either rejected patch, and must independently pass the same full packed-product N=24
-and N=216 contract before integration.
+The repaired series bound above keeps only the separately profiled async whole-project analysis
+settlement for ordinary edits, removes dependency-sensitive query reuse entirely, and adds the
+atomic registry publication and frozen-byte repairs. It is a new sealed candidate, not a retry of
+either rejected patch, and remains unmeasured until it independently passes the same full
+packed-product N=24 and N=216 contract.

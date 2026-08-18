@@ -581,25 +581,55 @@ describe('realistic performance CI policy', () => {
     expect(source).toContain('uses: ./.github/actions/playwright-install');
     expectPnpmBridge(source);
     expect(source).toContain(
-      'KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 336925d40e11024b54206908997dbdfe0f43a391',
+      'KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 1c591eca2fa7d1ba9c5cf90673cea36c54ee158f',
     );
     expect(source).toContain(
-      'KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-critical-path-profile-20260814',
+      'KOVO_DEV_GENERATION_CANDIDATE_FIRST_COMMIT: 1aea7dd0678254ceeaa869c537b8f5317777cb08',
+    );
+    expect(source).toContain(
+      'KOVO_DEV_GENERATION_CANDIDATE_PARENT: eb16f11734a2ab635a8207f2e6ece4612713f248',
+    );
+    expect(source).toContain(
+      'KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-async-analysis-only-20260814',
+    );
+    expect(source).toContain(
+      'KOVO_DEV_GENERATION_CANDIDATE_SECOND_COMMIT: 07d6e5b23245df0d48fc071f78397329750705ee',
     );
     expect(source).toContain('git fetch --no-tags origin');
+    expect(source).toContain(
+      '"+$KOVO_DEV_GENERATION_CANDIDATE_REF:$KOVO_DEV_GENERATION_CANDIDATE_REF"',
+    );
     expect(source).toContain(
       '"+$KOVO_DEV_GENERATION_CANDIDATE_REF:refs/perf-evidence/dev-generation-candidate"',
     );
     expect(source).toContain(
+      'resolved_ref="$(git rev-parse --verify "$KOVO_DEV_GENERATION_CANDIDATE_REF^{commit}")"',
+    );
+    expect(source).toContain('test "$resolved_ref" = "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"');
+    expect(source).toContain(
       'test "$resolved_candidate" = "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"',
+    );
+    expect(source).toContain(
+      'test "$(git rev-parse "$KOVO_DEV_GENERATION_CANDIDATE_FIRST_COMMIT^")" = "$KOVO_DEV_GENERATION_CANDIDATE_PARENT"',
+    );
+    expect(source).toContain(
+      'test "$(git rev-parse "$KOVO_DEV_GENERATION_CANDIDATE_SECOND_COMMIT^")" = "$KOVO_DEV_GENERATION_CANDIDATE_FIRST_COMMIT"',
+    );
+    expect(source).toContain(
+      'test "$(git rev-parse "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT^")" = "$KOVO_DEV_GENERATION_CANDIDATE_SECOND_COMMIT"',
     );
     expect(count(source, 'git worktree add --detach')).toBe(2);
     expect(source).toContain('git worktree add --detach "$baseline_root" "$KOVO_PERF_SOURCE_SHA"');
     expect(source).toContain('git worktree add --detach "$spike_root" "$KOVO_PERF_SOURCE_SHA"');
     expect(source).toContain("-c user.name='Kovo Performance CI'");
-    expect(source).toContain('cherry-pick "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"');
-    expect(source).toContain('git -C "$spike_root" rev-parse HEAD^');
-    expect(source).toContain('git -C "$spike_root" rev-list --count "$KOVO_PERF_SOURCE_SHA..HEAD"');
+    expect(source).toContain('cherry-pick \\');
+    expect(source).toContain('"$KOVO_DEV_GENERATION_CANDIDATE_FIRST_COMMIT"');
+    expect(source).toContain('"$KOVO_DEV_GENERATION_CANDIDATE_SECOND_COMMIT"');
+    expect(source).toContain('"$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"');
+    expect(source).toContain('git -C "$spike_root" rev-parse HEAD~3');
+    expect(source).toContain(
+      'test "$(git -C "$spike_root" rev-list --count "$KOVO_PERF_SOURCE_SHA..HEAD")" = 3',
+    );
     expect(source).toContain('git -C "$baseline_root" status --porcelain=v1 --untracked-files=all');
     expect(source).toContain('git -C "$spike_root" status --porcelain=v1 --untracked-files=all');
     expect(source).toContain('scripts/perf-dev-generation-spike.mjs');
