@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { analyzeNavigationAttribution } from '../benchmarks/harness/scenarios.mjs';
 import { ratifyPerformanceBaseline } from './perf-baseline-ratify.mjs';
 import {
   PERF_COMPARISON_BUDGET_SCHEMA,
@@ -257,6 +258,30 @@ describe('browser/server comparison budgets', () => {
       }),
     ).toThrow(/Next default\/L0 script posture is not proved/u);
 
+    const scriptlessL1 = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    const kovoL1Script = scriptlessL1[2].report.rawCells.find(
+      (cell) => cell.framework === 'kovo' && cell.lane === 'matched-l1',
+    );
+    kovoL1Script.report.apps[0].conditions.desktop.coldLoad.iterations[0].fixtureScriptCount = 0;
+    refreshEntry(scriptlessL1[2]);
+    expect(() =>
+      deriveComparisonPerformanceBudget(ratifyPerformanceBaseline(scriptlessL1), {
+        baselineEntries: scriptlessL1,
+      }),
+    ).toThrow(/matched-L1 script posture is not proved/u);
+
+    const impossibleBytes = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    const nextByteSample = impossibleBytes[0].report.rawCells.find(
+      (cell) => cell.framework === 'nextjs' && cell.lane === 'default',
+    ).report.apps[0].conditions.mobile.coldLoad.iterations[0];
+    nextByteSample.bytes.total = nextByteSample.bytes.js - 1;
+    refreshEntry(impossibleBytes[0]);
+    expect(() =>
+      deriveComparisonPerformanceBudget(ratifyPerformanceBaseline(impossibleBytes), {
+        baselineEntries: impossibleBytes,
+      }),
+    ).toThrow(/raw script\/byte posture is malformed/u);
+
     const clean = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
     const budget = deriveComparisonPerformanceBudget(ratifyPerformanceBaseline(clean), {
       baselineEntries: clean,
@@ -279,6 +304,92 @@ describe('browser/server comparison budgets', () => {
     expect(evaluateComparisonPerformanceBudget(budget, nextHoldout).verdict).toMatchObject({
       status: 'unproven',
     });
+  });
+
+  it('rejects per-occurrence browser census skew even when aggregate totals remain exact', () => {
+    const expectRawSplitRejection = (mutate, pattern) => {
+      const entries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+      mutate(entries[0].report);
+      refreshEntry(entries[0]);
+      const baseline = ratifyPerformanceBaseline(entries);
+      expect(baseline.verdict.status).toBe('ratified');
+      expect(() =>
+        deriveComparisonPerformanceBudget(baseline, { baselineEntries: entries }),
+      ).toThrow(pattern);
+    };
+    const pair = (report) =>
+      report.rawCells
+        .filter((cell) => cell.lane === 'default' && cell.framework === 'kovo')
+        .sort((left, right) => left.occurrence - right.occurrence);
+
+    expectRawSplitRejection((report) => {
+      for (const [cell, count] of pair(report).map((cell, occurrence) => [
+        cell,
+        [29, 1][occurrence],
+      ])) {
+        cell.report.iterations = count;
+        for (const condition of Object.values(cell.report.apps[0].conditions)) {
+          for (const scenario of ['coldLoad', 'navigation', 'ttiProbe']) {
+            const first = condition[scenario].iterations[0];
+            condition[scenario].iterations = Array.from({ length: count }, () =>
+              structuredClone(first),
+            );
+          }
+        }
+      }
+    }, /iteration census differs from its exact occurrence split/u);
+
+    expectRawSplitRejection((report) => {
+      for (const [cell, count] of pair(report).map((cell, occurrence) => [
+        cell,
+        [1, 4][occurrence],
+      ])) {
+        for (const lighthouse of cell.report.apps[0].lighthouse) {
+          lighthouse.repeats = count;
+          lighthouse.samples = Array.from({ length: count }, () => ({}));
+        }
+      }
+    }, /Lighthouse\[0\] raw census is malformed/u);
+
+    expectRawSplitRejection((report) => {
+      for (const [cell, count] of pair(report).map((cell, occurrence) => [
+        cell,
+        [1, 9][occurrence],
+      ])) {
+        cell.report.apps[0].bfcache.iterations = Array.from({ length: count }, () => ({}));
+      }
+    }, /bfcache traversal census differs from its exact occurrence split/u);
+
+    expectRawSplitRejection((report) => {
+      const cells = pair(report);
+      cells[0].report.warmups = 3;
+      cells[1].report.warmups = 0;
+    }, /warmup census differs from its exact occurrence split/u);
+
+    expectRawSplitRejection((report) => {
+      [report.rawCells[0], report.rawCells[1]] = [report.rawCells[1], report.rawCells[0]];
+    }, /execution order differs from serialized Kovo,Next,Next,Kovo policy/u);
+
+    expectRawSplitRejection((report) => {
+      const lighthouse = pair(report)[0].report.apps[0].lighthouse;
+      lighthouse[1].path = lighthouse[0].path;
+    }, /Lighthouse\[1\] raw census is malformed/u);
+  });
+
+  it('rejects a self-asserted matched-L1 navigation whose authoritative witness is invalid', () => {
+    const entries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    const nextL1 = entries[0].report.rawCells.find(
+      (cell) => cell.framework === 'nextjs' && cell.lane === 'matched-l1',
+    );
+    nextL1.report.apps[0].conditions.mobile.navigation.iterations[0].navAttribution.primaryResponse.networkWitness.identity =
+      digest('forged witness');
+    refreshEntry(entries[0]);
+
+    expect(() =>
+      deriveComparisonPerformanceBudget(ratifyPerformanceBaseline(entries), {
+        baselineEntries: entries,
+      }),
+    ).toThrow(/navigation attribution primary response is invalid/u);
   });
 
   it('requires cold-load JavaScript and total bytes for every lane and form factor', () => {
@@ -617,81 +728,195 @@ function browserAnalysis(index) {
 }
 
 function browserRawCells() {
+  const attributions = {
+    kovo: validNavigationAttribution('kovo'),
+    nextjs: validNavigationAttribution('nextjs'),
+  };
+  const schedule = [
+    { framework: 'kovo', occurrence: 0 },
+    { framework: 'nextjs', occurrence: 0 },
+    { framework: 'nextjs', occurrence: 1 },
+    { framework: 'kovo', occurrence: 1 },
+  ];
   return ['default', 'matched-l0', 'matched-l1'].flatMap((lane) =>
-    ['kovo', 'nextjs'].flatMap((framework) =>
-      [0, 1].map((occurrence) => {
-        const iterations = 15;
-        const lighthouseRepeats = occurrence === 0 ? 3 : 2;
-        const coldSample = () => {
-          const zeroJavaScript = framework === 'kovo' && lane !== 'matched-l1';
-          return {
-            bytes: { js: zeroJavaScript ? 0 : 100, total: 1_000 },
-            fixtureScriptCount: zeroJavaScript ? 0 : 1,
-          };
-        };
-        const navigationSample = () => ({
-          ...(lane === 'matched-l1'
-            ? framework === 'kovo'
-              ? {
-                  navAttribution: {
-                    primaryResponse: {
-                      contentType: 'application/vnd.kovo.document-parts+json; charset=utf-8',
-                      resourceType: 'fetch',
-                      selection: 'kovo-document-parts-media-type',
-                      status: 'observed',
-                    },
-                  },
-                  navDocumentReplaced: 0,
-                }
-              : {
-                  navAttribution: {
-                    primaryResponse: {
-                      contentType: 'text/html; charset=utf-8',
-                      networkWitness: {
-                        facts: { isNavigationRequest: true, resourceType: 'document' },
-                      },
-                      resourceType: 'document',
-                      selection: 'document-resource',
-                      status: 'observed',
-                    },
-                  },
-                  navDocumentReplaced: 1,
-                }
-            : {}),
-        });
-        const condition = () => ({
-          coldLoad: { iterations: Array.from({ length: iterations }, coldSample) },
-          navigation: { iterations: Array.from({ length: iterations }, navigationSample) },
-          ttiProbe: {
-            iterations: lane === 'matched-l0' ? [] : Array.from({ length: iterations }, () => ({})),
-          },
-        });
+    schedule.map(({ framework, occurrence }) => {
+      const iterations = 15;
+      const lighthouseRepeats = occurrence === 0 ? 3 : 2;
+      const listingPath =
+        lane === 'default' ? '/' : lane === 'matched-l0' ? '/matched/l0' : '/matched/l1';
+      const detailPath = `${listingPath === '/' ? '' : listingPath}/product/linen-field-jacket`;
+      const coldSample = () => {
+        const zeroJavaScript = framework === 'kovo' && lane !== 'matched-l1';
         return {
-          cell: 'browser',
-          framework,
-          lane,
-          occurrence,
-          report: {
-            apps: [
-              {
-                app: framework,
-                bfcache: { iterations: Array.from({ length: 5 }, () => ({})) },
-                conditions: { desktop: condition(), mobile: condition() },
-                lighthouse: ['desktop', 'desktop', 'mobile', 'mobile'].map((formFactor) => ({
+          bytes: { js: zeroJavaScript ? 0 : 100, total: 1_000 },
+          fixtureScriptCount: zeroJavaScript ? 0 : 1,
+        };
+      };
+      const navigationSample = () => ({
+        ...(lane === 'matched-l1'
+          ? framework === 'kovo'
+            ? {
+                navAttribution: attributions.kovo,
+                navDocumentReplaced: 0,
+              }
+            : {
+                navAttribution: attributions.nextjs,
+                navDocumentReplaced: 1,
+              }
+          : {}),
+      });
+      const condition = () => ({
+        coldLoad: { iterations: Array.from({ length: iterations }, coldSample) },
+        navigation: { iterations: Array.from({ length: iterations }, navigationSample) },
+        ttiProbe: {
+          iterations: lane === 'matched-l0' ? [] : Array.from({ length: iterations }, () => ({})),
+        },
+      });
+      return {
+        cell: 'browser',
+        framework,
+        lane,
+        occurrence,
+        report: {
+          apps: [
+            {
+              app: framework,
+              bfcache: { iterations: Array.from({ length: 5 }, () => ({})) },
+              conditions: { desktop: condition(), mobile: condition() },
+              lighthouse: ['desktop', 'mobile'].flatMap((formFactor) =>
+                [listingPath, detailPath].map((lighthousePath) => ({
                   formFactor,
+                  path: lighthousePath,
                   repeats: lighthouseRepeats,
                   samples: Array.from({ length: lighthouseRepeats }, () => ({})),
                 })),
-              },
-            ],
-            iterations,
-            lane,
-            schema: 'kovo-browser-benchmark/v1',
-          },
-        };
-      }),
-    ),
+              ),
+            },
+          ],
+          iterations,
+          lane,
+          schema: 'kovo-browser-benchmark/v1',
+          warmups: occurrence === 0 ? 2 : 1,
+        },
+      };
+    }),
   );
+}
+
+function validNavigationAttribution(framework) {
+  const next = framework === 'nextjs';
+  const contentType = next ? 'text/html' : 'application/vnd.kovo.document-parts+json';
+  const resourceType = next ? 'document' : 'fetch';
+  const traceResourceType = next ? 'Document' : 'Other';
+  const targetPath = '/matched/l1/product/linen-field-jacket';
+  const url = `http://localhost:4820${targetPath}`;
+  return analyzeNavigationAttribution({
+    clickTsUs: 1_000_000,
+    destinationMarkTsUs: 1_100_000,
+    destinationPaintTsUs: 1_120_000,
+    epochOffsetMs: 1_000,
+    mainFrameId: 'main-frame',
+    networkEvents: [browserNetworkRequest({ resourceType: traceResourceType, url })],
+    records: [
+      {
+        bytes: 0,
+        frameScope: 'top-level',
+        headers: next ? {} : { accept: 'application/vnd.kovo.document-parts+json' },
+        isNavigationRequest: next,
+        method: 'GET',
+        resourceType,
+        responseHeaders: { 'content-type': `${contentType}; charset=utf-8` },
+        startedEpochMs: 0,
+        status: 200,
+        timing: { requestStart: 10, responseEnd: 50, responseStart: 30, startTime: 1_990 },
+        url,
+      },
+    ],
+    targetPath,
+    traceEvents: [
+      ...browserTraceResponse({
+        contentType,
+        requestStartTsUs: 1_000_000,
+        resourceType: traceResourceType,
+        responseEndTsUs: 1_040_000,
+        responseStartTsUs: 1_020_000,
+        url,
+      }),
+      { name: 'Paint', ts: 1_120_000 },
+    ],
+  });
+}
+
+function browserNetworkRequest({ resourceType, url }) {
+  return {
+    frameId: 'main-frame',
+    initiator:
+      resourceType.toLowerCase() === 'document'
+        ? { type: 'other' }
+        : { fetchType: 'fetch', type: 'script' },
+    loaderId: 'main-loader',
+    request: { method: 'GET', url },
+    requestId: 'trace-request-1',
+    type: resourceType,
+  };
+}
+
+function browserTraceResponse({
+  contentType,
+  requestStartTsUs,
+  resourceType,
+  responseEndTsUs,
+  responseStartTsUs,
+  url,
+}) {
+  return [
+    {
+      args: {
+        data: {
+          frame: 'main-frame',
+          initiator:
+            resourceType.toLowerCase() === 'document'
+              ? { type: 'other' }
+              : { fetchType: 'fetch', type: 'script' },
+          loaderId: 'main-loader',
+          requestId: 'trace-request-1',
+          requestMethod: 'GET',
+          resourceType,
+          url,
+        },
+      },
+      name: 'ResourceSendRequest',
+      ts: requestStartTsUs,
+    },
+    {
+      args: {
+        data: {
+          headers: [{ name: 'Content-Type', value: contentType }],
+          mimeType: contentType,
+          requestId: 'trace-request-1',
+          statusCode: 200,
+          timing: {
+            receiveHeadersEnd: (responseStartTsUs - requestStartTsUs) / 1_000,
+            requestTime: requestStartTsUs / 1_000_000,
+            sendStart: 0,
+          },
+        },
+      },
+      name: 'ResourceReceiveResponse',
+      ts: responseStartTsUs + 50,
+    },
+    {
+      args: {
+        data: {
+          didFail: false,
+          finishTime: responseEndTsUs / 1_000_000,
+          requestId: 'trace-request-1',
+        },
+      },
+      name: 'ResourceFinish',
+      ts: responseEndTsUs + 50,
+    },
+  ];
 }
 
 function serverAnalysis(index) {

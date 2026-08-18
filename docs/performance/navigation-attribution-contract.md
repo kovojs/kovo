@@ -82,10 +82,13 @@ The publication gate therefore rechecks every raw matched-L1 navigation sample i
 baseline reports and the independent holdout. Kovo must have an observed
 `application/vnd.kovo.document-parts+json` primary response and
 `navDocumentReplaced === 0`; Next must have an observed `text/html` primary response authenticated
-as a document navigation and `navDocumentReplaced === 1`. The gate also reads every raw cold sample
-to prove Kovo's default/matched-L0 zero-script and zero-JavaScript-byte posture and Next's
-default/matched-L0 script posture. These facts are not inferred from aggregate medians or a
-resealed report.
+as a document navigation and `navDocumentReplaced === 1`. “Authenticated” here means the raw sample
+passes the same v3 attribution validator as the benchmark harness: the attribution digest,
+top-level trace response, Playwright network-witness digest, request/timing identity, trace event
+census, clock boundary, and phase contract must all agree. A self-asserted media type, resource
+type, or navigation flag is insufficient. The gate also reads every raw cold sample to prove Kovo's
+default/matched-L0 zero-script and zero-JavaScript-byte posture and the script-bearing posture of
+the other lanes. These facts are not inferred from aggregate medians or a resealed report.
 
 ## Interpretation
 

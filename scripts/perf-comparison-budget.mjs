@@ -4,6 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { navigationAttributionFindings } from '../benchmarks/harness/scenarios.mjs';
 import { executionIdentityFindings } from './lib/perf-execution.mjs';
 import { ratifyPerformanceBaseline } from './perf-baseline-ratify.mjs';
 import {
@@ -30,6 +31,12 @@ const REQUIRED_LOCKS = Object.freeze([
 ]);
 const SUPPORTED_SUBJECTS = Object.freeze(['browser', 'server']);
 const BROWSER_LANES = Object.freeze(['default', 'matched-l0', 'matched-l1']);
+const BROWSER_EXECUTION_ORDER = Object.freeze([
+  Object.freeze({ framework: 'kovo', occurrence: 0 }),
+  Object.freeze({ framework: 'nextjs', occurrence: 0 }),
+  Object.freeze({ framework: 'nextjs', occurrence: 1 }),
+  Object.freeze({ framework: 'kovo', occurrence: 1 }),
+]);
 const SERVER_LANES = Object.freeze(['matched-runtime']);
 const SERVER_CONCURRENCIES = Object.freeze([1, 8, 32]);
 const SERVER_ENCODINGS = Object.freeze(['identity', 'br']);
@@ -591,27 +598,33 @@ function requiredBrowserPublicationMetrics() {
 function browserRawPublicationEvidenceFindings(report, label) {
   const findings = [];
   const rawCells = Array.isArray(report?.rawCells) ? report.rawCells : [];
-  const expectedKeys = new Set(
-    BROWSER_LANES.flatMap((lane) =>
-      ['kovo', 'nextjs'].flatMap((framework) =>
-        [0, 1].map((occurrence) => `${lane}/${framework}/${String(occurrence)}`),
-      ),
-    ),
+  const expectedIdentities = BROWSER_LANES.flatMap((lane) =>
+    BROWSER_EXECUTION_ORDER.map(({ framework, occurrence }) => ({
+      framework,
+      key: `${lane}/${framework}/${String(occurrence)}`,
+      lane,
+      occurrence,
+    })),
   );
+  const expectedKeys = new Set(expectedIdentities.map(({ key }) => key));
   if (!Array.isArray(report?.rawCells) || rawCells.length !== expectedKeys.size) {
     findings.push(`${label} raw browser cell census is not the exact 12 cells`);
   }
 
+  const policy = report?.workloadIdentity?.identity?.policies;
+  const occurrenceSamples = splitBrowserOccurrenceTotal(policy?.browserSamples);
+  const occurrenceWarmups = splitBrowserOccurrenceTotal(policy?.warmups);
+  const occurrenceLighthouse = splitBrowserOccurrenceTotal(policy?.lighthouseRuns);
+  const occurrenceBfcache = splitBrowserOccurrenceTotal(policy?.bfcacheIterations);
   const seen = new Set();
-  const scenarioTotals = new Map();
-  const bfcacheTotals = new Map();
-  const lighthouseTotals = new Map();
-  const add = (map, key, value) => map.set(key, (map.get(key) ?? 0) + value);
   for (const [cellIndex, cell] of rawCells.entries()) {
     const where = `${label} raw browser cell[${String(cellIndex)}]`;
     const key = `${String(cell?.lane)}/${String(cell?.framework)}/${String(cell?.occurrence)}`;
     if (
       cell?.cell !== 'browser' ||
+      !BROWSER_LANES.includes(cell?.lane) ||
+      !['kovo', 'nextjs'].includes(cell?.framework) ||
+      ![0, 1].includes(cell?.occurrence) ||
       !expectedKeys.has(key) ||
       seen.has(key) ||
       cell?.report?.schema !== 'kovo-browser-benchmark/v1' ||
@@ -621,6 +634,9 @@ function browserRawPublicationEvidenceFindings(report, label) {
       continue;
     }
     seen.add(key);
+    if (key !== expectedIdentities[cellIndex]?.key) {
+      findings.push(`${where} execution order differs from serialized Kovo,Next,Next,Kovo policy`);
+    }
     const browserReport = cell.report;
     const apps = browserReport.apps;
     if (!Array.isArray(apps) || apps.length !== 1 || apps[0]?.app !== cell.framework) {
@@ -628,10 +644,13 @@ function browserRawPublicationEvidenceFindings(report, label) {
       continue;
     }
     const app = apps[0];
-    const iterationCount = browserReport.iterations;
-    if (!Number.isSafeInteger(iterationCount) || iterationCount < 1) {
-      findings.push(`${where} iteration census is malformed`);
-      continue;
+    const iterationCount = occurrenceSamples[cell.occurrence];
+    const warmupCount = occurrenceWarmups[cell.occurrence];
+    if (browserReport.iterations !== iterationCount) {
+      findings.push(`${where} iteration census differs from its exact occurrence split`);
+    }
+    if (browserReport.warmups !== warmupCount) {
+      findings.push(`${where} warmup census differs from its exact occurrence split`);
     }
     for (const formFactor of BROWSER_FORM_FACTORS) {
       const condition = app.conditions?.[formFactor];
@@ -645,11 +664,6 @@ function browserRawPublicationEvidenceFindings(report, label) {
           );
           continue;
         }
-        add(
-          scenarioTotals,
-          `${cell.lane}/${cell.framework}/${formFactor}/${scenario}`,
-          samples.length,
-        );
         if (scenario === 'coldLoad') {
           for (const [sampleIndex, sample] of samples.entries()) {
             const sampleWhere = `${where} ${formFactor}/coldLoad[${String(sampleIndex)}]`;
@@ -658,6 +672,7 @@ function browserRawPublicationEvidenceFindings(report, label) {
               sample.bytes.js < 0 ||
               !Number.isSafeInteger(sample?.bytes?.total) ||
               sample.bytes.total < 0 ||
+              sample.bytes.total < sample.bytes.js ||
               !Number.isSafeInteger(sample?.fixtureScriptCount) ||
               sample.fixtureScriptCount < 0
             ) {
@@ -677,15 +692,20 @@ function browserRawPublicationEvidenceFindings(report, label) {
             ) {
               findings.push(`${sampleWhere} Next default/L0 script posture is not proved`);
             }
+            if (cell.lane === 'matched-l1' && !(sample?.fixtureScriptCount > 0)) {
+              findings.push(`${sampleWhere} matched-L1 script posture is not proved`);
+            }
           }
         } else if (scenario === 'navigation' && cell.lane === 'matched-l1') {
           for (const [sampleIndex, sample] of samples.entries()) {
+            const sampleWhere = `${where} ${formFactor}/navigation[${String(sampleIndex)}]`;
             findings.push(
-              ...matchedL1RawNavigationPostureFindings(
-                sample,
-                cell.framework,
-                `${where} ${formFactor}/navigation[${String(sampleIndex)}]`,
+              ...navigationAttributionFindings(sample?.navAttribution).map(
+                (finding) => `${sampleWhere} ${finding}`,
               ),
+            );
+            findings.push(
+              ...matchedL1RawNavigationPostureFindings(sample, cell.framework, sampleWhere),
             );
           }
         }
@@ -693,32 +713,34 @@ function browserRawPublicationEvidenceFindings(report, label) {
     }
 
     const bfcache = app.bfcache?.iterations;
-    if (!Array.isArray(bfcache)) {
-      findings.push(`${where} raw bfcache traversal census is unavailable`);
-    } else {
-      add(bfcacheTotals, `${cell.lane}/${cell.framework}`, bfcache.length);
+    if (!Array.isArray(bfcache) || bfcache.length !== occurrenceBfcache[cell.occurrence]) {
+      findings.push(
+        `${where} raw bfcache traversal census differs from its exact occurrence split`,
+      );
     }
     const lighthouse = app.lighthouse;
     if (!Array.isArray(lighthouse) || lighthouse.length !== 4) {
       findings.push(`${where} raw Lighthouse census is not four cells`);
     } else {
+      const listingPath =
+        cell.lane === 'default' ? '/' : cell.lane === 'matched-l0' ? '/matched/l0' : '/matched/l1';
+      const detailPath = `${listingPath === '/' ? '' : listingPath}/product/linen-field-jacket`;
+      const expectedLighthouse = BROWSER_FORM_FACTORS.flatMap((formFactor) => [
+        { formFactor, path: listingPath },
+        { formFactor, path: detailPath },
+      ]);
       for (const [lighthouseIndex, lighthouseCell] of lighthouse.entries()) {
         const samples = lighthouseCell?.samples;
+        const expected = expectedLighthouse[lighthouseIndex];
         if (
-          !BROWSER_FORM_FACTORS.includes(lighthouseCell?.formFactor) ||
-          !Number.isSafeInteger(lighthouseCell?.repeats) ||
-          lighthouseCell.repeats < 1 ||
+          lighthouseCell?.formFactor !== expected.formFactor ||
+          lighthouseCell?.path !== expected.path ||
+          lighthouseCell?.repeats !== occurrenceLighthouse[cell.occurrence] ||
           !Array.isArray(samples) ||
           samples.length !== lighthouseCell.repeats
         ) {
           findings.push(`${where} Lighthouse[${String(lighthouseIndex)}] raw census is malformed`);
-          continue;
         }
-        add(
-          lighthouseTotals,
-          `${cell.lane}/${cell.framework}/${lighthouseCell.formFactor}`,
-          samples.length,
-        );
       }
     }
   }
@@ -726,34 +748,13 @@ function browserRawPublicationEvidenceFindings(report, label) {
   if (seen.size !== expectedKeys.size || [...expectedKeys].some((key) => !seen.has(key))) {
     findings.push(`${label} raw browser cell identities omit or invent an expected cell`);
   }
-  const policy = report?.workloadIdentity?.identity?.policies;
-  for (const lane of BROWSER_LANES) {
-    for (const framework of ['kovo', 'nextjs']) {
-      for (const formFactor of BROWSER_FORM_FACTORS) {
-        for (const scenario of ['coldLoad', 'ttiProbe', 'navigation']) {
-          const expected =
-            scenario === 'ttiProbe' && lane === 'matched-l0' ? 0 : policy?.browserSamples;
-          if (scenarioTotals.get(`${lane}/${framework}/${formFactor}/${scenario}`) !== expected) {
-            findings.push(
-              `${label} ${lane}/${framework}/${formFactor}/${scenario} raw sample total differs from policy`,
-            );
-          }
-        }
-        if (
-          lighthouseTotals.get(`${lane}/${framework}/${formFactor}`) !==
-          2 * policy?.lighthouseRuns
-        ) {
-          findings.push(
-            `${label} ${lane}/${framework}/${formFactor} raw Lighthouse sample total differs from policy`,
-          );
-        }
-      }
-      if (bfcacheTotals.get(`${lane}/${framework}`) !== policy?.bfcacheIterations) {
-        findings.push(`${label} ${lane}/${framework} raw bfcache total differs from policy`);
-      }
-    }
-  }
   return [...new Set(findings)].sort((left, right) => left.localeCompare(right));
+}
+
+function splitBrowserOccurrenceTotal(total) {
+  return Number.isSafeInteger(total) && total >= 0
+    ? [Math.ceil(total / 2), Math.floor(total / 2)]
+    : [null, null];
 }
 
 function matchedL1RawNavigationPostureFindings(sample, framework, label) {

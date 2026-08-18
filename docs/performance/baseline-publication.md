@@ -107,13 +107,18 @@ https://github.com/kovojs/kovo/actions/runs/<run-id>/artifacts/<artifact-id>
 The browser report's ratified analysis includes the 30 scenario samples, five raw Lighthouse
 samples per cell, and ten bfcache traversals. Every lane and form factor must include absolute cold
 JavaScript and total-byte metrics. Derivation also reads the exact 12 raw browser cells in each of
-the five baseline reports and the holdout: Kovo default and matched-L0 cold samples must have zero
-script elements and zero JavaScript bytes; Next default and matched L0 must have a script element;
-Kovo matched L1 must show document-parts without replacing the document; and Next matched L1 must
-show a `text/html` document navigation that replaces it. Resealing an aggregate cannot replace this
-raw posture proof. The check report uses the same authenticated execution, source/lock, normalized
-host-v2, quiet-host, and workload identities as the comparison reports. A dirty, busy, incomplete,
-duplicate, or identity-mismatched report produces `unproven`.
+the five baseline reports and the holdout. Each lane must retain the serialized Kovo, Next, Next,
+Kovo order and the exact per-occurrence split: 15/15 scenario samples, 2/1 warmups, 3/2 samples for
+each Lighthouse route/form-factor cell, and 5/5 bfcache traversals. Aggregate totals cannot hide a
+skewed occurrence. Kovo default and matched-L0 cold samples must have zero script elements and zero
+JavaScript bytes; every matched-L1 cold sample must retain a script element; and JavaScript bytes
+cannot exceed total bytes. Kovo matched L1 must show document-parts without replacing the document;
+Next matched L1 must show a `text/html` document navigation that replaces it. Every matched-L1
+sample must also pass the authoritative navigation-attribution schema, digest, primary-response,
+network-witness, trace, timing, and observation-boundary validation. Resealing an aggregate cannot
+replace this raw posture proof. The check report uses the same authenticated execution, source/lock,
+normalized host-v2, quiet-host, and workload identities as the comparison reports. A dirty, busy,
+incomplete, duplicate, or identity-mismatched report produces `unproven`.
 
 Baseline jobs request 90-day Actions retention, while the PR-only Production-bytes artifact requests
 14 days. Collect and publish the selected sidecar before that shorter window closes. The canonical
