@@ -1,6 +1,16 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -336,13 +346,43 @@ describe('seven-family performance publication gate', () => {
       });
       expect(result.publication.families[familyName].evidence.baseline).toHaveLength(5);
     }
-    const markdown = renderPerformancePublicationMarkdown(result.publication);
+    const markdown = renderFixturePublication(result, { authenticated, options });
     expect(markdown).toContain('Verdict: **publishable**');
     expect(markdown).toContain('independent holdout');
     expect(markdown).toContain('Kovo-only');
     expect(markdown).toContain('https://github.com/kovojs/kovo/tree/');
     expect(markdown).toContain('Production bytes sidecar');
     expect(markdown).toContain('perf-budgets.json');
+    expect(markdown).toContain('### Default/as shipped');
+    expect(markdown).toContain('### Matched L0');
+    expect(markdown).toContain('### Matched L1');
+    expect(
+      markdown.match(
+        /\| Metric \| Kovo median \| Kovo p95 \| Next median \| Next p95 \| Budget policy \|/gu,
+      ),
+    ).toHaveLength(3);
+    expect(markdown).toContain('median of five independent run medians');
+    expect(markdown).toContain('sixth run is the independent holdout and is not pooled');
+    expect(markdown).toContain('Next matched L0 still ships JavaScript');
+    expect(markdown).toContain('document-parts response and preserves the document');
+    expect(markdown).toContain('is not additive and is not a decode or morph split');
+    expect(markdown).toContain('[Derived browser budget](evidence/browser-budget.json)');
+    expect(markdown).toContain(
+      '| default/browser//desktop.coldLoad.bytes.js | 10 | 11 | 20 | 21 |',
+    );
+    for (const metric of Object.keys(result.documents.browser.budget.metrics)) {
+      expect(markdown.split(`| ${metric} |`)).toHaveLength(2);
+    }
+    for (const lane of ['default', 'matched-l0', 'matched-l1']) {
+      const positions = Object.keys(result.documents.browser.budget.metrics)
+        .filter((metric) => metric.startsWith(`${lane}/browser//`))
+        .sort((left, right) => left.localeCompare(right))
+        .map((metric) => markdown.indexOf(`| ${metric} |`));
+      expect(positions).toEqual([...positions].sort((left, right) => left - right));
+    }
+    expect(() => renderPerformancePublicationMarkdown(result.publication)).toThrow(
+      /must contain only documents and publication/u,
+    );
   });
 
   it('makes any deterministic byte-budget failure publication-blocking', () => {
@@ -389,6 +429,41 @@ describe('seven-family performance publication gate', () => {
     resealPublication(result.publication);
     expect(performancePublicationFindings(result.publication)).toContain(
       'Production bytes live workflow family job differs from policy',
+    );
+  });
+
+  it('refuses browser-row curation or metrics outside the three declared lanes', () => {
+    const authenticated = authenticatedFixture();
+    const options = fixtureDerivationOptions();
+    const result = derivePerformancePublication(authenticated, options);
+    result.documents.browser.budget.metrics['curated/browser//headline'] = structuredClone(
+      result.documents.browser.budget.metrics['default/browser//desktop.coldLoad.bytes.js'],
+    );
+    const budgetReference = result.publication.families.browser.documents.budget;
+    budgetReference.contentDigest = digest(
+      `${JSON.stringify(result.documents.browser.budget, null, 2)}\n`,
+    );
+    budgetReference.semanticDigest = canonicalDigest(result.documents.browser.budget);
+    resealPublication(result.publication);
+
+    expect(() => renderFixturePublication(result, { authenticated, options })).toThrow(
+      /does not belong to exactly one browser lane/u,
+    );
+
+    const emptyLane = derivePerformancePublication(authenticated, options);
+    for (const metric of Object.keys(emptyLane.documents.browser.budget.metrics)) {
+      if (metric.startsWith('matched-l1/browser//')) {
+        delete emptyLane.documents.browser.budget.metrics[metric];
+      }
+    }
+    const emptyLaneReference = emptyLane.publication.families.browser.documents.budget;
+    emptyLaneReference.contentDigest = digest(
+      `${JSON.stringify(emptyLane.documents.browser.budget, null, 2)}\n`,
+    );
+    emptyLaneReference.semanticDigest = canonicalDigest(emptyLane.documents.browser.budget);
+    resealPublication(emptyLane.publication);
+    expect(() => renderFixturePublication(emptyLane, { authenticated, options })).toThrow(
+      /browser budget table lane matched-l1 has no metrics/u,
     );
   });
 
@@ -655,14 +730,15 @@ describe('seven-family performance publication gate', () => {
   });
 
   it('writes content-addressed family documents plus the aggregate JSON and Markdown', async () => {
-    const directory = mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-publication-'));
+    const directory = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-publication-')));
     temporaryDirectories.push(directory);
     const authenticated = authenticatedFixture();
     const options = fixtureDerivationOptions();
     const result = derivePerformancePublication(authenticated, options);
-    const evidenceDirectory = path.join(directory, 'evidence');
-    const out = path.join(directory, 'publication.json');
-    const markdownOut = path.join(directory, 'publication.md');
+    const root = path.join(directory, 'publication');
+    const evidenceDirectory = path.join(root, 'evidence');
+    const out = path.join(root, 'performance-publication.json');
+    const markdownOut = path.join(root, 'performance-publication.md');
 
     await writePerformancePublicationOutputs(result, {
       assessBuildPersistence: options.assessBuildPersistence,
@@ -677,6 +753,15 @@ describe('seven-family performance publication gate', () => {
     const publication = JSON.parse(readFileSync(out, 'utf8'));
     expect(performancePublicationFindings(publication)).toEqual([]);
     expect(readFileSync(markdownOut, 'utf8')).toContain('Verdict: **publishable**');
+    expect(readdirSync(root).sort()).toEqual([
+      'evidence',
+      'performance-publication.json',
+      'performance-publication.md',
+    ]);
+    expect(readdirSync(evidenceDirectory)).toHaveLength(21);
+    expect(readdirSync(evidenceDirectory).some((name) => name.includes('production-bytes'))).toBe(
+      false,
+    );
     for (const familyName of FAMILY_NAMES) {
       for (const kind of ['baseline', 'budget', 'evaluation']) {
         const file = readFileSync(path.join(evidenceDirectory, `${familyName}-${kind}.json`));
@@ -701,11 +786,14 @@ describe('seven-family performance publication gate', () => {
   });
 
   it('rejects a readback directory containing evidence outside the exact 21-file census', async () => {
-    const directory = mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-publication-extra-'));
+    const directory = realpathSync(
+      mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-publication-extra-')),
+    );
     temporaryDirectories.push(directory);
-    const evidenceDirectory = path.join(directory, 'evidence');
-    mkdirSync(evidenceDirectory);
-    writeFileSync(path.join(evidenceDirectory, 'stale.json'), '{}\n');
+    const root = path.join(directory, 'publication');
+    const evidenceDirectory = path.join(root, 'evidence');
+    mkdirSync(path.join(evidenceDirectory, 'nested'), { recursive: true });
+    writeFileSync(path.join(evidenceDirectory, 'nested', 'stale.json'), '{}\n');
     const authenticated = authenticatedFixture();
     const options = fixtureDerivationOptions();
     const result = derivePerformancePublication(authenticated, options);
@@ -715,12 +803,80 @@ describe('seven-family performance publication gate', () => {
         assessBuildPersistence: options.assessBuildPersistence,
         authenticated,
         evidenceDirectory,
-        markdownOut: path.join(directory, 'publication.md'),
+        markdownOut: path.join(root, 'performance-publication.md'),
         operations: options.operations,
-        out: path.join(directory, 'publication.json'),
+        out: path.join(root, 'performance-publication.json'),
         ratify: (entries) => options.ratify(entries),
       }),
-    ).rejects.toThrow('exact 21-file census');
+    ).rejects.toThrow(/partial or extra inventory/u);
+  });
+
+  it('rejects publication symlinks and output paths outside the exact 23-file layout', async () => {
+    const directory = realpathSync(
+      mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-publication-layout-')),
+    );
+    temporaryDirectories.push(directory);
+    const authenticated = authenticatedFixture();
+    const options = fixtureDerivationOptions();
+    const result = derivePerformancePublication(authenticated, options);
+    const wrongRoot = path.join(directory, 'wrong');
+    await expect(
+      writePerformancePublicationOutputs(result, {
+        assessBuildPersistence: options.assessBuildPersistence,
+        authenticated,
+        evidenceDirectory: path.join(wrongRoot, 'evidence'),
+        markdownOut: path.join(wrongRoot, 'performance-publication.md'),
+        operations: options.operations,
+        out: path.join(wrongRoot, 'publication.json'),
+        ratify: (entries) => options.ratify(entries),
+      }),
+    ).rejects.toThrow(/must use publication/u);
+
+    const aliasRoot = path.join(directory, 'alias');
+    await expect(
+      writePerformancePublicationOutputs(result, {
+        assessBuildPersistence: options.assessBuildPersistence,
+        authenticated,
+        evidenceDirectory: `${aliasRoot}/nested/../evidence`,
+        markdownOut: path.join(aliasRoot, 'performance-publication.md'),
+        operations: options.operations,
+        out: path.join(aliasRoot, 'performance-publication.json'),
+        ratify: (entries) => options.ratify(entries),
+      }),
+    ).rejects.toThrow(/canonical absolute path without layout aliases/u);
+
+    const realParent = path.join(directory, 'real-parent');
+    const aliasParent = path.join(directory, 'alias-parent');
+    mkdirSync(path.join(realParent, 'sub'), { recursive: true });
+    symlinkSync(realParent, aliasParent);
+    const ancestorAliasRoot = path.join(aliasParent, 'sub', 'publication');
+    await expect(
+      writePerformancePublicationOutputs(result, {
+        assessBuildPersistence: options.assessBuildPersistence,
+        authenticated,
+        evidenceDirectory: path.join(ancestorAliasRoot, 'evidence'),
+        markdownOut: path.join(ancestorAliasRoot, 'performance-publication.md'),
+        operations: options.operations,
+        out: path.join(ancestorAliasRoot, 'performance-publication.json'),
+        ratify: (entries) => options.ratify(entries),
+      }),
+    ).rejects.toThrow(/symlink ancestor or realpath alias/u);
+    expect(existsSync(path.join(realParent, 'sub', 'publication'))).toBe(false);
+
+    const root = path.join(directory, 'publication');
+    mkdirSync(root);
+    symlinkSync(directory, path.join(root, 'evidence'));
+    await expect(
+      writePerformancePublicationOutputs(result, {
+        assessBuildPersistence: options.assessBuildPersistence,
+        authenticated,
+        evidenceDirectory: path.join(root, 'evidence'),
+        markdownOut: path.join(root, 'performance-publication.md'),
+        operations: options.operations,
+        out: path.join(root, 'performance-publication.json'),
+        ratify: (entries) => options.ratify(entries),
+      }),
+    ).rejects.toThrow(/partial or extra inventory/u);
   });
 
   it('detects aggregate-manifest mutation through its canonical digest', () => {
@@ -775,7 +931,7 @@ describe('seven-family performance publication gate', () => {
         ratify: (entries) => options.ratify(entries),
       }),
     ).toEqual([]);
-    expect(renderPerformancePublicationMarkdown(result.publication)).toContain(
+    expect(renderFixturePublication(result, { authenticated, options })).toContain(
       'Outcome: **profile-required** (current-profile-required).',
     );
   });
@@ -810,9 +966,57 @@ describe('seven-family performance publication gate', () => {
         'publication verdict is not derived from its family and sidecar census',
       ]),
     );
-    expect(() => renderPerformancePublicationMarkdown(forged)).toThrow(
-      /unproven build persistence findings/u,
+    expect(() =>
+      renderFixturePublication({ ...result, publication: forged }, { authenticated, options }),
+    ).toThrow(/unproven build persistence findings/u);
+  });
+
+  it('returns no partial output when an unproven browser cannot produce all 21 documents', async () => {
+    const authenticated = authenticatedFixture();
+    const options = fixtureDerivationOptions();
+    options.operations.browser = {
+      ...options.operations.browser,
+      derive() {
+        throw new TypeError('raw browser posture is unproven');
+      },
+    };
+    const result = derivePerformancePublication(authenticated, options);
+    expect(result.publication.verdict.status).toBe('unproven');
+    expect(result.documents.browser).toBeUndefined();
+    expect(
+      performancePublicationResultFindings(result, {
+        assessBuildPersistence: options.assessBuildPersistence,
+        authenticated,
+        operations: options.operations,
+        ratify: (entries) => options.ratify(entries),
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        'browser budget table metrics are unavailable',
+        'publication does not retain the exact 21 derived documents',
+      ]),
     );
+    expect(() => renderFixturePublication(result, { authenticated, options })).toThrow(
+      /Performance publication result is invalid/u,
+    );
+
+    const directory = realpathSync(
+      mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-publication-unproven-browser-')),
+    );
+    temporaryDirectories.push(directory);
+    const root = path.join(directory, 'publication');
+    await expect(
+      writePerformancePublicationOutputs(result, {
+        assessBuildPersistence: options.assessBuildPersistence,
+        authenticated,
+        evidenceDirectory: path.join(root, 'evidence'),
+        markdownOut: path.join(root, 'performance-publication.md'),
+        operations: options.operations,
+        out: path.join(root, 'performance-publication.json'),
+        ratify: (entries) => options.ratify(entries),
+      }),
+    ).rejects.toThrow(/Performance publication result is invalid/u);
+    expect(existsSync(root)).toBe(false);
   });
 
   it('requires a measured foreground-session decision when the authenticated predicate warrants it', () => {
@@ -849,7 +1053,7 @@ describe('seven-family performance publication gate', () => {
         ratify: (entries) => options.ratify(entries),
       }),
     ).toEqual([]);
-    expect(renderPerformancePublicationMarkdown(result.publication)).toContain(
+    expect(renderFixturePublication(result, { authenticated, options })).toContain(
       `- ${requiredFailure}`,
     );
 
@@ -863,13 +1067,15 @@ describe('seven-family performance publication gate', () => {
         'publication verdict is not derived from its family and sidecar census',
       ]),
     );
-    expect(() => renderPerformancePublicationMarkdown(forged)).toThrow(
-      /publication blocking failures are not derived/u,
-    );
+    expect(() =>
+      renderFixturePublication({ ...result, publication: forged }, { authenticated, options }),
+    ).toThrow(/publication blocking failures are not derived/u);
   });
 
   it('retains data-plane regression checks in the exact dev publication census', () => {
-    const result = derivePerformancePublication(authenticatedFixture(), fixtureDerivationOptions());
+    const authenticated = authenticatedFixture();
+    const options = fixtureDerivationOptions();
+    const result = derivePerformancePublication(authenticated, options);
     const dataP95 = 'corpus-n24/dev//edit.dataMs.p95';
 
     for (const phase of ['baseline', 'holdout']) {
@@ -877,7 +1083,7 @@ describe('seven-family performance publication gate', () => {
         expect.arrayContaining([expect.objectContaining({ id: dataP95, kind: 'regression' })]),
       );
     }
-    expect(renderPerformancePublicationMarkdown(result.publication)).toContain(dataP95);
+    expect(renderFixturePublication(result, { authenticated, options })).toContain(dataP95);
 
     const forged = structuredClone(result.publication);
     for (const phase of ['baseline', 'holdout']) {
@@ -893,12 +1099,13 @@ describe('seven-family performance publication gate', () => {
         'dev-n24 holdout target check census differs from policy',
       ]),
     );
-    expect(() => renderPerformancePublicationMarkdown(forged)).toThrow(
-      /dev-n24 baseline target check census differs from policy/u,
-    );
+    expect(() =>
+      renderFixturePublication({ ...result, publication: forged }, { authenticated, options }),
+    ).toThrow(/dev-n24 baseline target check census differs from policy/u);
   });
 
   it('blocks the aggregate when an otherwise measured dev holdout regresses on dataMs', () => {
+    const authenticated = authenticatedFixture();
     const options = fixtureDerivationOptions();
     options.operations['dev-n24'] = {
       ...options.operations['dev-n24'],
@@ -913,7 +1120,7 @@ describe('seven-family performance publication gate', () => {
       },
     };
 
-    const result = derivePerformancePublication(authenticatedFixture(), options);
+    const result = derivePerformancePublication(authenticated, options);
 
     expect(result.publication.families['dev-n24']).toMatchObject({
       holdoutEvaluation: {
@@ -937,7 +1144,7 @@ describe('seven-family performance publication gate', () => {
       status: 'blocked',
     });
     expect(performancePublicationFindings(result.publication)).toEqual([]);
-    expect(renderPerformancePublicationMarkdown(result.publication)).toContain(
+    expect(renderFixturePublication(result, { authenticated, options })).toContain(
       'holdout corpus-n24/dev//edit.dataMs.p95',
     );
   });
@@ -964,17 +1171,23 @@ describe('seven-family performance publication gate', () => {
       ratify: (entries) => options.ratify(entries),
     });
     expect(findings.join('\n')).toMatch(/evaluation document differs|aggregate summary differs/u);
+    expect(() => renderFixturePublication(result, { authenticated, options })).toThrow(
+      /Performance publication result is invalid/u,
+    );
 
-    const directory = mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-publication-mutation-'));
+    const directory = realpathSync(
+      mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-publication-mutation-')),
+    );
     temporaryDirectories.push(directory);
+    const root = path.join(directory, 'publication');
     await expect(
       writePerformancePublicationOutputs(result, {
         assessBuildPersistence: options.assessBuildPersistence,
         authenticated,
-        evidenceDirectory: path.join(directory, 'evidence'),
-        markdownOut: path.join(directory, 'publication.md'),
+        evidenceDirectory: path.join(root, 'evidence'),
+        markdownOut: path.join(root, 'performance-publication.md'),
         operations: options.operations,
-        out: path.join(directory, 'publication.json'),
+        out: path.join(root, 'performance-publication.json'),
         ratify: (entries) => options.ratify(entries),
       }),
     ).rejects.toThrow('Performance publication result is invalid');
@@ -1217,6 +1430,15 @@ describe('seven-family performance publication gate', () => {
   });
 });
 
+function renderFixturePublication(result, { authenticated, options }) {
+  return renderPerformancePublicationMarkdown(result, {
+    assessBuildPersistence: options.assessBuildPersistence,
+    authenticated,
+    operations: options.operations,
+    ratify: (entries) => options.ratify(entries),
+  });
+}
+
 function fixtureDerivationOptions() {
   return {
     assessBuildPersistence: ({ n24Budget, n216Budget }) =>
@@ -1366,6 +1588,30 @@ function fixtureBudget(familyName, baseline) {
   if (familyName === 'browser') {
     return {
       ...common,
+      metrics: Object.fromEntries(
+        ['default', 'matched-l0', 'matched-l1'].flatMap((lane, laneIndex) =>
+          [
+            [`${lane}/browser//desktop.coldLoad.bytes.js`, 10 + laneIndex],
+            [`${lane}/browser//mobile.navigation.navToPaintMs`, 100 + laneIndex],
+          ].map(([metric, value]) => [
+            metric,
+            {
+              baseline: {
+                kovoMedian: value,
+                kovoP95: value + 1,
+                nextMedian: value + 10,
+                nextP95: value + 11,
+                pairedMedian: -10,
+                runs: 5,
+              },
+              direction: 'lower-is-better',
+              kind: 'ratified-regression-ceiling',
+              medianMaximum: value * 1.05,
+              p95Maximum: (value + 1) * 1.05,
+            },
+          ]),
+        ),
+      ),
       targetAssessment: {
         checks: fixtureComparisonTargetChecks('browser'),
         failures: [],

@@ -105,9 +105,15 @@ https://github.com/kovojs/kovo/actions/runs/<run-id>/artifacts/<artifact-id>
 ```
 
 The browser report's ratified analysis includes the 30 scenario samples, five raw Lighthouse
-samples per cell, and ten bfcache traversals. The check report uses the same authenticated execution,
-source/lock, normalized host-v2, quiet-host, and workload identities as the comparison reports.
-A dirty, busy, incomplete, duplicate, or identity-mismatched report produces `unproven`.
+samples per cell, and ten bfcache traversals. Every lane and form factor must include absolute cold
+JavaScript and total-byte metrics. Derivation also reads the exact 12 raw browser cells in each of
+the five baseline reports and the holdout: Kovo default and matched-L0 cold samples must have zero
+script elements and zero JavaScript bytes; Next default and matched L0 must have a script element;
+Kovo matched L1 must show document-parts without replacing the document; and Next matched L1 must
+show a `text/html` document navigation that replaces it. Resealing an aggregate cannot replace this
+raw posture proof. The check report uses the same authenticated execution, source/lock, normalized
+host-v2, quiet-host, and workload identities as the comparison reports. A dirty, busy, incomplete,
+duplicate, or identity-mismatched report produces `unproven`.
 
 Baseline jobs request 90-day Actions retention, while the PR-only Production-bytes artifact requests
 14 days. Collect and publish the selected sidecar before that shorter window closes. The canonical
@@ -119,7 +125,7 @@ Create a custody directory outside the measured checkout, then supply the five d
 paths and their matching artifact URLs:
 
 ```sh
-kovo_perf_custody="$(mktemp -d)"
+kovo_perf_custody="$(realpath "$(mktemp -d)")"
 vp exec node scripts/perf-baseline-ratify.mjs \
   --report "$kovo_perf_custody/run-1/<report>.json" --location <artifact-url-1> \
   --report "$kovo_perf_custody/run-2/<report>.json" --location <artifact-url-2> \
@@ -378,6 +384,10 @@ vp exec node scripts/perf-publication-gate.mjs \
   --markdown-out "$kovo_perf_custody/publication/performance-publication.md"
 ```
 
+The three output paths must be canonical absolute paths in the one documented layout. The
+`publication` root must be absent or empty; a partial prior run, nested file, alternate output name,
+directory alias, or symlink is rejected instead of overwritten.
+
 The CLI completes all 42 selected baseline/holdout custody calls, the selected Production-bytes
 custody call, every carried family and Production-bytes candidate custody call, live
 reauthentication of the complete campaign workflow-run and artifact-list chronology, and both
@@ -386,10 +396,15 @@ it creates an evidence, JSON, Markdown, staging, or output path. A requested in-
 therefore created only after the whole measured checkout has passed every clean-source check; using
 the external directory above avoids coupling collection and publication to repository state.
 
-The evidence directory receives the re-ratified baseline, derived budget, and independent holdout
-evaluation for every family. The aggregate JSON content-addresses those 21 files and retains every
-canonical artifact page, API URL, API-response digest, artifact ZIP digest, report digest, execution,
-source, lock, host, and workload identity. The aggregate also retains the preregistered boundary,
+The output schema is `kovo-performance-publication/v6`. Its root contains exactly 23 regular files:
+`performance-publication.json`, `performance-publication.md`, and exactly 21 JSON files under
+`evidence/` (baseline, budget, and independent holdout evaluation for each of seven families).
+There is no Production-bytes family document; the authenticated sidecar remains in the aggregate.
+Extra or missing files, nested directories, alternate placement, and symlinks fail both the
+pre-write and readback inventory gates. The aggregate JSON content-addresses those 21 files and
+retains every canonical artifact page, API URL, API-response digest, artifact ZIP digest, report
+digest, execution, source, lock, host, and workload identity. The aggregate also retains the
+preregistered boundary,
 every authenticated run and literal publication-artifact identity, the complete Production-bytes
 chronology, every authenticated family/byte candidate reference, the independently re-derived
 cohort selection, and the earliest selected candidate. Its Markdown surfaces baseline and holdout target
@@ -399,8 +414,25 @@ foreground build-session assessment, including its four milestone/residual cells
 custody-authenticated profile references. The same aggregate JSON and Markdown retain the selected
 Production-bytes artifact custody, the exact `perf-budgets.json` byte length and SHA-256 from the
 clean measured-source checkout, all five observed values and budget maxima, and the derived
-pass/blocked/unproven sidecar status. The derived family evidence directory remains exactly 21
-files; the sidecar does not create a synthetic baseline/budget/evaluation family document.
+pass/blocked/unproven sidecar status.
+
+The 23-file publication is atomic at the contract level: if any family, including browser, cannot
+derive all three documents, result validation returns exit status 2 before creating the output
+root. An aggregate-level unproven decision that still has all 21 family documents (for example, a
+conditional build-profile decision) remains renderable and retains its unproven verdict; the gate
+never emits a partial family inventory.
+
+The browser section is not a curated headline subset. It deterministically partitions every metric
+in `evidence/browser-budget.json` into Default/as shipped, Matched L0, or Matched L1 and renders each
+lane sorted with `Metric | Kovo median | Kovo p95 | Next median | Next p95 | Budget policy`.
+The median is the median of the five run medians; p95 is the median of the five within-run p95s. The
+sixth run is the independent holdout and is not pooled. The section links the derived budget, all
+five baseline artifacts, the holdout, the exact measured source, and the exact fixture sources.
+It keeps the required caveats beside the tables: default compares Kovo's native L0 with Next's
+hydrated mutable cart; zero JavaScript applies only to Kovo L0 and Next matched L0 still ships
+JavaScript; matched L1 equalizes capability while Kovo preserves the document and Next replaces it;
+and `responseProcessingDomApply` overlaps transfer/parser/style/layout, so it is neither additive
+nor a decode/morph split.
 
 For each dev family, the rendered baseline and holdout target assessments include the exact median
 and p95 regression census for leaf, entry, data-plane, syntax-error, recovery, ready, and
@@ -456,10 +488,12 @@ integrity, `suite=bytes`, `componentCount=24`, and five-metric census.
 
 Before writing, the aggregate gate re-ratifies every baseline from its five authenticated raw
 reports, re-derives each family budget, and re-evaluates each holdout. It recomputes the exact target
-assessment and the byte and semantic digests for all 21 baseline/budget/evaluation documents. After
-writing, it reads those 21 files and the aggregate JSON back, verifies canonical bytes and digests,
-and repeats the result-level validation. A self-consistently edited target, evaluation, or document
-plus a recomputed aggregate self-hash therefore cannot produce exit status 0. It also reloads
+assessment and the byte and semantic digests for all 21 baseline/budget/evaluation documents. The
+Markdown renderer accepts only that complete `{documents, publication}` result and repeats the
+authenticated derivation; it never renders a bare aggregate merely because its self-hash is valid.
+After writing, it reads those 21 files and the aggregate JSON back, verifies canonical bytes and
+digests, and repeats the result-level validation. A self-consistently edited target, evaluation, or
+document plus a recomputed aggregate self-hash therefore cannot produce exit status 0. It also reloads
 `perf-budgets.json` from a clean checkout whose `HEAD` equals the measured source, requires disk
 bytes to equal `git show HEAD:perf-budgets.json`, evaluates exactly the five deterministic byte
 metrics, and canonically reproduces the sidecar assessment during result and readback validation.

@@ -73,7 +73,7 @@ import {
 } from './perf-gate.mjs';
 
 export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v5';
-export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v5';
+export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v6';
 export const PERF_PUBLICATION_REPOSITORY = 'kovojs/kovo';
 
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
@@ -83,6 +83,9 @@ const MAX_API_RESPONSE_BYTES = 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_REPORT_BYTES = 128 * 1024 * 1024;
 const MAX_CAMPAIGN_RUNS = 100;
+const PERF_PUBLICATION_JSON_NAME = 'performance-publication.json';
+const PERF_PUBLICATION_MARKDOWN_NAME = 'performance-publication.md';
+const PERF_PUBLICATION_EVIDENCE_DIRECTORY_NAME = 'evidence';
 const execFileAsync = promisify(execFile);
 const REQUIRED_LOCKS = Object.freeze([
   'pnpm-lock.yaml',
@@ -165,7 +168,7 @@ const FAMILY_NAMES = Object.freeze([
 const FAMILY_CONFIG = Object.freeze({
   browser: familyConfig({
     architecture:
-      'Default/as-shipped, matched L0, and matched L1 remain separate. Inert L0 documents retain zero JavaScript; same-document and document-replacing navigation are not conflated.',
+      'Default/as-shipped, matched L0, and matched L1 remain separate. Zero JavaScript is proved only for Kovo L0; Next matched L0 still ships JavaScript. Same-document and document-replacing navigation are not conflated.',
     artifactName: 'kovo-perf-browser-matrix',
     baselineFindings: comparisonBudgetBaselineFindings,
     budgetFindings: comparisonBudgetFindings,
@@ -2231,6 +2234,7 @@ export function performancePublicationResultFindings(
     ...performancePublicationFindings(publication),
     ...authenticatedInputFindings(authenticated),
     ...exactPublicationIdentityFindings(familyEntries(authenticated)),
+    ...browserPublicationTableFindings(result?.documents?.browser?.budget),
   ];
   const profileEntries = buildProfileEntries ?? authenticated?.buildProfiles ?? [];
   let reproduced;
@@ -2499,11 +2503,9 @@ export function performancePublicationFindings(publication) {
   return [...new Set(findings)].sort();
 }
 
-export function renderPerformancePublicationMarkdown(publication) {
-  const findings = performancePublicationFindings(publication);
-  if (findings.length > 0) {
-    throw new TypeError(`Cannot render malformed performance publication:\n${findings.join('\n')}`);
-  }
+export function renderPerformancePublicationMarkdown(result, validation = {}) {
+  assertPerformancePublicationResult(result, validation);
+  const publication = result.publication;
   const lines = [
     '# Kovo realistic performance publication gate',
     '',
@@ -2576,7 +2578,9 @@ export function renderPerformancePublicationMarkdown(publication) {
   for (const [label, url] of Object.entries(publication.fixtureSources)) {
     lines.push(`- [${label}](${url})`);
   }
+  lines.push(...renderBrowserComparisonMarkdownLines(result));
   for (const familyName of FAMILY_NAMES) {
+    if (familyName === 'browser') continue;
     const family = publication.families[familyName];
     lines.push('', `## ${familyName}`, '', family.architecture, '');
     if (family.status === 'unproven') {
@@ -2611,6 +2615,120 @@ export function renderPerformancePublicationMarkdown(publication) {
   return lines.join('\n');
 }
 
+function browserPublicationTableFindings(budget) {
+  if (!ownRecord(budget?.metrics) || Object.keys(budget.metrics).length === 0) {
+    return ['browser budget table metrics are unavailable'];
+  }
+  const findings = [];
+  const laneCounts = new Map(['default', 'matched-l0', 'matched-l1'].map((lane) => [lane, 0]));
+  for (const [metric, entry] of Object.entries(budget.metrics)) {
+    const lane = /^(default|matched-l0|matched-l1)\/browser\/\//u.exec(metric)?.[1];
+    if (lane === undefined) {
+      findings.push(`browser budget metric ${metric} does not belong to exactly one browser lane`);
+    } else {
+      laneCounts.set(lane, laneCounts.get(lane) + 1);
+    }
+    if (
+      !ownRecord(entry?.baseline) ||
+      !['kovoMedian', 'kovoP95', 'nextMedian', 'nextP95'].every((field) =>
+        Number.isFinite(entry.baseline[field]),
+      )
+    ) {
+      findings.push(`browser budget metric ${metric} absolute baseline values are unavailable`);
+    }
+    if (!nonEmptyString(browserBudgetPolicy(entry))) {
+      findings.push(`browser budget metric ${metric} policy is unavailable`);
+    }
+  }
+  for (const [lane, count] of laneCounts) {
+    if (count === 0) findings.push(`browser budget table lane ${lane} has no metrics`);
+  }
+  return [...new Set(findings)].sort((left, right) => left.localeCompare(right));
+}
+
+function renderBrowserComparisonMarkdownLines(result) {
+  const publication = result.publication;
+  const family = publication.families.browser;
+  const budget = result.documents.browser.budget;
+  const lines = [
+    '',
+    '## Browser comparison: explicit lanes',
+    '',
+    family.architecture,
+    '',
+    'Each median is the median of five independent run medians. Each p95 is the median of the five within-run p95 values. The sixth run is the independent holdout and is not pooled into either baseline statistic.',
+    '',
+    'The default/as-shipped lane is intentionally capability-mismatched: Kovo uses its native L0 cart while Next uses a hydrated mutable cart. Zero JavaScript applies only to Kovo L0; Next matched L0 still ships JavaScript. Matched L1 equalizes cart capability, but Kovo uses an observed document-parts response and preserves the document while Next uses an observed `text/html` document navigation and replaces it. `responseProcessingDomApply` overlaps transfer, parser, style, and layout; it is not additive and is not a decode or morph split.',
+    '',
+    'Authenticated derivation inputs:',
+    '',
+    '- [Derived browser budget](evidence/browser-budget.json)',
+    `- [Measured source](https://github.com/${PERF_PUBLICATION_REPOSITORY}/tree/${publication.identity.sourceCommit})`,
+  ];
+  for (const [label, url] of Object.entries(publication.fixtureSources)) {
+    lines.push(`- [${label}](${url})`);
+  }
+  for (const [index, evidence] of family.evidence.baseline.entries()) {
+    lines.push(`- [baseline ${String(index + 1)}: ${evidence.execution}](${evidence.location})`);
+  }
+  lines.push(
+    `- [independent holdout: ${family.evidence.holdout.execution}](${family.evidence.holdout.location})`,
+  );
+  const laneTitles = {
+    default: 'Default/as shipped',
+    'matched-l0': 'Matched L0',
+    'matched-l1': 'Matched L1',
+  };
+  for (const lane of ['default', 'matched-l0', 'matched-l1']) {
+    const rows = Object.entries(budget.metrics)
+      .filter(([metric]) => metric.startsWith(`${lane}/browser//`))
+      .sort(([left], [right]) => left.localeCompare(right));
+    lines.push(
+      '',
+      `### ${laneTitles[lane]}`,
+      '',
+      '| Metric | Kovo median | Kovo p95 | Next median | Next p95 | Budget policy |',
+      '| --- | ---: | ---: | ---: | ---: | --- |',
+    );
+    for (const [metric, entry] of rows) {
+      lines.push(
+        `| ${metric.replaceAll('|', '\\|')} | ${formatNumber(entry.baseline.kovoMedian)} | ${formatNumber(entry.baseline.kovoP95)} | ${formatNumber(entry.baseline.nextMedian)} | ${formatNumber(entry.baseline.nextP95)} | ${browserBudgetPolicy(entry)} |`,
+      );
+    }
+  }
+  lines.push('', 'Browser target assessment:', '');
+  for (const phase of ['baseline', 'holdout']) {
+    for (const check of family.targetAssessment[phase].checks) {
+      lines.push(
+        `- ${phase} ${check.id}: ${formatNumber(check.observed)} ${check.operator} ${formatNumber(check.limit)} — ${check.status}`,
+      );
+    }
+  }
+  return lines;
+}
+
+function browserBudgetPolicy(entry) {
+  if (entry?.kind === 'informational') return 'informational';
+  if (entry?.kind === 'exact-availability-floor' && Number.isFinite(entry.minimum)) {
+    return `minimum ${formatNumber(entry.minimum)}`;
+  }
+  if (
+    entry?.kind === 'ratified-regression-ceiling' &&
+    Number.isFinite(entry.medianMaximum) &&
+    Number.isFinite(entry.p95Maximum)
+  ) {
+    return `median <= ${formatNumber(entry.medianMaximum)}; p95 <= ${formatNumber(entry.p95Maximum)}`;
+  }
+  if (
+    entry?.kind === 'ratified-regression-floor' &&
+    Number.isFinite(entry.medianMinimum) &&
+    Number.isFinite(entry.p95Minimum)
+  ) {
+    return `median >= ${formatNumber(entry.medianMinimum)}; p95 >= ${formatNumber(entry.p95Minimum)}`;
+  }
+  return '';
+}
+
 export async function writePerformancePublicationOutputs(
   result,
   {
@@ -2639,60 +2757,39 @@ export async function writePerformancePublicationOutputs(
     ratify,
   };
   assertPerformancePublicationResult(result, validation);
-  const resolvedEvidence = path.resolve(evidenceDirectory);
-  await mkdir(resolvedEvidence, { recursive: true });
-  const expectedMembers = performanceEvidenceMemberNames(result.documents);
-  const unexpectedMembers = (await readdir(resolvedEvidence)).filter(
-    (member) => !expectedMembers.includes(member),
-  );
-  if (unexpectedMembers.length > 0) {
-    throw new TypeError(
-      'performance evidence directory contains files outside the exact 21-file census',
-    );
-  }
-  for (const [familyName, documents] of Object.entries(result.documents)) {
-    for (const [kind, document] of Object.entries(documents)) {
+  const markdown = renderPerformancePublicationMarkdown(result, validation);
+  const layout = await performancePublicationOutputLayout({ evidenceDirectory, markdownOut, out });
+  await prepareEmptyPerformancePublicationRoot(layout);
+  for (const familyName of FAMILY_NAMES) {
+    for (const kind of ['baseline', 'budget', 'evaluation']) {
+      const document = result.documents[familyName][kind];
       await writeFile(
-        path.join(resolvedEvidence, `${familyName}-${kind}.json`),
+        path.join(layout.evidenceDirectory, `${familyName}-${kind}.json`),
         prettyJson(document),
-        { flag: 'w' },
+        { flag: 'wx' },
       );
     }
   }
-  await mkdir(path.dirname(path.resolve(out)), { recursive: true });
-  await writeFile(path.resolve(out), prettyJson(result.publication), { flag: 'w' });
-  await mkdir(path.dirname(path.resolve(markdownOut)), { recursive: true });
-  await writeFile(
-    path.resolve(markdownOut),
-    renderPerformancePublicationMarkdown(result.publication),
-    { flag: 'w' },
-  );
+  await writeFile(layout.out, prettyJson(result.publication), { flag: 'wx' });
+  await writeFile(layout.markdownOut, markdown, { flag: 'wx' });
   await validateWrittenPerformancePublicationOutputs(result, {
-    evidenceDirectory: resolvedEvidence,
-    markdownOut: path.resolve(markdownOut),
-    out: path.resolve(out),
+    ...layout,
     validation,
   });
 }
 
 async function validateWrittenPerformancePublicationOutputs(
   expected,
-  { evidenceDirectory, markdownOut, out, validation },
+  { evidenceDirectory, markdownOut, out, root, validation },
 ) {
+  await assertExactPerformancePublicationInventory(root);
   const publicationBytes = await readFile(out);
   if (!publicationBytes.equals(Buffer.from(prettyJson(expected.publication)))) {
     throw new TypeError('written publication JSON differs from the validated in-memory result');
   }
   const publication = parseOutputJson(publicationBytes, 'written publication JSON');
   const documents = {};
-  const expectedMembers = performanceEvidenceMemberNames(expected.documents);
-  const actualMembers = (await readdir(evidenceDirectory)).sort((left, right) =>
-    left.localeCompare(right),
-  );
-  if (canonicalJson(actualMembers) !== canonicalJson(expectedMembers)) {
-    throw new TypeError('written performance evidence directory is not the exact 21-file census');
-  }
-  for (const familyName of Object.keys(expected.documents)) {
+  for (const familyName of FAMILY_NAMES) {
     documents[familyName] = {};
     for (const kind of ['baseline', 'budget', 'evaluation']) {
       const file = path.join(evidenceDirectory, `${familyName}-${kind}.json`);
@@ -2711,17 +2808,136 @@ async function validateWrittenPerformancePublicationOutputs(
   const readBack = { documents, publication };
   assertPerformancePublicationResult(readBack, validation);
   const markdownBytes = await readFile(markdownOut);
-  if (!markdownBytes.equals(Buffer.from(renderPerformancePublicationMarkdown(publication)))) {
-    throw new TypeError('written publication Markdown differs from the validated aggregate');
+  if (
+    !markdownBytes.equals(Buffer.from(renderPerformancePublicationMarkdown(readBack, validation)))
+  ) {
+    throw new TypeError('written publication Markdown differs from the validated complete result');
+  }
+  await assertExactPerformancePublicationInventory(root);
+}
+
+function performanceEvidenceMemberNames() {
+  return FAMILY_NAMES.flatMap((familyName) =>
+    ['baseline', 'budget', 'evaluation'].map((kind) => `${familyName}-${kind}.json`),
+  ).sort((left, right) => left.localeCompare(right));
+}
+
+async function performancePublicationOutputLayout({ evidenceDirectory, markdownOut, out }) {
+  const supplied = { evidenceDirectory, markdownOut, out };
+  for (const [label, value] of Object.entries(supplied)) {
+    if (!path.isAbsolute(value) || value !== path.resolve(value)) {
+      throw new TypeError(`${label} must be one canonical absolute path without layout aliases`);
+    }
+  }
+  const root = path.dirname(out);
+  const expected = {
+    evidenceDirectory: path.join(root, PERF_PUBLICATION_EVIDENCE_DIRECTORY_NAME),
+    markdownOut: path.join(root, PERF_PUBLICATION_MARKDOWN_NAME),
+    out: path.join(root, PERF_PUBLICATION_JSON_NAME),
+  };
+  if (
+    evidenceDirectory !== expected.evidenceDirectory ||
+    markdownOut !== expected.markdownOut ||
+    out !== expected.out ||
+    new Set(Object.values(expected)).size !== 3
+  ) {
+    throw new TypeError(
+      'performance publication outputs must use publication/{performance-publication.json,performance-publication.md,evidence/*.json}',
+    );
+  }
+  await assertCanonicalExistingPublicationPath(
+    path.dirname(root),
+    'performance publication output parent',
+  );
+  return { ...expected, root };
+}
+
+async function prepareEmptyPerformancePublicationRoot(layout) {
+  let rootStat;
+  try {
+    rootStat = await lstat(layout.root);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+    const parent = await lstat(path.dirname(layout.root));
+    if (!parent.isDirectory() || parent.isSymbolicLink()) {
+      throw new TypeError('performance publication output parent must be one real directory');
+    }
+    await mkdir(layout.root);
+    rootStat = await lstat(layout.root);
+  }
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    throw new TypeError('performance publication output root must be one real directory');
+  }
+  await assertCanonicalExistingPublicationPath(layout.root, 'performance publication output root');
+  const existing = await readdir(layout.root);
+  if (existing.length !== 0) {
+    throw new TypeError(
+      'performance publication output root must be absent or empty; partial or extra inventory is rejected',
+    );
+  }
+  await mkdir(layout.evidenceDirectory);
+}
+
+async function assertExactPerformancePublicationInventory(root) {
+  const expectedRootMembers = [
+    PERF_PUBLICATION_EVIDENCE_DIRECTORY_NAME,
+    PERF_PUBLICATION_JSON_NAME,
+    PERF_PUBLICATION_MARKDOWN_NAME,
+  ].sort((left, right) => left.localeCompare(right));
+  const rootStat = await lstat(root);
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    throw new TypeError('written performance publication root is not one real directory');
+  }
+  await assertCanonicalExistingPublicationPath(root, 'written performance publication root');
+  const rootMembers = (await readdir(root)).sort((left, right) => left.localeCompare(right));
+  if (canonicalJson(rootMembers) !== canonicalJson(expectedRootMembers)) {
+    throw new TypeError('written performance publication root is not the exact 23-file layout');
+  }
+  for (const name of [PERF_PUBLICATION_JSON_NAME, PERF_PUBLICATION_MARKDOWN_NAME]) {
+    const member = await lstat(path.join(root, name));
+    if (!member.isFile() || member.isSymbolicLink()) {
+      throw new TypeError(`written performance publication ${name} is not one regular file`);
+    }
+    await assertCanonicalExistingPublicationPath(
+      path.join(root, name),
+      `written performance publication ${name}`,
+    );
+  }
+  const evidenceDirectory = path.join(root, PERF_PUBLICATION_EVIDENCE_DIRECTORY_NAME);
+  const evidenceStat = await lstat(evidenceDirectory);
+  if (!evidenceStat.isDirectory() || evidenceStat.isSymbolicLink()) {
+    throw new TypeError('written performance evidence member is not one real directory');
+  }
+  await assertCanonicalExistingPublicationPath(
+    evidenceDirectory,
+    'written performance evidence directory',
+  );
+  const expectedEvidence = performanceEvidenceMemberNames();
+  const evidenceMembers = (await readdir(evidenceDirectory)).sort((left, right) =>
+    left.localeCompare(right),
+  );
+  if (canonicalJson(evidenceMembers) !== canonicalJson(expectedEvidence)) {
+    throw new TypeError('written performance evidence directory is not the exact 21-file census');
+  }
+  for (const name of evidenceMembers) {
+    const member = await lstat(path.join(evidenceDirectory, name));
+    if (!member.isFile() || member.isSymbolicLink()) {
+      throw new TypeError(`written performance evidence ${name} is not one regular file`);
+    }
+    await assertCanonicalExistingPublicationPath(
+      path.join(evidenceDirectory, name),
+      `written performance evidence ${name}`,
+    );
   }
 }
 
-function performanceEvidenceMemberNames(documents) {
-  return Object.keys(documents)
-    .flatMap((familyName) =>
-      ['baseline', 'budget', 'evaluation'].map((kind) => `${familyName}-${kind}.json`),
-    )
-    .sort((left, right) => left.localeCompare(right));
+async function assertCanonicalExistingPublicationPath(value, label) {
+  const member = await lstat(value);
+  if (member.isSymbolicLink()) throw new TypeError(`${label} must not be a symlink`);
+  const resolved = await realpath(value);
+  if (resolved !== value) {
+    throw new TypeError(`${label} has a symlink ancestor or realpath alias`);
+  }
 }
 
 function baselineTargetAssessment(familyName, budget) {

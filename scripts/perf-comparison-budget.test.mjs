@@ -196,6 +196,110 @@ describe('browser/server comparison budgets', () => {
     );
   });
 
+  it("requires the exact raw browser census and both entrants' measured runtime posture", () => {
+    const omitted = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    omitted[2].report.rawCells.pop();
+    refreshEntry(omitted[2]);
+    expect(() =>
+      deriveComparisonPerformanceBudget(ratifyPerformanceBaseline(omitted), {
+        baselineEntries: omitted,
+      }),
+    ).toThrow(/raw browser cell census is not the exact 12 cells/u);
+
+    const kovoScript = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    const kovoDefault = kovoScript[0].report.rawCells.find(
+      (cell) => cell.framework === 'kovo' && cell.lane === 'default',
+    );
+    kovoDefault.report.apps[0].conditions.desktop.coldLoad.iterations[0].fixtureScriptCount = 1;
+    kovoDefault.report.apps[0].conditions.desktop.coldLoad.iterations[0].bytes.js = 1;
+    refreshEntry(kovoScript[0]);
+    expect(() =>
+      deriveComparisonPerformanceBudget(ratifyPerformanceBaseline(kovoScript), {
+        baselineEntries: kovoScript,
+      }),
+    ).toThrow(/Kovo L0 zero-JavaScript posture is not proved/u);
+
+    const kovoBytes = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    const kovoL0Bytes = kovoBytes[3].report.rawCells.find(
+      (cell) => cell.framework === 'kovo' && cell.lane === 'matched-l0',
+    );
+    kovoL0Bytes.report.apps[0].conditions.mobile.coldLoad.iterations[0].bytes.js = 1;
+    refreshEntry(kovoBytes[3]);
+    expect(() =>
+      deriveComparisonPerformanceBudget(ratifyPerformanceBaseline(kovoBytes), {
+        baselineEntries: kovoBytes,
+      }),
+    ).toThrow(/Kovo L0 zero-JavaScript posture is not proved/u);
+
+    const nextScript = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    const nextL0 = nextScript[4].report.rawCells.find(
+      (cell) => cell.framework === 'nextjs' && cell.lane === 'matched-l0',
+    );
+    nextL0.report.apps[0].conditions.mobile.coldLoad.iterations[0].fixtureScriptCount = 0;
+    refreshEntry(nextScript[4]);
+    expect(() =>
+      deriveComparisonPerformanceBudget(ratifyPerformanceBaseline(nextScript), {
+        baselineEntries: nextScript,
+      }),
+    ).toThrow(/Next default\/L0 script posture is not proved/u);
+
+    const nextDefaultScript = Array.from({ length: 5 }, (_, index) =>
+      reportEntry(index, 'browser'),
+    );
+    const nextDefault = nextDefaultScript[1].report.rawCells.find(
+      (cell) => cell.framework === 'nextjs' && cell.lane === 'default',
+    );
+    nextDefault.report.apps[0].conditions.desktop.coldLoad.iterations[0].fixtureScriptCount = 0;
+    refreshEntry(nextDefaultScript[1]);
+    expect(() =>
+      deriveComparisonPerformanceBudget(ratifyPerformanceBaseline(nextDefaultScript), {
+        baselineEntries: nextDefaultScript,
+      }),
+    ).toThrow(/Next default\/L0 script posture is not proved/u);
+
+    const clean = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    const budget = deriveComparisonPerformanceBudget(ratifyPerformanceBaseline(clean), {
+      baselineEntries: clean,
+    });
+    const holdout = reportEntry(5, 'browser').report;
+    const kovoL1 = holdout.rawCells.find(
+      (cell) => cell.framework === 'kovo' && cell.lane === 'matched-l1',
+    );
+    kovoL1.report.apps[0].conditions.desktop.navigation.iterations[0].navDocumentReplaced = 1;
+    expect(evaluateComparisonPerformanceBudget(budget, holdout).verdict).toMatchObject({
+      status: 'unproven',
+    });
+
+    const nextHoldout = reportEntry(6, 'browser').report;
+    const nextL1 = nextHoldout.rawCells.find(
+      (cell) => cell.framework === 'nextjs' && cell.lane === 'matched-l1',
+    );
+    nextL1.report.apps[0].conditions.mobile.navigation.iterations[0].navAttribution.primaryResponse.contentType =
+      'application/json';
+    expect(evaluateComparisonPerformanceBudget(budget, nextHoldout).verdict).toMatchObject({
+      status: 'unproven',
+    });
+  });
+
+  it('requires cold-load JavaScript and total bytes for every lane and form factor', () => {
+    for (const requiredMetric of [
+      'default/browser//desktop.coldLoad.bytes.js',
+      'matched-l0/browser//mobile.coldLoad.bytes.total',
+      'matched-l1/browser//desktop.coldLoad.bytes.total',
+    ]) {
+      const entries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+      for (const entry of entries) {
+        delete entry.report.analysis[requiredMetric];
+        refreshEntry(entry);
+      }
+      expect(() =>
+        deriveComparisonPerformanceBudget(ratifyPerformanceBaseline(entries), {
+          baselineEntries: entries,
+        }),
+      ).toThrow(`required browser metric ${requiredMetric} is unavailable`);
+    }
+  });
+
   it('rejects omitted identity targets, fabricated paired Brotli, and missing raw Brotli proof', () => {
     const missingIdentity = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'server'));
     for (const entry of missingIdentity) {
@@ -428,7 +532,9 @@ function reportEntry(index, subject) {
       workloadAuthenticated: true,
     },
     schema: 'kovo-next-performance-comparison/v1',
-    ...(subject === 'server' ? { rawCells: serverBrotliRawCells() } : {}),
+    ...(subject === 'browser'
+      ? { rawCells: browserRawCells() }
+      : { rawCells: serverBrotliRawCells() }),
     source,
     verdict: { reasons: [], status: 'measured' },
     workloadIdentity: {
@@ -454,7 +560,7 @@ function browserAnalysis(index) {
     analysis[`${lane}/browser//bfcache.evidenceComplete`] = booleanMetric(1, 1, 10);
     analysis[`${lane}/browser//bfcache.restored`] = booleanMetric(1, 0, 10);
     for (const formFactor of ['desktop', 'mobile']) {
-      for (const leaf of ['fcpMs', 'lcpMs']) {
+      for (const leaf of ['fcpMs', 'lcpMs', 'bytes.js', 'bytes.total']) {
         analysis[`${lane}/browser//${formFactor}.coldLoad.${leaf}`] = metric(200 + index, 220, 30);
       }
       analysis[`${lane}/browser//${formFactor}.navigation.navToPaintMs`] = metric(
@@ -508,6 +614,84 @@ function browserAnalysis(index) {
     }
   }
   return analysis;
+}
+
+function browserRawCells() {
+  return ['default', 'matched-l0', 'matched-l1'].flatMap((lane) =>
+    ['kovo', 'nextjs'].flatMap((framework) =>
+      [0, 1].map((occurrence) => {
+        const iterations = 15;
+        const lighthouseRepeats = occurrence === 0 ? 3 : 2;
+        const coldSample = () => {
+          const zeroJavaScript = framework === 'kovo' && lane !== 'matched-l1';
+          return {
+            bytes: { js: zeroJavaScript ? 0 : 100, total: 1_000 },
+            fixtureScriptCount: zeroJavaScript ? 0 : 1,
+          };
+        };
+        const navigationSample = () => ({
+          ...(lane === 'matched-l1'
+            ? framework === 'kovo'
+              ? {
+                  navAttribution: {
+                    primaryResponse: {
+                      contentType: 'application/vnd.kovo.document-parts+json; charset=utf-8',
+                      resourceType: 'fetch',
+                      selection: 'kovo-document-parts-media-type',
+                      status: 'observed',
+                    },
+                  },
+                  navDocumentReplaced: 0,
+                }
+              : {
+                  navAttribution: {
+                    primaryResponse: {
+                      contentType: 'text/html; charset=utf-8',
+                      networkWitness: {
+                        facts: { isNavigationRequest: true, resourceType: 'document' },
+                      },
+                      resourceType: 'document',
+                      selection: 'document-resource',
+                      status: 'observed',
+                    },
+                  },
+                  navDocumentReplaced: 1,
+                }
+            : {}),
+        });
+        const condition = () => ({
+          coldLoad: { iterations: Array.from({ length: iterations }, coldSample) },
+          navigation: { iterations: Array.from({ length: iterations }, navigationSample) },
+          ttiProbe: {
+            iterations: lane === 'matched-l0' ? [] : Array.from({ length: iterations }, () => ({})),
+          },
+        });
+        return {
+          cell: 'browser',
+          framework,
+          lane,
+          occurrence,
+          report: {
+            apps: [
+              {
+                app: framework,
+                bfcache: { iterations: Array.from({ length: 5 }, () => ({})) },
+                conditions: { desktop: condition(), mobile: condition() },
+                lighthouse: ['desktop', 'desktop', 'mobile', 'mobile'].map((formFactor) => ({
+                  formFactor,
+                  repeats: lighthouseRepeats,
+                  samples: Array.from({ length: lighthouseRepeats }, () => ({})),
+                })),
+              },
+            ],
+            iterations,
+            lane,
+            schema: 'kovo-browser-benchmark/v1',
+          },
+        };
+      }),
+    ),
+  );
 }
 
 function serverAnalysis(index) {

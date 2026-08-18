@@ -103,7 +103,10 @@ fail closed.
 This is a local custody proof through the final sweep, not an atomic filesystem snapshot or an
 external timestamp. The operator must exclude concurrent writers for the entire gate invocation
 and preserve the custody directory after the gate returns if it is to remain reproducible audit
-evidence. Run
+evidence. Raw campaign, profile, and Production-bytes custody stays in this external directory and
+is never copied into the committed publication tree. The separately generated publication root is
+only the exact 23-file derived inventory: aggregate JSON and Markdown plus 21 evidence JSON files.
+Returning from the gate does not transfer custody responsibility to those derived files. Run
 `scripts/perf-publication-gate.mjs` from the same clean measured checkout; that gate remains the
 authority for live GitHub/workflow authentication, re-ratification, budget derivation, holdout
 evaluation, and the final publishable/blocked/unproven verdict. Optional N=216 build-profile

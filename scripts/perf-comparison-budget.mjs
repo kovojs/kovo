@@ -177,6 +177,7 @@ export function evaluateComparisonPerformanceBudget(budget, candidate) {
   }
   if (budget?.subject?.kind === 'browser') {
     reasons.push(...browserPublicationMetricFindings(candidate?.analysis, 'candidate'));
+    reasons.push(...browserRawPublicationEvidenceFindings(candidate, 'candidate'));
   } else if (budget?.subject?.kind === 'server') {
     reasons.push(...serverPublicationMetricFindings(candidate?.analysis, 'candidate'));
     reasons.push(...serverBrotliRawEvidenceFindings(candidate, 'candidate'));
@@ -469,6 +470,8 @@ function linkedRawReportFindings(baseline, entries) {
     );
     if (baseline.subject?.workloadIdentity?.identity?.cells?.[0] === 'server') {
       findings.push(...serverBrotliRawEvidenceFindings(entry?.report, label));
+    } else if (baseline.subject?.workloadIdentity?.identity?.cells?.[0] === 'browser') {
+      findings.push(...browserRawPublicationEvidenceFindings(entry?.report, label));
     }
     for (const finding of executionIdentityFindings(entry?.report?.execution, {
       requireProvider: 'github-actions',
@@ -555,7 +558,7 @@ function requiredBrowserPublicationMetrics() {
   const metrics = [];
   for (const lane of BROWSER_LANES) {
     for (const formFactor of BROWSER_FORM_FACTORS) {
-      for (const leaf of ['fcpMs', 'lcpMs']) {
+      for (const leaf of ['fcpMs', 'lcpMs', 'bytes.js', 'bytes.total']) {
         metrics.push(`${lane}/browser//${formFactor}.coldLoad.${leaf}`);
       }
       metrics.push(`${lane}/browser//${formFactor}.navigation.navToPaintMs`);
@@ -578,6 +581,205 @@ function requiredBrowserPublicationMetrics() {
     }
   }
   return metrics;
+}
+
+/**
+ * Authenticate the publication posture from every raw browser sample. Aggregate analysis can
+ * summarize timing and byte values, but it cannot prove which navigation transport or document
+ * script posture produced them.
+ */
+function browserRawPublicationEvidenceFindings(report, label) {
+  const findings = [];
+  const rawCells = Array.isArray(report?.rawCells) ? report.rawCells : [];
+  const expectedKeys = new Set(
+    BROWSER_LANES.flatMap((lane) =>
+      ['kovo', 'nextjs'].flatMap((framework) =>
+        [0, 1].map((occurrence) => `${lane}/${framework}/${String(occurrence)}`),
+      ),
+    ),
+  );
+  if (!Array.isArray(report?.rawCells) || rawCells.length !== expectedKeys.size) {
+    findings.push(`${label} raw browser cell census is not the exact 12 cells`);
+  }
+
+  const seen = new Set();
+  const scenarioTotals = new Map();
+  const bfcacheTotals = new Map();
+  const lighthouseTotals = new Map();
+  const add = (map, key, value) => map.set(key, (map.get(key) ?? 0) + value);
+  for (const [cellIndex, cell] of rawCells.entries()) {
+    const where = `${label} raw browser cell[${String(cellIndex)}]`;
+    const key = `${String(cell?.lane)}/${String(cell?.framework)}/${String(cell?.occurrence)}`;
+    if (
+      cell?.cell !== 'browser' ||
+      !expectedKeys.has(key) ||
+      seen.has(key) ||
+      cell?.report?.schema !== 'kovo-browser-benchmark/v1' ||
+      cell.report.lane !== cell.lane
+    ) {
+      findings.push(`${where} identity is malformed or duplicated`);
+      continue;
+    }
+    seen.add(key);
+    const browserReport = cell.report;
+    const apps = browserReport.apps;
+    if (!Array.isArray(apps) || apps.length !== 1 || apps[0]?.app !== cell.framework) {
+      findings.push(`${where} entrant census differs from its cell identity`);
+      continue;
+    }
+    const app = apps[0];
+    const iterationCount = browserReport.iterations;
+    if (!Number.isSafeInteger(iterationCount) || iterationCount < 1) {
+      findings.push(`${where} iteration census is malformed`);
+      continue;
+    }
+    for (const formFactor of BROWSER_FORM_FACTORS) {
+      const condition = app.conditions?.[formFactor];
+      for (const scenario of ['coldLoad', 'ttiProbe', 'navigation']) {
+        const samples = condition?.[scenario]?.iterations;
+        const expectedCount =
+          scenario === 'ttiProbe' && cell.lane === 'matched-l0' ? 0 : iterationCount;
+        if (!Array.isArray(samples) || samples.length !== expectedCount) {
+          findings.push(
+            `${where} ${formFactor}/${scenario} raw sample census expected ${String(expectedCount)}`,
+          );
+          continue;
+        }
+        add(
+          scenarioTotals,
+          `${cell.lane}/${cell.framework}/${formFactor}/${scenario}`,
+          samples.length,
+        );
+        if (scenario === 'coldLoad') {
+          for (const [sampleIndex, sample] of samples.entries()) {
+            const sampleWhere = `${where} ${formFactor}/coldLoad[${String(sampleIndex)}]`;
+            if (
+              !Number.isSafeInteger(sample?.bytes?.js) ||
+              sample.bytes.js < 0 ||
+              !Number.isSafeInteger(sample?.bytes?.total) ||
+              sample.bytes.total < 0 ||
+              !Number.isSafeInteger(sample?.fixtureScriptCount) ||
+              sample.fixtureScriptCount < 0
+            ) {
+              findings.push(`${sampleWhere} raw script/byte posture is malformed`);
+            }
+            if (
+              cell.framework === 'kovo' &&
+              (cell.lane === 'default' || cell.lane === 'matched-l0') &&
+              (sample?.fixtureScriptCount !== 0 || sample?.bytes?.js !== 0)
+            ) {
+              findings.push(`${sampleWhere} Kovo L0 zero-JavaScript posture is not proved`);
+            }
+            if (
+              cell.framework === 'nextjs' &&
+              (cell.lane === 'default' || cell.lane === 'matched-l0') &&
+              !(sample?.fixtureScriptCount > 0)
+            ) {
+              findings.push(`${sampleWhere} Next default/L0 script posture is not proved`);
+            }
+          }
+        } else if (scenario === 'navigation' && cell.lane === 'matched-l1') {
+          for (const [sampleIndex, sample] of samples.entries()) {
+            findings.push(
+              ...matchedL1RawNavigationPostureFindings(
+                sample,
+                cell.framework,
+                `${where} ${formFactor}/navigation[${String(sampleIndex)}]`,
+              ),
+            );
+          }
+        }
+      }
+    }
+
+    const bfcache = app.bfcache?.iterations;
+    if (!Array.isArray(bfcache)) {
+      findings.push(`${where} raw bfcache traversal census is unavailable`);
+    } else {
+      add(bfcacheTotals, `${cell.lane}/${cell.framework}`, bfcache.length);
+    }
+    const lighthouse = app.lighthouse;
+    if (!Array.isArray(lighthouse) || lighthouse.length !== 4) {
+      findings.push(`${where} raw Lighthouse census is not four cells`);
+    } else {
+      for (const [lighthouseIndex, lighthouseCell] of lighthouse.entries()) {
+        const samples = lighthouseCell?.samples;
+        if (
+          !BROWSER_FORM_FACTORS.includes(lighthouseCell?.formFactor) ||
+          !Number.isSafeInteger(lighthouseCell?.repeats) ||
+          lighthouseCell.repeats < 1 ||
+          !Array.isArray(samples) ||
+          samples.length !== lighthouseCell.repeats
+        ) {
+          findings.push(`${where} Lighthouse[${String(lighthouseIndex)}] raw census is malformed`);
+          continue;
+        }
+        add(
+          lighthouseTotals,
+          `${cell.lane}/${cell.framework}/${lighthouseCell.formFactor}`,
+          samples.length,
+        );
+      }
+    }
+  }
+
+  if (seen.size !== expectedKeys.size || [...expectedKeys].some((key) => !seen.has(key))) {
+    findings.push(`${label} raw browser cell identities omit or invent an expected cell`);
+  }
+  const policy = report?.workloadIdentity?.identity?.policies;
+  for (const lane of BROWSER_LANES) {
+    for (const framework of ['kovo', 'nextjs']) {
+      for (const formFactor of BROWSER_FORM_FACTORS) {
+        for (const scenario of ['coldLoad', 'ttiProbe', 'navigation']) {
+          const expected =
+            scenario === 'ttiProbe' && lane === 'matched-l0' ? 0 : policy?.browserSamples;
+          if (scenarioTotals.get(`${lane}/${framework}/${formFactor}/${scenario}`) !== expected) {
+            findings.push(
+              `${label} ${lane}/${framework}/${formFactor}/${scenario} raw sample total differs from policy`,
+            );
+          }
+        }
+        if (
+          lighthouseTotals.get(`${lane}/${framework}/${formFactor}`) !==
+          2 * policy?.lighthouseRuns
+        ) {
+          findings.push(
+            `${label} ${lane}/${framework}/${formFactor} raw Lighthouse sample total differs from policy`,
+          );
+        }
+      }
+      if (bfcacheTotals.get(`${lane}/${framework}`) !== policy?.bfcacheIterations) {
+        findings.push(`${label} ${lane}/${framework} raw bfcache total differs from policy`);
+      }
+    }
+  }
+  return [...new Set(findings)].sort((left, right) => left.localeCompare(right));
+}
+
+function matchedL1RawNavigationPostureFindings(sample, framework, label) {
+  const primary = sample?.navAttribution?.primaryResponse;
+  const mediaType =
+    typeof primary?.contentType === 'string'
+      ? primary.contentType.split(';', 1)[0].trim().toLowerCase()
+      : '';
+  if (framework === 'kovo') {
+    return primary?.status === 'observed' &&
+      primary?.selection === 'kovo-document-parts-media-type' &&
+      mediaType === 'application/vnd.kovo.document-parts+json' &&
+      sample?.navDocumentReplaced === 0
+      ? []
+      : [`${label} Kovo document-parts in-document navigation posture is not proved`];
+  }
+  const witness = primary?.networkWitness?.facts;
+  return primary?.status === 'observed' &&
+    primary?.selection === 'document-resource' &&
+    mediaType === 'text/html' &&
+    primary?.resourceType === 'document' &&
+    witness?.resourceType === 'document' &&
+    witness?.isNavigationRequest === true &&
+    sample?.navDocumentReplaced === 1
+    ? []
+    : [`${label} Next text/html document-replacement navigation posture is not proved`];
 }
 
 function serverPublicationMetricFindings(metrics, label) {

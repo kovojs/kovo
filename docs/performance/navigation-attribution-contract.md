@@ -78,11 +78,21 @@ The serialized evidence retains:
 The digest is tamper evidence within the comparison's source and execution provenance. It is not an
 independent claim that a self-hash proves the browser produced the evidence.
 
+The publication gate therefore rechecks every raw matched-L1 navigation sample in all five
+baseline reports and the independent holdout. Kovo must have an observed
+`application/vnd.kovo.document-parts+json` primary response and
+`navDocumentReplaced === 0`; Next must have an observed `text/html` primary response authenticated
+as a document navigation and `navDocumentReplaced === 1`. The gate also reads every raw cold sample
+to prove Kovo's default/matched-L0 zero-script and zero-JavaScript-byte posture and Next's
+default/matched-L0 script posture. These facts are not inferred from aggregate medians or a
+resealed report.
+
 ## Interpretation
 
 Use `responseProcessingDomApply` to compare the common response-to-ready envelope. Use the named
 style, layout, and paint rows to locate browser work inside and after that envelope. Do not add the
-rows together, and do not describe the combined duration as decode time or morph time.
+rows together, and do not describe the combined duration as decode time or morph time. The
+publication renders that warning beside each of its three explicit browser-lane tables.
 
 If Chromium later provides stable cross-framework decode or DOM-apply boundaries, the schema must
 change again and the baseline must be recollected. Existing v2 reports predate the top-level-frame
