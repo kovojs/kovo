@@ -190,7 +190,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-fWTvfGlrSY8dw7guCwg3DTmrM6gBUEX4rmwbIwRplIPl2ikXP1SE570RbzjUgb6YpEiQkykzNsA48aZN73jDkw=="
+      "sha512": "sha512-mKn/xkYluF/SfEj7AsWMNbdLJ5RtS2/AA0NB8eKQ0VQ0ERZb6BQr3of2S9v1LDZuWbyGAGDn6E2tv/NeLhBedA=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
@@ -642,7 +642,7 @@
     },
     {
       "path": "@kovojs/server/dist/crypto-authority.mjs",
-      "sha512": "sha512-zpeUrlDDIU4aKkR7iomgkwAHwuoU+RuI6Q3ZUyK6XQdhQx/9jtSh3R8ta/KIBW5xi1vOpgbj/v6s+CpSftqyQQ=="
+      "sha512": "sha512-Vm+F4WsSsFUX5CfeRjRLCJixRUs9CbS3xPKIS9v/YQ6de1qgO1PmMIBU3zEMqcOpwsI5Ee16KV5Kq2csdtzPHw=="
     },
     {
       "path": "@kovojs/server/dist/csp.mjs",
@@ -1018,7 +1018,7 @@
     },
     {
       "path": "@kovojs/server/dist/mutation-wire.mjs",
-      "sha512": "sha512-xxJBA3fAbCQlJF/yfwPMqlHcZNMEt4O9dJ17xHHq5+fz19TmQKqlErT1qMm0J1P2s1muwq5aLjHqfyIyPYQ3EA=="
+      "sha512": "sha512-XuKGwEcBPaqdNok3+QTqWnq9VqOYbmFvNLG9Uex3/d32EfSmOSWdxXQRsz9lBeGUpaO14HB2eRFfvcIB4dvOHA=="
     },
     {
       "path": "@kovojs/server/dist/mutation.mjs",
@@ -1598,7 +1598,7 @@
     },
     {
       "path": "@kovojs/server/dist/vite-dev.mjs",
-      "sha512": "sha512-vQNgzi9Rc8b80tIE7RvcI+cFNDar0leEkZqJX/v/C8iLFLkpcW11QX6+T3bSnyq3Ma69eDWOu6CFC4C6I0GxZA=="
+      "sha512": "sha512-sxJxO0odcChakvC/DG8h7MP/vrVlYURTMCoJOfWiXQLQBEfv/9qvzUFVDo3Y/34+RSQNtIFBkWmOrq3Kdj1+Jw=="
     },
     {
       "path": "@kovojs/server/dist/vite-manifest.mjs",

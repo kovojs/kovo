@@ -10236,6 +10236,10 @@
     ],
     [
       "@kovojs/server/dist/vite-dev.mjs",
+      "@kovojs/server/dist/crypto-authority.mjs"
+    ],
+    [
+      "@kovojs/server/dist/vite-dev.mjs",
       "@kovojs/server/dist/document-core.mjs"
     ],
     [
@@ -10909,7 +10913,7 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-WZAdeNqPYvJbDRIbOA6HzgJRRSY27ry5V2PZF+XvE1sXGrlfEudzuXPNQniVYDp+YnNI2fi2JibaL0+vzzdodA==",
+  "policySha512": "sha512-Ba/E4tQdfiC5zTiyWJioedIHS8KWBdHkrluDWARewDsHXbZyRRKWQpPtBQlR3Hu8jZzjYs8oY5GnCSgmir0w2Q==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",
