@@ -5,12 +5,7 @@ import {
   type ChildProcess,
 } from 'node:child_process';
 import { Buffer as builtinBuffer } from 'node:buffer';
-import {
-  createHmac as builtinCreateHmac,
-  hash as builtinHash,
-  randomBytes as builtinRandomBytes,
-  timingSafeEqual as builtinTimingSafeEqual,
-} from 'node:crypto';
+import { hash as builtinHash } from 'node:crypto';
 import {
   accessSync as builtinAccessSync,
   constants as builtinFsConstants,
@@ -216,6 +211,11 @@ import { runSoundSubsetCheck } from './sound-subset.js';
 import { kovoBuildOneShotDigest, type KovoBuildOneShotIdentity } from './build-one-shot-handoff.js';
 import { STATIC_TRUST_WORKER_TIMEOUT_MS } from './build-security-deadlines.js';
 import {
+  authenticateStaticTrustWorkerPayload,
+  equalStaticTrustWorkerAuthentication,
+  mintStaticTrustWorkerAuthority,
+} from './build-crypto-authority.js';
+import {
   buildByteLength,
   buildSecurityArrayAppend,
   buildArrayIsArray,
@@ -248,10 +248,7 @@ import {
 const execFile = builtinExecFile;
 const spawn = builtinSpawn;
 const bufferFrom = builtinBuffer.from;
-const createHmac = builtinCreateHmac;
 const hash = builtinHash;
-const randomBytes = builtinRandomBytes;
-const timingSafeEqual = builtinTimingSafeEqual;
 const jsonParse = JSON.parse;
 const accessSync = builtinAccessSync;
 const fsWriteOk = builtinFsConstants.W_OK;
@@ -4265,23 +4262,11 @@ function staticTrustAuthentication(
   requestDigest: string,
   payload: string,
 ): string {
-  if (!/^[0-9a-f]{64}$/u.test(authenticationKey)) {
-    throw new TypeError('Kovo static-trust worker authentication key is invalid.');
-  }
-  return `hmac-sha256:${createHmac('sha256', bufferFrom(authenticationKey, 'hex'))
-    .update(requestDigest, 'utf8')
-    .update('\0', 'utf8')
-    .update(payload, 'utf8')
-    .digest('hex')}`;
+  return authenticateStaticTrustWorkerPayload(authenticationKey, requestDigest, payload);
 }
 
 function equalStaticTrustAuthentication(actual: string, expected: string): boolean {
-  const actualBytes = bufferFrom(actual, 'utf8');
-  const expectedBytes = bufferFrom(expected, 'utf8');
-  return (
-    actualBytes.byteLength === expectedBytes.byteLength &&
-    timingSafeEqual(actualBytes, expectedBytes)
-  );
+  return equalStaticTrustWorkerAuthentication(actual, expected);
 }
 
 function staticTrustSourceDigest(
@@ -4491,10 +4476,11 @@ async function runPreEvaluationStaticTrustPreflightInWorker(
   invocationEnv: NodeJS.ProcessEnv,
   cache: boolean | null,
 ): Promise<PreEvaluationStaticTrust> {
+  const workerAuthority = mintStaticTrustWorkerAuthority();
   const workerRequest: StaticTrustWorkerRequest = {
-    authenticationKey: randomBytes(32).toString('hex'),
+    authenticationKey: workerAuthority.authenticationKey,
     cache,
-    challenge: randomBytes(32).toString('hex'),
+    challenge: workerAuthority.challenge,
     command: null,
     kind: 'app',
     modulePath: appModulePath,
@@ -4514,10 +4500,11 @@ async function runPreEvaluationBuildConfigTrustPreflightInWorker(
   command: 'build' | 'check',
   invocationEnv: NodeJS.ProcessEnv,
 ): Promise<PreEvaluationBuildConfigTrust> {
+  const workerAuthority = mintStaticTrustWorkerAuthority();
   const workerRequest: StaticTrustWorkerRequest = {
-    authenticationKey: randomBytes(32).toString('hex'),
+    authenticationKey: workerAuthority.authenticationKey,
     cache: null,
-    challenge: randomBytes(32).toString('hex'),
+    challenge: workerAuthority.challenge,
     command,
     kind: 'config',
     modulePath: configPath,
@@ -4566,10 +4553,11 @@ async function runPreEvaluationBuildConfigTrustPreflightForSourceCheck(
     return { inputDigest, reusedAuthenticated: true, sourceDigest, trust: cached };
   }
 
+  const workerAuthority = mintStaticTrustWorkerAuthority();
   const workerRequest: StaticTrustWorkerRequest = {
-    authenticationKey: randomBytes(32).toString('hex'),
+    authenticationKey: workerAuthority.authenticationKey,
     cache: null,
-    challenge: randomBytes(32).toString('hex'),
+    challenge: workerAuthority.challenge,
     command: 'check',
     kind: 'config',
     modulePath: configPath,
@@ -4633,10 +4621,11 @@ async function runPreEvaluationStaticTrustPreflightForSourceCheck(
     return { inputDigest, reusedAuthenticated: true, sourceDigest, trust: cached };
   }
 
+  const workerAuthority = mintStaticTrustWorkerAuthority();
   const workerRequest: StaticTrustWorkerRequest = {
-    authenticationKey: randomBytes(32).toString('hex'),
+    authenticationKey: workerAuthority.authenticationKey,
     cache,
-    challenge: randomBytes(32).toString('hex'),
+    challenge: workerAuthority.challenge,
     command: null,
     kind: 'app',
     modulePath: appModulePath,

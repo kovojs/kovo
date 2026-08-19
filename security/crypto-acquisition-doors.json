@@ -126,10 +126,26 @@
     {
       "id": "crypto-door-014",
       "file": "packages/cli/src/commands/build-export.ts",
-      "kind": "crypto-acquisition",
-      "operations": ["createHmac", "hash", "randomBytes", "timingSafeEqual"],
+      "kind": "digest",
+      "operations": ["hash"],
       "tier": "build-tooling",
-      "review": "The bootstrap-first CLI owns fresh 256-bit static-trust-worker keys and challenges, HMAC-SHA256 envelope authentication, fixed-width equality, and exact non-keyed source and artifact digests; these primitives stay private to the worker protocol and no generic crypto handle escapes."
+      "review": "Exact named one-shot SHA-256 digests bind build/check source, manifest, artifact, and worker-envelope bytes; keyed operations and entropy route through the private build crypto authority."
+    },
+    {
+      "id": "crypto-door-cli-build-crypto-authority",
+      "file": "packages/cli/src/commands/build-crypto-authority.ts",
+      "kind": "crypto-acquisition",
+      "operations": ["createHmac", "randomBytes", "timingSafeEqual"],
+      "tier": "build-tooling",
+      "review": "Bootstrap-pinned, known-answer-tested authority owns fresh 256-bit static-worker keys/challenges and session-confined HMAC-SHA256 fact authentication; only fixed worker fields or a closed fact-authentication handle escape, with no primitive selector or key accessor."
+    },
+    {
+      "id": "crypto-door-cli-check-session-reuse",
+      "file": "packages/cli/src/commands/check-session-reuse.ts",
+      "kind": "digest",
+      "operations": ["hash"],
+      "tier": "build-tooling",
+      "review": "Exact named one-shot SHA-256 digests bind project-resolved TypeScript source bytes after app package loading; the captured helper acquires no entropy, key material, or keyed operation."
     },
     {
       "id": "crypto-door-cli-build-one-shot-handoff",
@@ -317,7 +333,7 @@
         "verify"
       ],
       "tier": "server-runtime",
-      "review": "Boot-pinned, known-answer-tested primitive owner; only closed handles or fixed-purpose outputs leave it, including session-fingerprint fallback and process-local live-target audience entropy."
+      "review": "Boot-pinned, known-answer-tested primitive owner; only closed handles or fixed-purpose outputs leave it, including session-fingerprint fallback, process-local live-target audience entropy, and independent development live-target secrets for Vite-bound and fallback generations."
     },
     {
       "id": "crypto-door-058",
@@ -332,14 +348,6 @@
       "file": "packages/server/src/internal/data-plane-static-analysis-intrinsics.ts",
       "kind": "crypto-acquisition",
       "operations": ["createHash", "createHmac", "randomUUID"],
-      "tier": "server-runtime",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
-    },
-    {
-      "id": "crypto-door-035",
-      "file": "packages/server/src/mutation-wire.ts",
-      "kind": "crypto-acquisition",
-      "operations": ["randomBytes"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -774,6 +782,222 @@
       "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact non-keyed SHA-256 digest keys isolated-test baseline reuse by immutable source bytes; it acquires no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-perf-packed-product-identity",
+      "file": "scripts/fixtures/perf-packed-product-identity.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind canonical packed-product identity facts used by the performance fixtures; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-artifact-custody",
+      "file": "scripts/lib/perf-artifact-custody.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed Git-blob SHA-1 and artifact SHA-256 digests bind immutable workflow artifacts, open-file custody bytes, and canonical custody evidence; no entropy or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-execution",
+      "file": "scripts/lib/perf-execution.mjs",
+      "kind": "crypto-acquisition",
+      "operations": ["createHash", "randomBytes"],
+      "tier": "build-tooling",
+      "review": "The performance execution boundary owns canonical SHA-256 execution identities plus fixed-purpose local-run, server-deployment, and server-attestation entropy; only fixed-width strings leave it and no primitive or byte-count selector escapes."
+    },
+    {
+      "id": "crypto-door-perf-host",
+      "file": "scripts/lib/perf-host.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind canonical benchmark host and cohort fingerprints; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-packed-kovo-product",
+      "file": "scripts/lib/perf-packed-kovo-product.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind packed Kovo manifests, tarballs, package contents, and verified product bytes used by measurements; no entropy or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-provenance",
+      "file": "scripts/lib/perf-provenance.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind dependency-lock and primed server-response bytes to performance provenance; the fixed helper exposes no algorithm selector, entropy, or keyed operation."
+    },
+    {
+      "id": "crypto-door-perf-baseline-ratify",
+      "file": "scripts/perf-baseline-ratify.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind retained baseline report bytes before ratification; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-build-benchmark",
+      "file": "scripts/perf-build-benchmark.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind build workload manifests, corpus state, and measured output evidence; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-build-budget",
+      "file": "scripts/perf-build-budget.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind canonical build-budget inputs and report bytes used for publication decisions; no entropy or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-build-session-profile",
+      "file": "scripts/perf-build-session-profile.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind build-session profile subjects and retained evidence bytes; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-build-source-trust-spike",
+      "file": "scripts/perf-build-source-trust-spike.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind source-trust spike inputs, outputs, and comparison evidence; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-check-budget",
+      "file": "scripts/perf-check-budget.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind source-check budget report bytes and canonical comparison facts; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-check-watch-spike",
+      "file": "scripts/perf-check-watch-spike.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind foreground check-watch spike artifacts and dependency snapshots; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-cli-startup-benchmark",
+      "file": "scripts/perf-cli-startup-benchmark.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind installed package contents, manifests, and CLI startup subjects; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-comparison-budget",
+      "file": "scripts/perf-comparison-budget.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind comparison report bytes and canonical cross-framework budget facts; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-compressed-cache-ab",
+      "file": "scripts/perf-compressed-cache-ab.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind compressed-cache A/B source and response bytes; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-dev-budget",
+      "file": "scripts/perf-dev-budget.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind canonical development-budget inputs and retained report bytes; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-dev-edit-profile-audit",
+      "file": "scripts/perf-dev-edit-profile-audit.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind development edit-profile markers and audited profile bytes; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-dev-edit-profile",
+      "file": "scripts/perf-dev-edit-profile.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind development edit-profile source and observation bytes; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-dev-generation-spike",
+      "file": "scripts/perf-dev-generation-spike.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-1/SHA-256 Git-object and workload digests bind generated development corpora and spike evidence; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-gate",
+      "file": "scripts/perf-gate.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind canonical performance-gate workload identities; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-loader-runtime-memo-ab",
+      "file": "scripts/perf-loader-runtime-memo-ab.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind loader-memo A/B source, rendered document, and profile evidence bytes; no entropy or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-publication-collect",
+      "file": "scripts/perf-publication-collect.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind downloaded workflow artifacts and canonical publication collection bytes; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-publication-gate",
+      "file": "scripts/perf-publication-gate.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind canonical publication manifests, family reports, and emitted evidence; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-regression-check",
+      "file": "scripts/perf-regression-check.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind canonical regression-check inputs and decision evidence; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-route-css",
+      "file": "scripts/perf-route-css.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind route-CSS workload and artifact bytes for matched measurements; no entropy, key material, or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-server-profile",
+      "file": "scripts/perf-server-profile.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind production-server CPU profile subjects and retained profile evidence; no entropy, key material, or keyed operation is acquired."
     },
     {
       "id": "crypto-door-verify-packed-release-certificate",

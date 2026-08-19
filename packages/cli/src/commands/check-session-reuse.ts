@@ -1,10 +1,14 @@
 /* oxlint-disable typescript/no-unsafe-type-assertion -- TypeScript is resolved from the app package. */
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { hash as builtinHash } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 import { findNearestFile } from '../tooling.js';
+import {
+  createKovoSourceCheckFactAuthenticationAuthority,
+  type KovoSourceCheckFactAuthenticationAuthority,
+} from './build-crypto-authority.js';
 import { kovoBuildOneShotDigest } from './build-one-shot-handoff.js';
 import type { KovoSourceCheckProducerFactSession } from './build-export.js';
 
@@ -17,6 +21,7 @@ const typeScriptFactSchema = 'kovo-check-typescript-semantic-fact/v1';
 const maximumFactEntries = 32;
 const maximumFactPayloadBytes = 64 * 1024 * 1024;
 const maximumFactTotalBytes = 256 * 1024 * 1024;
+const hash = builtinHash;
 
 type SerializableProducerPhase = 'app-source-trust' | 'config-trust' | 'stylesheet';
 
@@ -58,9 +63,9 @@ export interface KovoSourceCheckSessionFactCacheSnapshot {
  * to `.kovo/cache`, and closing the foreground session destroys every retained value.
  */
 export class KovoSourceCheckSessionFactCache implements KovoSourceCheckProducerFactSession {
+  readonly #authenticationAuthority: KovoSourceCheckFactAuthenticationAuthority;
   readonly #enabled: boolean;
   readonly #facts = new Map<string, AuthenticatedProducerFact>();
-  readonly #authenticationKey = randomBytes(32);
   #closed = false;
   #hits = 0;
   #misses = 0;
@@ -72,6 +77,7 @@ export class KovoSourceCheckSessionFactCache implements KovoSourceCheckProducerF
     if (typeof enabled !== 'boolean') {
       throw new TypeError('Source-check session cache posture must be boolean.');
     }
+    this.#authenticationAuthority = createKovoSourceCheckFactAuthenticationAuthority();
     this.#enabled = enabled;
   }
 
@@ -87,11 +93,7 @@ export class KovoSourceCheckSessionFactCache implements KovoSourceCheckProducerF
       this.#misses += 1;
       return undefined;
     }
-    const expected = this.#authenticate(key, fact.payload);
-    if (
-      expected.byteLength !== fact.authentication.byteLength ||
-      !timingSafeEqual(expected, fact.authentication)
-    ) {
+    if (!this.#authenticationAuthority.verifyFact(key, fact.payload, fact.authentication)) {
       this.#deleteFact(key, fact);
       this.#misses += 1;
       return undefined;
@@ -314,7 +316,7 @@ export class KovoSourceCheckSessionFactCache implements KovoSourceCheckProducerF
     this.#payloadBytes = 0;
     this.#typescriptState = undefined;
     this.#typescriptSnapshot = null;
-    this.#authenticationKey.fill(0);
+    this.#authenticationAuthority.destroy();
     this.#closed = true;
   }
 
@@ -335,11 +337,7 @@ export class KovoSourceCheckSessionFactCache implements KovoSourceCheckProducerF
   }
 
   #authenticate(key: string, payload: string): Buffer {
-    return createHmac('sha256', this.#authenticationKey)
-      .update(key, 'utf8')
-      .update('\0', 'utf8')
-      .update(payload, 'utf8')
-      .digest();
+    return this.#authenticationAuthority.authenticate(key, payload);
   }
 
   #deleteFact(key: string, fact: AuthenticatedProducerFact): void {
@@ -415,5 +413,5 @@ function realpathOrResolved(path: string): string {
 }
 
 function sha256(source: string): string {
-  return `sha256:${createHash('sha256').update(source, 'utf8').digest('hex')}`;
+  return `sha256:${hash('sha256', source, 'hex')}`;
 }
