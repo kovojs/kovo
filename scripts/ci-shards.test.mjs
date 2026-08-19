@@ -434,7 +434,7 @@ describe('ci-shards', () => {
     expect(ROOT_VITEST_SHARD_BUDGET_SECONDS).toBe(50 * 60);
     expect(ROOT_VITEST_SHARD_COUNT / 4).toBe(1.25);
     expect((ROOT_VITEST_SHARD_COUNT * ROOT_VITEST_JOB_TIMEOUT_SECONDS) / 60).toBe(300);
-    expect(rootTestJob).toContain('timeout-minutes: 60');
+    expect(rootTestJob).toContain('timeout-minutes: 90');
     expect(rootTestJob).toContain('shard: [1, 2, 3, 4, 5]');
     expect(rootTestJob).toContain('total: [5]');
     expect(rootTestJob).toContain('.created_at < \\"$run_created_at\\"');

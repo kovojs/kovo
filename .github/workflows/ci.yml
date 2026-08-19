@@ -343,7 +343,10 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Browser installation is part of the wall budget for every root shard. A cold or degraded
+    # hosted cache has taken more than 30 minutes by itself, so leave the measured test shard its
+    # full historical completion window instead of cancelling healthy work during setup.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
