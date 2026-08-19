@@ -83,7 +83,6 @@ const DEV_SOCKET_EVIDENCE_MAX_PROCESSES = 4_096;
 const DEV_SOCKET_EVIDENCE_MAX_RECORDS = 256;
 export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v4';
 let atomicCorpusSourceWrite = 0;
-let paintFenceSequence = 0;
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const PERFORMANCE_POSTURE_FILES = Object.freeze([
   'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
@@ -1243,25 +1242,16 @@ async function browserErrorOverlaySignal(page) {
 
 export async function waitForPaint(page, timeoutMs = EDIT_TIMEOUT_MS) {
   const started = performance.now();
-  const attribute = 'data-kovo-perf-paint-fence';
-  const pendingAttribute = 'data-kovo-perf-paint-fence-pending';
-  const expected = `paint-${String((paintFenceSequence += 1))}`;
+  // The fence must not annotate React-owned markup. In Next.js dev, DOMContentLoaded can precede
+  // root hydration; writing a temporary <html> attribute here makes the benchmark itself produce
+  // a hydration mismatch. A promise returned by waitForFunction keeps the same bounded two-frame
+  // fence without changing the document being measured.
   await page.waitForFunction(
-    ({ attribute: marker, expected: value, pendingAttribute: pending }) => {
-      const root = document.documentElement;
-      if (root.getAttribute(marker) === value) return true;
-      if (root.getAttribute(pending) !== value) {
-        root.setAttribute(pending, value);
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            root.setAttribute(marker, value);
-            root.removeAttribute(pending);
-          }),
-        );
-      }
-      return false;
-    },
-    { attribute, expected, pendingAttribute },
+    () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)));
+      }),
+    undefined,
     { polling: 'raf', timeout: Math.max(1, Math.ceil(timeoutMs)) },
   );
   return performance.now() - started;

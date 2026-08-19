@@ -53,6 +53,7 @@ import {
   validateDevSessionHandoffEvidence,
   validateSocketOwnerEvidence,
   verifyCorpusSources,
+  waitForPaint,
   waitForReadyPage,
 } from './dev-loop.mjs';
 import { generateCorpora } from './generate.mjs';
@@ -1577,6 +1578,47 @@ describe('single-entrant developer-loop adapter', () => {
       status: 200,
       transientFailures: 2,
     });
+  });
+
+  it('fences two animation frames without mutating framework-owned document markup', async () => {
+    const frames = [];
+    let predicateSource = null;
+    let waitOptions = null;
+    let documentReads = 0;
+    vi.stubGlobal('document', {
+      get documentElement() {
+        documentReads += 1;
+        throw new Error('paint fence touched the hydrated document');
+      },
+    });
+    vi.stubGlobal('requestAnimationFrame', (callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    try {
+      const page = {
+        waitForFunction: async (predicate, argument, options) => {
+          predicateSource = String(predicate);
+          waitOptions = { argument, options };
+          return predicate();
+        },
+      };
+      const pending = waitForPaint(page, 12.2);
+      expect(frames).toHaveLength(1);
+      frames.shift()(0);
+      expect(frames).toHaveLength(1);
+      frames.shift()(16);
+
+      await expect(pending).resolves.toBeGreaterThanOrEqual(0);
+      expect(waitOptions).toEqual({
+        argument: undefined,
+        options: { polling: 'raf', timeout: 13 },
+      });
+      expect(documentReads).toBe(0);
+      expect(predicateSource).not.toMatch(/document|setAttribute|removeAttribute/u);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('never navigates the browser when the dev process exits during Node readiness polling', async () => {
