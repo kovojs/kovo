@@ -199,6 +199,27 @@ describe('closed wire-input classifications', () => {
     ]);
   });
 
+  it('binds Vite dev CSP admission to the dedicated bounded response grammar', () => {
+    const manifest = JSON.parse(readFileSync('security/wire-input-boundary.json', 'utf8'));
+    const [site] = discoverWireInputReads().filter(
+      (candidate) =>
+        candidate.file === 'packages/server/src/vite-dev.ts' &&
+        candidate.inputName === 'content-security-policy',
+    );
+
+    expect(site).toEqual({
+      allowedCarriers: ['header', 'request-header', 'response-header'],
+      api: 'serverReadHeader',
+      file: 'packages/server/src/vite-dev.ts',
+      id: 'packages/server/src/vite-dev.ts#policy',
+      inputName: 'content-security-policy',
+      symbol: 'packages/server/src/response.ts#readHeader',
+    });
+    expect(manifest.rows.find((row) => row.id === site.id)?.registryId).toBe(
+      'response-header.content-security-policy',
+    );
+  });
+
   it('rejects missing, stale, and name-incompatible registry bindings', () => {
     const discovered = discoverWireInputReads({ canonicalReaders, sources });
     const result = evaluateWireInputBoundary({

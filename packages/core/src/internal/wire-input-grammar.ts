@@ -279,6 +279,7 @@ export type FrameworkWireInputGrammarKind =
   | 'boolean-literal'
   | 'capability-token'
   | 'content-disposition'
+  | 'content-security-policy'
   | 'cookie-value'
   | 'fragment-target'
   | 'http-field-value'
@@ -430,6 +431,12 @@ export const FRAMEWORK_WIRE_INPUT_REGISTRY = Object.freeze({
       grammar: 'content-disposition',
       id: 'response-header.content-disposition',
       name: 'content-disposition',
+    },
+    {
+      carrier: 'response-header',
+      grammar: 'content-security-policy',
+      id: 'response-header.content-security-policy',
+      name: 'content-security-policy',
     },
     {
       carrier: 'response-header',

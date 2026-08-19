@@ -754,6 +754,16 @@
       "allowedCarriers": ["header", "request-header", "response-header"],
       "api": "serverReadHeader",
       "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#policy",
+      "inputName": "content-security-policy",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Dev route response injection passes the exact registered CSP field through the bounded directive grammar before reconstructing that response header with Vite's fresh style nonce.",
+      "registryId": "response-header.content-security-policy"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/vite-dev.ts",
       "id": "packages/server/src/vite-dev.ts#fragment",
       "inputName": "kovo-fragment",
       "symbol": "packages/server/src/response.ts#readHeader",
@@ -803,8 +813,8 @@
   ],
   "schema": "kovo-wire-input-boundary/v1",
   "summary": {
-    "classified": 80,
+    "classified": 81,
     "dynamicNames": 6,
-    "sites": 80
+    "sites": 81
   }
 }
