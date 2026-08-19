@@ -260,7 +260,11 @@ export function checkTcbBoundary(options = {}) {
 export function collectWorkspacePackageJsons(root) {
   const nested = collectFiles(root, analysisToolchainPackageRoots, {
     includeFile: ({ relativePath }) => relativePath.endsWith('/package.json'),
-    skipDirectory: ({ name }) => name === 'node_modules',
+    // Next's standalone output faithfully copies the authored app manifest below `.next/`.
+    // Generated copies are not analysis-time workspaces and would otherwise impersonate an
+    // authored duplicate after a benchmark build. Keep every authored directory in scope so two
+    // real workspace manifests with the same identity still fail closed.
+    skipDirectory: ({ name }) => name === 'node_modules' || name === '.next',
   });
   return ['package.json', ...nested];
 }

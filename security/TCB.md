@@ -358,8 +358,16 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
         "reason": "The source-root proof resolves only names from Kovo's finite first-party framework package inventory through a resolver captured before app evaluation."
       },
       {
+        "id": "packages/cli/src/commands/build-export.ts#require.resolve#createRequire(appModulePath).resolve(KOVO_SOURCE_CHECK_STYLESHEET_IDENTITY_SPECIFIER)",
+        "reason": "Source-check stylesheet reuse resolves only the fixed @kovojs/ui/button identity relative to the app, then requires the exact specifier, @kovojs/ui package name, resolved export, implementation digest, bounded manifest, and manifest name before binding those bytes into the cache key; any ambiguity disables reuse."
+      },
+      {
         "id": "packages/cli/src/commands/build-export.ts#require.resolve#requireFromCli.resolve(packageName)",
         "reason": "The build/export runner resolves only names from Kovo's finite first-party framework package inventory to pin workspace entry paths before app evaluation."
+      },
+      {
+        "id": "packages/cli/src/commands/check-session-reuse.ts#require#projectRequire(modulePath)",
+        "reason": "The foreground TypeScript preflight first resolves the literal typescript package through the project loader, canonicalizes that result to an exact realpath, and loads only that path; path, version, manifest, package, config, and source facts bind reuse, while any loader or compiler ambiguity falls back to the complete one-shot producer."
       },
       {
         "id": "packages/cli/src/commands/db.ts#import#import(pathToFileURL(resolvedPath).href)",

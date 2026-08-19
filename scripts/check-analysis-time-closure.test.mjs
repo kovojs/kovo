@@ -1,12 +1,18 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
+  checkAnalysisTimeClosure,
   collectAnalysisImportGraph,
   collectSecurityRatchetFindings,
   deriveTransitiveSubjects,
   discoverGateEntrypoints,
   subjectLabel,
 } from './check-analysis-time-closure.mjs';
+import { collectWorkspacePackageJsons } from './check-tcb-boundary.mjs';
 import {
   parsePnpmPackageIntegrities,
   parsePnpmSnapshotDependencies,
@@ -161,7 +167,12 @@ describe('analysis-time closure', () => {
         import ts from 'typescript';
         const localRequire = makeRequire(import.meta.url);
         localRequire.resolve('integrity-tool/subpath');
+        const appModulePath = '/app/src/app.tsx';
+        const stylesheetSpecifier = '@kovojs/ui/button';
+        makeRequire(appModulePath).resolve(stylesheetSpecifier);
+        const typescriptPath = localRequire.resolve('typescript');
         localRequire(resolvePlugin());
+        localRequire(typescriptPath);
         await import(resolvePlugin());
         export { value, ts };
       `,
@@ -196,10 +207,92 @@ describe('analysis-time closure', () => {
         kind: 'import',
       },
       {
+        expression: 'makeRequire(appModulePath).resolve(stylesheetSpecifier)',
+        id: 'scripts/gate.mjs#require.resolve#makeRequire(appModulePath).resolve(stylesheetSpecifier)',
+        kind: 'require.resolve',
+      },
+      {
         expression: 'localRequire(resolvePlugin())',
         id: 'scripts/gate.mjs#require#localRequire(resolvePlugin())',
         kind: 'require',
       },
+      {
+        expression: 'localRequire(typescriptPath)',
+        id: 'scripts/gate.mjs#require#localRequire(typescriptPath)',
+        kind: 'require',
+      },
+    ]);
+  });
+
+  it('excludes generated Next output while retaining every authored manifest', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-analysis-workspaces-'));
+    try {
+      const authoredNext = join(root, 'benchmarks/nextjs/package.json');
+      const authoredDuplicate = join(root, 'benchmarks/alternate/package.json');
+      const generatedNext = join(
+        root,
+        'benchmarks/nextjs/.next/standalone/benchmarks/nextjs/package.json',
+      );
+      for (const manifestPath of [authoredNext, authoredDuplicate, generatedNext]) {
+        mkdirSync(dirname(manifestPath), { recursive: true });
+        writeFileSync(manifestPath, '{"name":"kovo-benchmark-nextjs"}\n', 'utf8');
+      }
+
+      expect(collectWorkspacePackageJsons(root)).toEqual([
+        'package.json',
+        'benchmarks/alternate/package.json',
+        'benchmarks/nextjs/package.json',
+      ]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('still rejects duplicate identities in authored manifest paths', () => {
+    const files = {
+      'package.json': '{"name":"root","scripts":{}}',
+      'benchmarks/alternate/package.json': '{"name":"kovo-benchmark-nextjs"}',
+      'benchmarks/nextjs/package.json': '{"name":"kovo-benchmark-nextjs"}',
+      'pnpm-lock.yaml': `lockfileVersion: '9.0'
+packages:
+  unused@1.0.0:
+    resolution: {integrity: ${shaA}}
+snapshots:
+  unused@1.0.0: {}
+`,
+    };
+    const manifest = {
+      analysisTimeClosure: {
+        compileEntrypoints: [],
+        dynamicAcquisitions: [],
+        maxPackageCount: 0,
+        roots: [],
+        schema: 'kovo.security.analysis-time-closure/v1',
+        subjects: [],
+      },
+      budgets: { totalTcbMaxLines: 0 },
+      entries: [],
+      securityRatchet: {
+        limits: { analysisClosureSize: 0, entryCount: 0, totalTcbMaxLines: 0 },
+        reviewedRaises: [],
+        schema: 'kovo.security.tcb-ratchet/v1',
+      },
+    };
+    const result = checkAnalysisTimeClosure({
+      exists: (file) => Object.hasOwn(files, file),
+      manifest,
+      previousManifest: null,
+      readText: (file) => files[file],
+      repoRoot: '/repo',
+      workspacePackageJsons: [
+        'package.json',
+        'benchmarks/alternate/package.json',
+        'benchmarks/nextjs/package.json',
+      ],
+    });
+
+    expect(result.findings).toEqual([
+      'benchmarks/nextjs/package.json: duplicate workspace name kovo-benchmark-nextjs',
     ]);
   });
 
