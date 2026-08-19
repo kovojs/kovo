@@ -454,7 +454,9 @@ jobs:
   starter:
     needs: starter-packages
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # The browser shard has seen a 34-minute hosted Chromium dependency install before its
+    # unchanged 13–16-minute proof. Keep that complete proof bounded without cancelling it in setup.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

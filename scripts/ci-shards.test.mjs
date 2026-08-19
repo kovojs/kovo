@@ -592,7 +592,7 @@ describe('ci-shards', () => {
     expect(ci).toContain('  static-core:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 90');
     expect(ci).toContain('  paranoid:\n    runs-on: ubuntu-latest');
     expect(ci).toContain(
-      '  starter:\n    needs: starter-packages\n    runs-on: ubuntu-latest\n    timeout-minutes: 40',
+      '  starter:\n    needs: starter-packages\n    runs-on: ubuntu-latest\n    # The browser shard has seen a 34-minute hosted Chromium dependency install before its\n    # unchanged 13–16-minute proof. Keep that complete proof bounded without cancelling it in setup.\n    timeout-minutes: 60',
     );
     expect(ci).toContain('name: Validate acceptance ownership and selector coverage');
     expect(nightly).toContain('  starter-security-residual:');
