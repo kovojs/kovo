@@ -1,12 +1,13 @@
 # Security Bug Ledger (`bugz-35`)
 
-<!-- kovo-security-ledger: transient -->
+<!-- kovo-security-ledger: archived -->
 
 **Date:** 2026-07-21
-**Status:** CLOSED — remediation complete; publication and required CI pending
+**Status:** ARCHIVED — remediation complete and published
 **Baseline:** `cc1463f2451c7d5275e09a70df4f25fe1af39b7c`
-**Lifecycle:** `closed-pending-publication`; archive by 2026-08-18 to
-`plans/history/bugz-35.md` after the verified closing tip is published and required CI is green.
+**Lifecycle:** Archived 2026-08-18. The closing ledger commit `11ba9ce4f` is an ancestor of
+authenticated `origin/main` tip `e3fc9bf10`; CI run `31342386114` and Pages run `31342386117`
+completed successfully for that published tip.
 
 **Scope:** Distinct security and security-evidence defects found while closing the three 10x
 security roadmaps. The tutorial findings affect the checked-in teaching application and its gate,

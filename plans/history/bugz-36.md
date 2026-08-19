@@ -1,12 +1,13 @@
 # Security Bug Ledger (`bugz-36`)
 
-<!-- kovo-security-ledger: transient -->
+<!-- kovo-security-ledger: archived -->
 
 **Date:** 2026-07-21
-**Status:** CLOSED — remediation complete; publication and required CI pending
+**Status:** ARCHIVED — remediation complete and published
 **Baseline:** `11ba9ce4fbb0da08a458ce25ba575851efbc9082`
-**Lifecycle:** `closed-pending-publication`; archive by 2026-08-18 to
-`plans/history/bugz-36.md` after the verified closing tip is published and required CI is green.
+**Lifecycle:** Archived 2026-08-18. The closing ledger commit `9eb49702c` is an ancestor of
+authenticated `origin/main` tip `e3fc9bf10`; CI run `31342386114` and Pages run `31342386117`
+completed successfully for that published tip.
 
 **Scope:** Distinct security and security-evidence defects found while completing the three 10x
 security roadmaps after `bugz-35`. Every root below was reproduced before closure and deduplicated

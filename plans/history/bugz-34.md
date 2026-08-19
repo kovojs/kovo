@@ -1,13 +1,13 @@
 # Security Bug Ledger (`bugz-34`)
 
-<!-- kovo-security-ledger: transient -->
+<!-- kovo-security-ledger: archived -->
 
 **Date:** 2026-07-18
-**Status:** CLOSED — remediation complete; publication and required CI pending
+**Status:** ARCHIVED — remediation complete and published
 **Baseline:** `e5f613be9f1bb1f1cfc568a53e88ee741b3a4ded`
-**Lifecycle:** `closed-pending-publication`; archive by 2026-07-25 to
-`plans/history/bugz-34.md` after the
-verified closing tip is published and required CI is green.
+**Lifecycle:** Archived 2026-08-18. The closing ledger commit `16fe01b3b` is an ancestor of
+authenticated `origin/main` tip `e3fc9bf10`; CI run `31342386114` and Pages run `31342386117`
+completed successfully for that published tip.
 
 **Scope:** The first fixed-charter remote Node-ingress convergence audit. Deliberately hostile
 same-process code remains outside the app-level proof under SPEC §6.6.
