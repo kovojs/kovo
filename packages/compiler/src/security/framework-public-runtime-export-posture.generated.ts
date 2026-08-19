@@ -90,14 +90,14 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./security",["default"]],
       ["./storage",["default"]],
       ["./webhooks",["default"]],
-    ], ["kovo-source-tree-sha256:bdd6ed3f25af7e551800d01609f598bec76f19f4156505a4efda09031ff7b981"]],
+    ], ["kovo-source-tree-sha256:74061dd153459546a5da6bd26972056b0602b79d2d47c35afb31bc559887d3cd"]],
     ["sha256:21df25de397fff0639cd204e15712acfb9dfcbc54e46fbf5acddada0050f7086", [
       [".",["default","types"]],
       ["./diagnostics",["default","types"]],
       ["./security",["default","types"]],
       ["./storage",["default","types"]],
       ["./webhooks",["default","types"]],
-    ], ["kovo-packed-tree-sha256:c12af3a40cd437dc153213f75585a141e7e9fdabad2aaa456f7deb9182168130"]],
+    ], ["kovo-packed-tree-sha256:67f8ff586dc48440494cf19e3c6586a1af7621e8b9e3d4d9b8f07bc3b185d322"]],
   ], "exact-implementation"],
   ["@kovojs/drizzle", "0.3.0", [
     ["sha256:33536f15d5891c9c210b0e2558da2ba54535a32a60e491a513f71499f3c9e5eb", [

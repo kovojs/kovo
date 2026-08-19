@@ -190,7 +190,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-mKn/xkYluF/SfEj7AsWMNbdLJ5RtS2/AA0NB8eKQ0VQ0ERZb6BQr3of2S9v1LDZuWbyGAGDn6E2tv/NeLhBedA=="
+      "sha512": "sha512-rov5deyPCglhFiy6YVIaWxT+G2FLa9y9BxCdVJKD1O5+e+brT2SZi+k0Xqj4crgPduPHkPwAHV73sjbG5Zv97Q=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
@@ -390,7 +390,7 @@
     },
     {
       "path": "@kovojs/core/dist/internal/wire-input-grammar.mjs",
-      "sha512": "sha512-uUiX/bh6KMfRikeSArX+4kxFNH46D/4ZjlA1/FTwiDR9rM7BBXedet+oX8TDWNXNKHE4TMOzTuAKcknUCUeuXw=="
+      "sha512": "sha512-VM5ap3gNMbYqdgJUdkQy1DgnsuZjId1zvkQ3UaaJMWvmw4ynhr5XTZ3dlAC1xd9SiKcAeFFVXTYZpL/O5zSm4Q=="
     },
     {
       "path": "@kovojs/core/dist/internal/wire-json.mjs",
