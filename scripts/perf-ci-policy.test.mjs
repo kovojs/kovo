@@ -97,6 +97,7 @@ describe('realistic performance CI policy', () => {
     }
     expect(bytes).toContain('scripts/perf-gate.mjs');
     expect(bytes).toContain('--suite bytes');
+    expect(smoke).toContain('timeout-minutes: 60');
     expect(smoke).toContain('uses: ./.github/actions/playwright-install');
     expect(smoke).toContain(
       'vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile',

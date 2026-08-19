@@ -113,7 +113,9 @@ jobs:
     name: Matched fixture correctness
     if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # A hosted Playwright install was directly observed exceeding 40 minutes; leave the
+    # unchanged matched proof time to finish while keeping the PR smoke bounded.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
