@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  'a01794b171b3ad05fc2afe743275ae0003fc83f4d3dc1c41d55d6ff098a30b81';
+  'f55944208dec9c4558f6af3a602a6311146fa3a6522516a7753aeca4f4faa749';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  '0cd0f437bdea250577fd910fcd9c2a185017c77abe6ca073d03fce6ca2200d30';
+  '65a3baab816ef86764e68747d966e40e40b022d0ea56a236898942dfd5320052';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -110,7 +110,7 @@ const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/browser/src/client-installer.ts#2c7b7a1aae697bd8d488d7459007da844cddb796d21fb790fe0fffb74ab46bcb#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
   'packages/browser/src/inline-loader.ts#3cb658fb87a5568ec970c76b16232247175e44d6403eca10f02447fd397cf1f3#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
   'packages/cli/src/commands/build-one-shot-orchestrator.ts#7a5fc8e7593367db4b02bcd3adde17a4f731412731aab7bc0b933771569a6f30#155dc086a67d2a9e403ab8fb47af4b37fd0fe57b81238f765189c672470d7607',
-  'packages/cli/src/commands/check-session-reuse.ts#7d6a674b58c7fb91b429a2c622cf0288181a088c5c8b0088e982e261f12cdca2#53694aeeb5fdbe95af7f65b51f681fad7066715b50e55488792908827d35cb9c',
+  'packages/cli/src/commands/check-session-reuse.ts#889644eb97d30eea395a596fd12043a756b6291fa243dedc8ab72f3c0a84c53d#53694aeeb5fdbe95af7f65b51f681fad7066715b50e55488792908827d35cb9c',
   'packages/cli/src/commands/db.ts#71f2e25eedf60743b28fb20ffadac69b9a2d9f342be7b5361e2133f0830fbfdf#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#22ee982930cbc113c692d6995ae3b919cf4783cba81f795018505d88b75c5874#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#22ee982930cbc113c692d6995ae3b919cf4783cba81f795018505d88b75c5874#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
@@ -136,11 +136,11 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'a5e27897ba54f7a2234b9323f235d3976b3766cff86a22a5a7470436123c9555'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '463c6bf4013e84ceb3a6b93e9974b46974eeb809db68c24f5ff4dd9b448ede9f',
+    '3c9b4ef10d7b1fb9190e16f065eaa129968886b2863be3b5310c60387497348c',
   ],
   [
     'packages/cli/src/commands/check-session-reuse.ts',
-    '7d6a674b58c7fb91b429a2c622cf0288181a088c5c8b0088e982e261f12cdca2',
+    '889644eb97d30eea395a596fd12043a756b6291fa243dedc8ab72f3c0a84c53d',
   ],
   [
     'packages/cli/src/commands/build-static-trust-source-hook.mjs',
