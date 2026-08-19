@@ -1,9 +1,27 @@
+import { Buffer } from 'node:buffer';
 import { createHash, randomBytes } from 'node:crypto';
 
 import { canonicalJson } from './perf-host.mjs';
 
 export const PERF_EXECUTION_SCHEMA = 'kovo-performance-execution/v1';
 const commitPattern = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u;
+const lowercaseHexPattern = /^[0-9a-f]+$/u;
+const nativeBufferToString = Buffer.prototype.toString;
+const nativeNumberIsSafeInteger = Number.isSafeInteger;
+const nativeObjectFreeze = Object.freeze;
+const nativeRandomBytes = randomBytes;
+const nativeReflectApply = Reflect.apply;
+const nativeRegExpTest = lowercaseHexPattern.test.bind(lowercaseHexPattern);
+const serverBenchmarkDeploymentIdPrefix = 'deployment:kovo-server-benchmark-';
+
+/** Mint the production server benchmark's exact process runtime environment. */
+export function mintServerBenchmarkRuntimeEnvironment() {
+  return nativeObjectFreeze({
+    KOVO_ATTESTATION_DEPLOYMENT_ID: `${serverBenchmarkDeploymentIdPrefix}${randomHex(6)}`,
+    KOVO_ATTESTATION_SECRET: randomHex(32),
+    NODE_ENV: 'production',
+  });
+}
 
 /**
  * Identify one independent benchmark execution without pretending local metadata is CI authority.
@@ -12,7 +30,7 @@ const commitPattern = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u;
  */
 export function performanceExecutionIdentity({
   env = process.env,
-  nonce = randomBytes(16).toString('hex'),
+  nonce = randomHex(16),
   pid = process.pid,
   startedAt = new Date().toISOString(),
 } = {}) {
@@ -125,4 +143,15 @@ function sha256Canonical(value) {
 
 function nonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
+}
+
+function randomHex(byteLength) {
+  if (!nativeNumberIsSafeInteger(byteLength) || byteLength < 1 || byteLength > 32) {
+    throw new TypeError('performance entropy byte length must be an integer between 1 and 32');
+  }
+  const value = nativeReflectApply(nativeBufferToString, nativeRandomBytes(byteLength), ['hex']);
+  if (value.length !== byteLength * 2 || !nativeRegExpTest(value)) {
+    throw new TypeError('performance entropy was not exact lowercase hexadecimal text');
+  }
+  return value;
 }

@@ -9,7 +9,6 @@
  * Static validators, and Proved-document caching.
  */
 import { spawn } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import http from 'node:http';
@@ -25,8 +24,9 @@ import {
   MATCHED_SERVER_DETAIL_SLUG,
   validateMatchedServerDocument,
 } from '../benchmarks/shared/server-semantic-contract.mjs';
+import { mintServerBenchmarkRuntimeEnvironment } from './lib/perf-execution.mjs';
 import { performanceHostFingerprint } from './lib/perf-host.mjs';
-import { collectPerformanceProvenance } from './lib/perf-provenance.mjs';
+import { collectPerformanceProvenance, sha256PerformanceBytes } from './lib/perf-provenance.mjs';
 import { measureProcessTreeWindow } from './lib/process-tree-metrics.mjs';
 
 export const SERVER_BENCHMARK_SCHEMA = 'kovo-server-benchmark/v1';
@@ -698,16 +698,11 @@ async function entrantDefinition(framework, portValue) {
     const version = JSON.parse(
       await readFile(path.join(repoRoot, 'packages/server/package.json'), 'utf8'),
     ).version;
-    const deploymentId = `deployment:kovo-server-benchmark-${randomBytes(6).toString('hex')}`;
     return {
       appRoot,
       artifacts: [path.join(appRoot, 'dist/server/server.mjs')],
       build: ['vp', ['exec', 'pnpm', '--dir', appRoot, 'run', 'build']],
-      env: {
-        KOVO_ATTESTATION_DEPLOYMENT_ID: deploymentId,
-        KOVO_ATTESTATION_SECRET: randomBytes(32).toString('hex'),
-        NODE_ENV: 'production',
-      },
+      env: mintServerBenchmarkRuntimeEnvironment(),
       framework,
       port,
       start: [process.execPath, ['dist/server/server.mjs']],
@@ -851,7 +846,7 @@ function commaSeparatedTokens(value) {
 }
 
 function sha256(bytes) {
-  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+  return sha256PerformanceBytes(bytes);
 }
 
 function quantile(sorted, fraction) {

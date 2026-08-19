@@ -20,6 +20,11 @@ function sha256File(filePath) {
   return `sha256:${createHash('sha256').update(readFileSync(filePath)).digest('hex')}`;
 }
 
+/** Exact SHA-256 report identity used by the production server benchmark. */
+export function sha256PerformanceBytes(bytes) {
+  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+}
+
 /**
  * Bind a performance report to the source tree and dependency resolutions it measured.
  *

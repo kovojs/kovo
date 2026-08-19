@@ -3,7 +3,6 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
-import { randomBytes } from 'node:crypto';
 import {
   assertRegisteredDiagnostic,
   createRegisteredDiagnostic,
@@ -28,6 +27,7 @@ import { deriveClosedKovoApp } from './app-snapshot.js';
 import { runWithGeneratedLiveTargetRegistry } from './live-target-registry.js';
 import { createRequestHandler } from './app.js';
 import type { KovoApp } from './app-types.js';
+import { mintDevelopmentLiveTargetAttestationSecret } from './crypto-authority.js';
 import {
   computeRenderPlanFingerprint,
   replaceVersionedClientModuleBuildSnapshot,
@@ -157,7 +157,7 @@ import { admitKovoViteDevStyleNonce, admitKovoViteDevStyleNonceHeader } from './
 const kovoHmrClientPath = '/@kovo/hmr-client';
 const kovoHmrRouteRefreshPath = '/@kovo/hmr/refresh/route';
 const kovoHmrLiveTargetRefreshPath = '/@kovo/hmr/refresh/live-targets';
-const kovoViteDevelopmentLiveTargetAttestationSecret = randomBytes(32).toString('base64url');
+const kovoViteDevelopmentLiveTargetAttestationSecret = mintDevelopmentLiveTargetAttestationSecret();
 const kovoHmrClientScript = `<script type="module" src="${kovoHmrClientPath}"></script>`;
 const kovoHmrWireInputGrammarSource = canonicalJsonStringify(FRAMEWORK_WIRE_INPUT_GRAMMAR);
 const kovoHmrWireTargetCodecSource = buildSecurityFunctionSource(createFrameworkWireTargetCodec);

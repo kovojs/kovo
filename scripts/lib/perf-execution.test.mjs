@@ -1,8 +1,60 @@
+import { Buffer } from 'node:buffer';
+
 import { describe, expect, it } from 'vitest';
 
-import { executionIdentityFindings, performanceExecutionIdentity } from './perf-execution.mjs';
+import {
+  executionIdentityFindings,
+  mintServerBenchmarkRuntimeEnvironment,
+  performanceExecutionIdentity,
+} from './perf-execution.mjs';
 
 describe('performance execution identity', () => {
+  it('mints only one frozen exact server benchmark runtime environment', async () => {
+    const first = mintServerBenchmarkRuntimeEnvironment();
+    const second = mintServerBenchmarkRuntimeEnvironment();
+    const prefix = 'deployment:kovo-server-benchmark-';
+
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Reflect.ownKeys(first)).toEqual([
+      'KOVO_ATTESTATION_DEPLOYMENT_ID',
+      'KOVO_ATTESTATION_SECRET',
+      'NODE_ENV',
+    ]);
+    expect(first.KOVO_ATTESTATION_DEPLOYMENT_ID).toMatch(
+      /^deployment:kovo-server-benchmark-[0-9a-f]{12}$/u,
+    );
+    expect(
+      Buffer.from(first.KOVO_ATTESTATION_DEPLOYMENT_ID.slice(prefix.length), 'hex'),
+    ).toHaveLength(6);
+    expect(first.KOVO_ATTESTATION_SECRET).toMatch(/^[0-9a-f]{64}$/u);
+    expect(Buffer.from(first.KOVO_ATTESTATION_SECRET, 'hex')).toHaveLength(32);
+    expect(first.NODE_ENV).toBe('production');
+    expect(second.KOVO_ATTESTATION_DEPLOYMENT_ID).not.toBe(first.KOVO_ATTESTATION_DEPLOYMENT_ID);
+    expect(second.KOVO_ATTESTATION_SECRET).not.toBe(first.KOVO_ATTESTATION_SECRET);
+    expect(await import('./perf-execution.mjs')).not.toHaveProperty('randomBytes');
+  });
+
+  it('keeps benchmark entropy encoding pinned after late Buffer.toString poisoning', () => {
+    const original = Buffer.prototype.toString;
+    try {
+      Buffer.prototype.toString = () => 'poisoned';
+      const environment = mintServerBenchmarkRuntimeEnvironment();
+      const execution = performanceExecutionIdentity({
+        env: {},
+        pid: 42,
+        startedAt: '2026-08-13T12:00:00.000Z',
+      });
+
+      expect(environment.KOVO_ATTESTATION_DEPLOYMENT_ID).toMatch(
+        /^deployment:kovo-server-benchmark-[0-9a-f]{12}$/u,
+      );
+      expect(environment.KOVO_ATTESTATION_SECRET).toMatch(/^[0-9a-f]{64}$/u);
+      expect(execution.local.nonce).toMatch(/^[0-9a-f]{32}$/u);
+    } finally {
+      Buffer.prototype.toString = original;
+    }
+  });
+
   it('binds a PR-head source and event SHA to one directly derived Actions run', () => {
     const execution = performanceExecutionIdentity({
       env: {

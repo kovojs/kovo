@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto';
-
 import type { JsonValue, Redirect, ScopedKey } from '@kovojs/core';
 import { assertAndCloneJsonValue, canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
@@ -18,7 +16,10 @@ import {
   resolveCsrfLiveTargetBinding,
   type CsrfOptions,
 } from './csrf.js';
-import { createLiveTargetCryptoHandle } from './crypto-authority.js';
+import {
+  createLiveTargetCryptoHandle,
+  mintDevelopmentLiveTargetAttestationSecret,
+} from './crypto-authority.js';
 import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
 import type { MutationFail, MutationSuccess } from './mutation.js';
@@ -55,7 +56,7 @@ import {
 } from './response-security-intrinsics.js';
 import { mutationWireJsonParse } from './mutation-wire-intrinsics.js';
 
-const developmentLiveTargetAttestationSecret = randomBytes(32).toString('base64url');
+const developmentLiveTargetAttestationSecret = mintDevelopmentLiveTargetAttestationSecret();
 let boundViteDevelopmentLiveTargetAttestationSecret: string | undefined;
 
 /**

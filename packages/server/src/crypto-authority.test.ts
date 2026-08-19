@@ -7,6 +7,7 @@ import {
   createPrincipalErasureCryptoHandle,
   createSessionFingerprintCryptoHandle,
   cryptoPurposeRegistry,
+  mintDevelopmentLiveTargetAttestationSecret,
   mintLiveTargetLocalAudienceNonce,
 } from './crypto-authority.js';
 import { createSigningKeyRing } from './keyring.js';
@@ -113,6 +114,17 @@ describe('SPEC §6.6 purpose-bound crypto authority', () => {
 
     expect(first).toMatch(/^[A-Za-z0-9_-]{43}$/u);
     expect(second).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(second).not.toBe(first);
+  });
+
+  it('mints independently fresh fixed 32-byte development live-target secrets', () => {
+    const first = mintDevelopmentLiveTargetAttestationSecret();
+    const second = mintDevelopmentLiveTargetAttestationSecret();
+
+    expect(first).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(second).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(Buffer.from(first, 'base64url')).toHaveLength(32);
+    expect(Buffer.from(second, 'base64url')).toHaveLength(32);
     expect(second).not.toBe(first);
   });
 });
