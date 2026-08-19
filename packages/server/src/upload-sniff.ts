@@ -308,7 +308,7 @@ export declare namespace accept {
   function unverified(types: readonly string[], justification: string): UnverifiedAcceptance;
 }
 
-accept.unverified = function unverified(
+(accept as typeof accept).unverified = function unverified(
   types: readonly string[],
   justification: string,
 ): UnverifiedAcceptance {
