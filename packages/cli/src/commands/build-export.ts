@@ -212,8 +212,8 @@ import { kovoBuildOneShotDigest, type KovoBuildOneShotIdentity } from './build-o
 import { STATIC_TRUST_WORKER_TIMEOUT_MS } from './build-security-deadlines.js';
 import {
   authenticateStaticTrustWorkerPayload,
-  equalStaticTrustWorkerAuthentication,
   mintStaticTrustWorkerAuthority,
+  verifyStaticTrustWorkerPayload,
 } from './build-crypto-authority.js';
 import {
   buildByteLength,
@@ -4265,10 +4265,6 @@ function staticTrustAuthentication(
   return authenticateStaticTrustWorkerPayload(authenticationKey, requestDigest, payload);
 }
 
-function equalStaticTrustAuthentication(actual: string, expected: string): boolean {
-  return equalStaticTrustWorkerAuthentication(actual, expected);
-}
-
 function staticTrustSourceDigest(
   files: readonly BuildCheckSourceFile[],
   clientEntry?: BuildCheckSourceFile,
@@ -5204,9 +5200,11 @@ function authenticatedStaticTrustWorkerSuccess(
     typeof digest !== 'string' ||
     typeof payload !== 'string' ||
     requestDigest !== expectedRequestDigest ||
-    !equalStaticTrustAuthentication(
+    !verifyStaticTrustWorkerPayload(
+      expectedRequest.authenticationKey,
+      expectedRequestDigest,
+      payload,
       authentication,
-      staticTrustAuthentication(expectedRequest.authenticationKey, expectedRequestDigest, payload),
     ) ||
     digest !== staticTrustDigest(payload)
   ) {

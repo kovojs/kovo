@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
 import {
   authenticateStaticTrustWorkerPayload,
   createKovoSourceCheckFactAuthenticationAuthority,
-  equalStaticTrustWorkerAuthentication,
   mintStaticTrustWorkerAuthority,
+  verifyStaticTrustWorkerPayload,
 } from './build-crypto-authority.js';
 
 const mutableCrypto = createRequire(import.meta.url)('node:crypto') as {
@@ -35,10 +35,12 @@ describe('SPEC §6.6 build/check crypto authority', () => {
     expect(() => authority.destroy()).not.toThrow();
 
     const exports = await import('./build-crypto-authority.js');
-    expect(exports).not.toHaveProperty('createHmac');
-    expect(exports).not.toHaveProperty('randomBytes');
-    expect(exports).not.toHaveProperty('timingSafeEqual');
-    expect(exports).not.toHaveProperty('equal');
+    expect(Object.keys(exports).sort()).toEqual([
+      'authenticateStaticTrustWorkerPayload',
+      'createKovoSourceCheckFactAuthenticationAuthority',
+      'mintStaticTrustWorkerAuthority',
+      'verifyStaticTrustWorkerPayload',
+    ]);
   });
 
   it('mints fixed-width worker authority and preserves the authenticated envelope identity', () => {
@@ -58,8 +60,12 @@ describe('SPEC §6.6 build/check crypto authority', () => {
     expect(authenticated).toBe(
       'hmac-sha256:ba281914233da2df3e3d321254b0055f66428febc1b0ed0706fedfd43099a237',
     );
-    expect(equalStaticTrustWorkerAuthentication(authenticated, authenticated)).toBe(true);
-    expect(equalStaticTrustWorkerAuthentication(authenticated, `${authenticated}0`)).toBe(false);
+    expect(
+      verifyStaticTrustWorkerPayload('00'.repeat(32), 'request', 'payload', authenticated),
+    ).toBe(true);
+    expect(
+      verifyStaticTrustWorkerPayload('00'.repeat(32), 'request', 'payload', `${authenticated}0`),
+    ).toBe(false);
   });
 
   it('pins authority controls before late builtin and prototype poisoning', () => {

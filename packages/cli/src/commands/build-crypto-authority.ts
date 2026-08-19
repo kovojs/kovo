@@ -152,11 +152,17 @@ export function authenticateStaticTrustWorkerPayload(
   return `hmac-sha256:${hmacHex(key, [requestDigest, '\0', payload])}`;
 }
 
-/** @internal Fixed-width comparison for static-trust worker envelope authentication. */
-export function equalStaticTrustWorkerAuthentication(actual: string, expected: string): boolean {
+/** @internal Verify one exact static-trust worker response envelope. */
+export function verifyStaticTrustWorkerPayload(
+  authenticationKey: string,
+  requestDigest: string,
+  payload: string,
+  actualAuthentication: string,
+): boolean {
   assertBuildCryptoAuthority();
-  if (typeof actual !== 'string' || typeof expected !== 'string') return false;
-  const actualBytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, [actual, 'utf8']);
+  if (typeof actualAuthentication !== 'string') return false;
+  const expected = authenticateStaticTrustWorkerPayload(authenticationKey, requestDigest, payload);
+  const actualBytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, [actualAuthentication, 'utf8']);
   const expectedBytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, [expected, 'utf8']);
   return (
     byteLength(actualBytes) === byteLength(expectedBytes) &&
