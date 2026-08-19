@@ -137,7 +137,7 @@
       "kind": "crypto-acquisition",
       "operations": ["createHmac", "randomBytes", "timingSafeEqual"],
       "tier": "build-tooling",
-      "review": "Bootstrap-pinned, known-answer-tested authority owns fresh 256-bit static-worker keys/challenges and session-confined HMAC-SHA256 fact authentication; only fixed worker fields or a closed fact-authentication handle escape, with no primitive selector or key accessor."
+      "review": "Bootstrap-pinned, known-answer-tested authority owns fresh 256-bit static-worker keys/challenges and session-confined HMAC-SHA256 fact authentication; only the exact worker authenticationKey/challenge fields or a closed fact-authentication handle escape. The fact handle has no key accessor, and no generic primitive or entropy selector escapes."
     },
     {
       "id": "crypto-door-cli-check-session-reuse",
@@ -805,7 +805,7 @@
       "kind": "crypto-acquisition",
       "operations": ["createHash", "randomBytes"],
       "tier": "build-tooling",
-      "review": "The performance execution boundary owns canonical SHA-256 execution identities plus fixed-purpose local-run, server-deployment, and server-attestation entropy; only fixed-width strings leave it and no primitive or byte-count selector escapes."
+      "review": "The performance execution boundary owns canonical SHA-256 execution identities plus fixed-purpose local-run, server-deployment, and server-attestation entropy; entropy leaves only in fixed-width fields of the exact execution-identity and frozen runtime-environment objects, and no primitive or caller-selectable byte count escapes."
     },
     {
       "id": "crypto-door-perf-host",
