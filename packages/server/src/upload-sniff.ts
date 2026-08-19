@@ -304,6 +304,10 @@ export function accept(types: readonly string[]): readonly string[] {
   return snapshotUploadMimeTypes(types);
 }
 
+export declare namespace accept {
+  function unverified(types: readonly string[], justification: string): UnverifiedAcceptance;
+}
+
 accept.unverified = function unverified(
   types: readonly string[],
   justification: string,
