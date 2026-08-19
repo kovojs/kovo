@@ -1574,7 +1574,7 @@
     },
     {
       "path": "@kovojs/server/dist/upload-sniff.mjs",
-      "sha512": "sha512-MhiI4/jPJwmxVwcusd9Uxvb1V7urXgu1myoCh+plMcWAM8DkIAxVHDq3awxXc75FxfSUhNr9bUaaNX/NLNI1ZA=="
+      "sha512": "sha512-FipF8kDn9xZS+dXjupq83qdUfQXMDEp1rjKvShBq+9Ab9QJ8caxjKIpMA3i5f+dMwvzhCfP+ncyFlxIku2WEEw=="
     },
     {
       "path": "@kovojs/server/dist/vite-build-assets.mjs",
