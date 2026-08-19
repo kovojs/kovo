@@ -304,24 +304,22 @@ export function accept(types: readonly string[]): readonly string[] {
   return snapshotUploadMimeTypes(types);
 }
 
-export namespace accept {
-  export function unverified(
-    types: readonly string[],
-    justification: string,
-  ): UnverifiedAcceptance {
-    const closedJustification = snapshotAuditJustification(justification, 'accept.unverified(...)');
-    const closedTypes = snapshotUploadMimeTypes(types);
-    const fact = witnessFreeze({ justification: closedJustification, types: closedTypes });
-    unverifiedMimeFacts.record(fact);
-    const acceptance = witnessFreeze({
-      justification: closedJustification,
-      types: closedTypes,
-      unverified: true as const,
-    }) as UnverifiedAcceptance;
-    witnessWeakMapSet(unverifiedAcceptanceSnapshots, acceptance, acceptance);
-    return acceptance;
-  }
-}
+accept.unverified = function unverified(
+  types: readonly string[],
+  justification: string,
+): UnverifiedAcceptance {
+  const closedJustification = snapshotAuditJustification(justification, 'accept.unverified(...)');
+  const closedTypes = snapshotUploadMimeTypes(types);
+  const fact = witnessFreeze({ justification: closedJustification, types: closedTypes });
+  unverifiedMimeFacts.record(fact);
+  const acceptance = witnessFreeze({
+    justification: closedJustification,
+    types: closedTypes,
+    unverified: true as const,
+  }) as UnverifiedAcceptance;
+  witnessWeakMapSet(unverifiedAcceptanceSnapshots, acceptance, acceptance);
+  return acceptance;
+};
 
 /** @internal Authenticate an upload acceptance minted by {@link accept.unverified}. */
 export function unverifiedAcceptanceSnapshot(value: unknown): UnverifiedAcceptance {

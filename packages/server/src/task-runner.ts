@@ -125,31 +125,39 @@ export interface DurableTaskRunnerOptions {
 }
 
 export class UnknownDurableTaskError extends Error {
-  constructor(readonly taskKey: string) {
+  readonly taskKey: string;
+
+  constructor(taskKey: string) {
     super(`No durable task is registered for key "${taskKey}".`);
+    this.taskKey = taskKey;
     this.name = 'UnknownDurableTaskError';
   }
 }
 
 export class DurableTaskLeaseLostError extends Error {
-  constructor(
-    readonly jobId: string,
-    readonly bodySettled: Promise<void>,
-    readonly heartbeatError?: unknown,
-  ) {
+  readonly jobId: string;
+  readonly bodySettled: Promise<void>;
+  readonly heartbeatError?: unknown;
+
+  constructor(jobId: string, bodySettled: Promise<void>, heartbeatError?: unknown) {
     super(`Durable task lease was lost while job "${jobId}" was still running.`);
+    this.jobId = jobId;
+    this.bodySettled = bodySettled;
+    this.heartbeatError = heartbeatError;
     this.name = 'DurableTaskLeaseLostError';
   }
 }
 
 export class DurableTaskLeaseSettlementDiscardedError extends Error {
-  constructor(
-    readonly jobId: string,
-    readonly operation: 'markFailed' | 'markSucceeded',
-  ) {
+  readonly jobId: string;
+  readonly operation: 'markFailed' | 'markSucceeded';
+
+  constructor(jobId: string, operation: 'markFailed' | 'markSucceeded') {
     super(
       `Durable task ${operation} settlement for job "${jobId}" was discarded because its lease fence no longer matched.`,
     );
+    this.jobId = jobId;
+    this.operation = operation;
     this.name = 'DurableTaskLeaseSettlementDiscardedError';
   }
 }
@@ -999,11 +1007,11 @@ function snapshotTaskScheduleOptions(
 }
 
 class DurableTaskTimeoutError extends Error {
-  constructor(
-    message: string,
-    readonly bodySettled: Promise<void>,
-  ) {
+  readonly bodySettled: Promise<void>;
+
+  constructor(message: string, bodySettled: Promise<void>) {
     super(message);
+    this.bodySettled = bodySettled;
     this.name = 'DurableTaskTimeoutError';
   }
 }

@@ -1102,7 +1102,11 @@ function appendReplayValue<Value>(values: Value[], value: Value): void {
 }
 
 class ReplayFormDataFingerprintInput {
-  constructor(readonly entries: readonly (readonly [string, unknown])[]) {}
+  readonly entries: readonly (readonly [string, unknown])[];
+
+  constructor(entries: readonly (readonly [string, unknown])[]) {
+    this.entries = entries;
+  }
 }
 
 async function canonicalFormDataEntries(

@@ -64,8 +64,11 @@ export type LoadShedSurface = AppSystemResponseSurface;
 
 /** @internal */
 export class RequestBodyLimitExceededError extends Error {
-  constructor(readonly maxBodyBytes: number) {
+  readonly maxBodyBytes: number;
+
+  constructor(maxBodyBytes: number) {
     super(`Request body exceeded ${maxBodyBytes} bytes.`);
+    this.maxBodyBytes = maxBodyBytes;
     this.name = 'RequestBodyLimitExceededError';
   }
 }

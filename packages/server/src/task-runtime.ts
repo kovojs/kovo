@@ -69,6 +69,7 @@ export function appTaskScheduler(app: KovoApp): TaskScheduler | undefined {
 }
 
 class DefaultAppTaskRuntime implements AppTaskRuntime {
+  private readonly app: KovoApp;
   private cronMaterializer: RecurringTaskMaterializer | undefined;
   private cronTimer: ReturnType<typeof setTimeout> | undefined;
   private runner: DurableTaskRunner | undefined;
@@ -77,7 +78,8 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
 
   readonly scheduler: TaskScheduler;
 
-  constructor(private readonly app: KovoApp) {
+  constructor(app: KovoApp) {
+    this.app = app;
     this.tasks = taskSnapshotCollection(app.tasks, 'Application durable task registry');
     this.scheduler = {
       registeredTasks: this.tasks,

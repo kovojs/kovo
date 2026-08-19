@@ -6173,13 +6173,12 @@ function postgresSecretReadParams(values: readonly unknown[]): unknown[] {
 }
 
 class NodePostgresRuntimeClient implements RuntimeSqlClient {
+  private readonly pool: Pool;
   #drainGeneration = 0;
   #sqlErrorObserver: PostgresSqlErrorObserver | undefined;
 
-  constructor(
-    private readonly pool: Pool,
-    observer?: PostgresSqlErrorObserver,
-  ) {
+  constructor(pool: Pool, observer?: PostgresSqlErrorObserver) {
+    this.pool = pool;
     this.#sqlErrorObserver = observer;
   }
 
@@ -6353,9 +6352,12 @@ export const __testPostgresRuntimeInternals = {
 };
 
 class NodePostgresTransactionClient implements RuntimeSqlClient {
+  private readonly client: PoolClient;
   #savepointSequence = 0;
 
-  constructor(private readonly client: PoolClient) {}
+  constructor(client: PoolClient) {
+    this.client = client;
+  }
 
   async exec(statement: string): Promise<unknown> {
     return this.client.query(statement);
