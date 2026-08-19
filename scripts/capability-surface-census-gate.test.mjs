@@ -35,6 +35,27 @@ const sources = new Map([
   ],
 ]);
 
+const performanceRegistryCanaries = [
+  {
+    api: 'createWitnessWeakMap',
+    classification: 'internal-registry',
+    file: 'packages/server/src/loader-runtime-client-module.ts',
+    id: 'packages/server/src/loader-runtime-client-module.ts#loaderRuntimeHrefMemo',
+    reason:
+      'Memoizes a successfully validated loader-runtime href only for one exact private registry identity and its current active publish-epoch token. Every successful publication replaces that token and forces full revalidation, staging changes remain inactive, refusal paths are never stored, and the WeakMap exposes no outward authority.',
+    symbol: 'packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap',
+  },
+  {
+    api: 'createWitnessWeakMap',
+    classification: 'internal-registry',
+    file: 'packages/server/src/response.ts',
+    id: 'packages/server/src/response.ts#frameworkProvedDocumentCompressionWitnesses',
+    reason:
+      'Backs the private compression-cache authority witness for one exact framework-owned response identity with a frozen build token and body digest. Production callers mint it only when the compiler-proved buffered body is at or below the cache-admission ceiling, cache admission separately requires a credential-neutral buffered 200, structural clones and public headers cannot recover it, transfer requires an already witnessed source, and weak response identity bounds retention.',
+    symbol: 'packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap',
+  },
+];
+
 // @kovo-security-certifies C13 capability-mint-symbol-identity-census
 it('discovers witness registries and systemDb mints by TypeScript symbol identity', () => {
   const sites = discoverCapabilityMintSites({
@@ -61,6 +82,34 @@ it('discovers witness registries and systemDb mints by TypeScript symbol identit
       symbol: 'runtime.ts#Runtime.systemDb',
     },
   ]);
+});
+
+it('pins the loader memo and compression witness as exact private registry surfaces', () => {
+  const manifest = JSON.parse(
+    readFileSync(new URL('./capability-surface-census.manifest.json', import.meta.url), 'utf8'),
+  );
+  const canaryIds = new Set(performanceRegistryCanaries.map((row) => row.id));
+  const discovered = discoverCapabilityMintSites();
+
+  expect(discovered.filter((site) => canaryIds.has(site.id))).toEqual(
+    performanceRegistryCanaries.map(
+      ({ classification: _classification, reason: _reason, ...site }) => site,
+    ),
+  );
+  expect(manifest.mintSites.filter((row) => canaryIds.has(row.id))).toEqual(
+    performanceRegistryCanaries,
+  );
+  expect(manifest.summary).toEqual({ internalRegistries: 138, mints: 3, sites: 141 });
+
+  for (const canary of performanceRegistryCanaries) {
+    const withoutCanary = {
+      ...manifest,
+      mintSites: manifest.mintSites.filter((row) => row.id !== canary.id),
+    };
+    expect(
+      evaluateCapabilitySurfaceCensus({ discovered, manifest: withoutCanary }).findings,
+    ).toContain(`missing capability census row ${canary.id}`);
+  }
 });
 
 // @kovo-security-certifies C13 principal-epoch-credential-door-census
