@@ -5510,7 +5510,7 @@
     "ownerKey": "d1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1",
     "serverCopies": [
       {
-        "basePackedContentsSha256": "7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635",
+        "basePackedContentsSha256": "d157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8",
         "overlayFiles": [
           {
             "bytes": 12245,
@@ -5536,7 +5536,7 @@
         ],
         "physicalRoot": "<fixture>/store/server-a",
         "postWriteContents": {
-          "digest": "bf0364b3ebdbbec59c6e9682d39d27780cc4189bdac2e7821e517e6c8aac6e06",
+          "digest": "3ae862d43bb406c135a181c350a9d158f5c973909c36de81b9b1bbaa3b188c49",
           "files": [
             {
               "bytes": 1551,
@@ -5756,11 +5756,11 @@
               "sha256": "f0e3da47db4a4d357637a379d2f8dc42a1511c46a7193e9a76aa096a2010117f"
             },
             {
-              "bytes": 75962,
+              "bytes": 76027,
               "executable": false,
               "path": "dist/app-load-shed.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "236c3c36aa8dce919a9443a69deab807e653dbbf6381b98d82995b941eb8476e"
+              "sha256": "9d42cf53c6dda419f1c5f4606c32cd290ec30d98372ea1aee6ea227922cff314"
             },
             {
               "bytes": 694,
@@ -6537,21 +6537,21 @@
               "executable": false,
               "path": "dist/crypto-authority.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "7ba6a0e422c4b39da8851d986f0237de24542f68f461af00f627cde464d157c0"
+              "sha256": "d8f0bbea59fc6043d1d021e278f5cf76554af6cb33e9bf5959726af374033bad"
             },
             {
-              "bytes": 23912,
+              "bytes": 24386,
               "executable": false,
               "path": "dist/crypto-authority.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "df05ed26cff452beb307ac528717be35d8a8ba7e1aa216077c14b672332815f9"
+              "sha256": "d57dc77f3d0bc18c0cc38ddca837262910da768cd89f53a75abed941ae2e1db5"
             },
             {
-              "bytes": 45157,
+              "bytes": 45796,
               "executable": false,
               "path": "dist/crypto-authority.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b21e559e3dfed3c30355ef2c1f8b87e57f470084151e463483daac965da20b3c"
+              "sha256": "f7ab8f2909852769262a1b5fe542c38dd31c3f527fbe44899ba7966552be716b"
             },
             {
               "bytes": 9433,
@@ -7884,11 +7884,11 @@
               "sha256": "5aa6d2c09c743de42448201a41bb2d6c301a7793a1bf480773428d892de2676e"
             },
             {
-              "bytes": 45481,
+              "bytes": 45573,
               "executable": false,
               "path": "dist/internal/linear-regex/index.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "eeabee743423b8feb39c41c3d99e8ac9b42e3ac011d9b7164587ef4340c31ff3"
+              "sha256": "c0affd3d3305c2fa2689281a87f8534cc3fe9d7e52956a3ea9a98189b5307e9a"
             },
             {
               "bytes": 443,
@@ -8581,21 +8581,21 @@
               "executable": false,
               "path": "dist/mutation-wire.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "2ad3ded64cd7a99c7ecce1ef8acc8dcc1e2e448c23320646cade1c7f6c737dd9"
+              "sha256": "4c6e0fe1ea7b68d3032fd37608906f4d4740e94610bbc46b5c1adb74f5cc42dc"
             },
             {
-              "bytes": 15954,
+              "bytes": 15962,
               "executable": false,
               "path": "dist/mutation-wire.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "6c365eba2007e194ed9665636c6214959350358aa4c63f55436ab0714a698de0"
+              "sha256": "9f6809f908dc11668dadb1798c42aa753e7057b12412458d1b04d86e51dc59f7"
             },
             {
-              "bytes": 44623,
+              "bytes": 44617,
               "executable": false,
               "path": "dist/mutation-wire.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "4147ff9ddf6af48c42c0a85ead4582824ec5435a37e2b0fa13a5c59913fe47bc"
+              "sha256": "038c3020a6d174682b5f75e901e025e5870587e67d34d14e082681242afd1109"
             },
             {
               "bytes": 5723,
@@ -8651,7 +8651,7 @@
               "executable": false,
               "path": "dist/mutation/definition.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "deda61d9f2688eb0bf7f449bfc0fc330077a7c9370887b668a11c3144779d32a"
+              "sha256": "4babbaebabb21f31b8517078cb4744a5819d29fb30c452697d8697ebf710828c"
             },
             {
               "bytes": 12309,
@@ -8661,11 +8661,11 @@
               "sha256": "5f6381e31880e39f739688390f022d537d34b89eeec6669f49f803744da24be5"
             },
             {
-              "bytes": 51162,
+              "bytes": 51202,
               "executable": false,
               "path": "dist/mutation/definition.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "0d1ed3059b6994b1ac09c0a0458abd4e23eb98aa3ef133a1f5294287df317481"
+              "sha256": "a364dd90bed39c4d2b73fef7732d537166660bda0d4839aa05e9f3df113a60bb"
             },
             {
               "bytes": 4012,
@@ -9060,11 +9060,11 @@
               "sha256": "984b009f27b52215be76966d15a70beed61eff66b95c73efb01006b52cbd6b82"
             },
             {
-              "bytes": 538861,
+              "bytes": 538934,
               "executable": false,
               "path": "dist/postgres-runtime.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "936a7025a274286e4f57c172b9b8d83b866f54520202d4c162a25aef762c4595"
+              "sha256": "f9a4aa43acf8810a6ebaad06110f5ac54047172fe9ec3b22fd8bd0285a1f23f1"
             },
             {
               "bytes": 3743,
@@ -9802,11 +9802,11 @@
               "sha256": "799ebcd803b53e8c65909ece1c72a3394ac166f96d188ce763a748be1b4818d6"
             },
             {
-              "bytes": 68811,
+              "bytes": 68898,
               "executable": false,
               "path": "dist/replay.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b4e6f0198093eb8d82155d53d51a59c3bb62a92bfc4be27f95d07fc02b790459"
+              "sha256": "c1d5913eed88dc8c53ae62bd8639e3d3f7855a69cd0584998118096a6bbf7666"
             },
             {
               "bytes": 10987,
@@ -10177,7 +10177,7 @@
               "executable": false,
               "path": "dist/route.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "38e0e2503e34284c08b71f92023bef1da3046de9e8e825c3dca1f8aa12849497"
+              "sha256": "0c0314e20f7c6b0728ac80cbd367802352f96195d5fe6bf04209c2d83a2e3093"
             },
             {
               "bytes": 42952,
@@ -10187,11 +10187,11 @@
               "sha256": "a067c2f3465fafde3f2e9474f561d733522e8d45f0d37c4d85e3c8171c63edd6"
             },
             {
-              "bytes": 98278,
+              "bytes": 98394,
               "executable": false,
               "path": "dist/route.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "2afe4ac4ade3b7d9fb5929d02e4b5b121338b4c2953fd38ae07f71b035162013"
+              "sha256": "18ddfd6773660c0e87ac3c4b6a9b0e4e775679022d1f10c88f1a7ce848fa54b1"
             },
             {
               "bytes": 1651,
@@ -11174,11 +11174,11 @@
               "sha256": "653b2bf02c33bb63bdb569340ed40c2e52731aa17412480a3425c5d6644823d0"
             },
             {
-              "bytes": 20052,
+              "bytes": 20124,
               "executable": false,
               "path": "dist/task-cron.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "f9f648c6eadcb1947c9ffe9821b104bcbc3fe20c622298e6b0f695c9250ecf46"
+              "sha256": "f250cec5c358bc816b0d583215640485e1e531a849c7cda529617c36e4540ae3"
             },
             {
               "bytes": 4035,
@@ -11244,11 +11244,11 @@
               "sha256": "823b9214a5cc6c6a4761efc22ece9eeb8c2b1f212492bc3282b9ac0e8f23b3d2"
             },
             {
-              "bytes": 60806,
+              "bytes": 61194,
               "executable": false,
               "path": "dist/task-runner.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b05ac189198af19697366b50589060bef61fb540c8ac1d488bfe938f2dee31e1"
+              "sha256": "a3c7037eff1bc613f524090713ed7ea1eb8a475bd32cb40d1d41655b60da5970"
             },
             {
               "bytes": 6448,
@@ -11258,11 +11258,11 @@
               "sha256": "0894645b16b38bfd79d269bfdfa60e4b94622f1b4ddfd578524bd9346cbc5a99"
             },
             {
-              "bytes": 12162,
+              "bytes": 12198,
               "executable": false,
               "path": "dist/task-runtime.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "51b44ebb60b99ea5b5a35ec06325b3102ee34c47d8ff3d3fe0d0d8d4e94f7df8"
+              "sha256": "7e7d50d4790f204046529e6ce6d156b0b191598407535157b278a62b8f320103"
             },
             {
               "bytes": 31315,
@@ -11356,25 +11356,25 @@
               "sha256": "1eb59a14fa27d65b3c0eeacf4493499cb491b01c2f406f0038787a4bb68271db"
             },
             {
-              "bytes": 527,
+              "bytes": 530,
               "executable": false,
               "path": "dist/upload-sniff.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "d93a6d9d62a3a830e9951262b791e77817513298f22c0092d7d5f9c77c391975"
+              "sha256": "2fc41b98ee8c20737e2747b6453da6fc2e0fb780155bdcbb86b883afa07d5a30"
             },
             {
-              "bytes": 11456,
+              "bytes": 11377,
               "executable": false,
               "path": "dist/upload-sniff.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "53d8bf7127625315b336c124bade8f48a9924b4a5f05c7e34ab1e4eb0d38db4d"
+              "sha256": "3da2775bf92ae1d8ee97fee508d923f1e54d852b9834190d417c373de824ecb6"
             },
             {
-              "bytes": 24623,
+              "bytes": 24719,
               "executable": false,
               "path": "dist/upload-sniff.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "4fee72a022b6d15e12ecaae841be090610afa8261ed3d98e998aba2e4db76b02"
+              "sha256": "173f72280ed0f9c099448d507116f0e7685551a5b3c8d7551f77ed0f6ee09b3f"
             },
             {
               "bytes": 3793,
@@ -11517,18 +11517,18 @@
               "sha256": "8709c5ea914f03dc471ec38868eae41606fa1a0ad1be55c8f48e42bf532718fd"
             },
             {
-              "bytes": 86799,
+              "bytes": 86848,
               "executable": false,
               "path": "dist/vite-dev.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b7829a5b6c1c9b1a3d5445e4144471724dc444c1ee7e5df6b290c2a0e984db32"
+              "sha256": "658ca7f77c6ae39829369e156271509a906b3311419a8ae8c9e38422a2ee9b31"
             },
             {
-              "bytes": 166379,
+              "bytes": 166409,
               "executable": false,
               "path": "dist/vite-dev.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "f8695718b42bf901c0c61b314abecf2eea6dcf2cb5bcd7b020e3aff9dd6d54bc"
+              "sha256": "7f9e88d5573910a4f70619c407ed6116a8c5b82ffdc0bf6276e92e0ef2695e1b"
             },
             {
               "bytes": 7302,
@@ -11773,7 +11773,7 @@
         }
       },
       {
-        "basePackedContentsSha256": "7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635",
+        "basePackedContentsSha256": "d157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8",
         "overlayFiles": [
           {
             "bytes": 12245,
@@ -11799,7 +11799,7 @@
         ],
         "physicalRoot": "<fixture>/store/server-b",
         "postWriteContents": {
-          "digest": "bf0364b3ebdbbec59c6e9682d39d27780cc4189bdac2e7821e517e6c8aac6e06",
+          "digest": "3ae862d43bb406c135a181c350a9d158f5c973909c36de81b9b1bbaa3b188c49",
           "files": [
             {
               "bytes": 1551,
@@ -12019,11 +12019,11 @@
               "sha256": "f0e3da47db4a4d357637a379d2f8dc42a1511c46a7193e9a76aa096a2010117f"
             },
             {
-              "bytes": 75962,
+              "bytes": 76027,
               "executable": false,
               "path": "dist/app-load-shed.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "236c3c36aa8dce919a9443a69deab807e653dbbf6381b98d82995b941eb8476e"
+              "sha256": "9d42cf53c6dda419f1c5f4606c32cd290ec30d98372ea1aee6ea227922cff314"
             },
             {
               "bytes": 694,
@@ -12800,21 +12800,21 @@
               "executable": false,
               "path": "dist/crypto-authority.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "7ba6a0e422c4b39da8851d986f0237de24542f68f461af00f627cde464d157c0"
+              "sha256": "d8f0bbea59fc6043d1d021e278f5cf76554af6cb33e9bf5959726af374033bad"
             },
             {
-              "bytes": 23912,
+              "bytes": 24386,
               "executable": false,
               "path": "dist/crypto-authority.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "df05ed26cff452beb307ac528717be35d8a8ba7e1aa216077c14b672332815f9"
+              "sha256": "d57dc77f3d0bc18c0cc38ddca837262910da768cd89f53a75abed941ae2e1db5"
             },
             {
-              "bytes": 45157,
+              "bytes": 45796,
               "executable": false,
               "path": "dist/crypto-authority.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b21e559e3dfed3c30355ef2c1f8b87e57f470084151e463483daac965da20b3c"
+              "sha256": "f7ab8f2909852769262a1b5fe542c38dd31c3f527fbe44899ba7966552be716b"
             },
             {
               "bytes": 9433,
@@ -14147,11 +14147,11 @@
               "sha256": "5aa6d2c09c743de42448201a41bb2d6c301a7793a1bf480773428d892de2676e"
             },
             {
-              "bytes": 45481,
+              "bytes": 45573,
               "executable": false,
               "path": "dist/internal/linear-regex/index.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "eeabee743423b8feb39c41c3d99e8ac9b42e3ac011d9b7164587ef4340c31ff3"
+              "sha256": "c0affd3d3305c2fa2689281a87f8534cc3fe9d7e52956a3ea9a98189b5307e9a"
             },
             {
               "bytes": 443,
@@ -14844,21 +14844,21 @@
               "executable": false,
               "path": "dist/mutation-wire.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "2ad3ded64cd7a99c7ecce1ef8acc8dcc1e2e448c23320646cade1c7f6c737dd9"
+              "sha256": "4c6e0fe1ea7b68d3032fd37608906f4d4740e94610bbc46b5c1adb74f5cc42dc"
             },
             {
-              "bytes": 15954,
+              "bytes": 15962,
               "executable": false,
               "path": "dist/mutation-wire.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "6c365eba2007e194ed9665636c6214959350358aa4c63f55436ab0714a698de0"
+              "sha256": "9f6809f908dc11668dadb1798c42aa753e7057b12412458d1b04d86e51dc59f7"
             },
             {
-              "bytes": 44623,
+              "bytes": 44617,
               "executable": false,
               "path": "dist/mutation-wire.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "4147ff9ddf6af48c42c0a85ead4582824ec5435a37e2b0fa13a5c59913fe47bc"
+              "sha256": "038c3020a6d174682b5f75e901e025e5870587e67d34d14e082681242afd1109"
             },
             {
               "bytes": 5723,
@@ -14914,7 +14914,7 @@
               "executable": false,
               "path": "dist/mutation/definition.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "deda61d9f2688eb0bf7f449bfc0fc330077a7c9370887b668a11c3144779d32a"
+              "sha256": "4babbaebabb21f31b8517078cb4744a5819d29fb30c452697d8697ebf710828c"
             },
             {
               "bytes": 12309,
@@ -14924,11 +14924,11 @@
               "sha256": "5f6381e31880e39f739688390f022d537d34b89eeec6669f49f803744da24be5"
             },
             {
-              "bytes": 51162,
+              "bytes": 51202,
               "executable": false,
               "path": "dist/mutation/definition.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "0d1ed3059b6994b1ac09c0a0458abd4e23eb98aa3ef133a1f5294287df317481"
+              "sha256": "a364dd90bed39c4d2b73fef7732d537166660bda0d4839aa05e9f3df113a60bb"
             },
             {
               "bytes": 4012,
@@ -15323,11 +15323,11 @@
               "sha256": "984b009f27b52215be76966d15a70beed61eff66b95c73efb01006b52cbd6b82"
             },
             {
-              "bytes": 538861,
+              "bytes": 538934,
               "executable": false,
               "path": "dist/postgres-runtime.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "936a7025a274286e4f57c172b9b8d83b866f54520202d4c162a25aef762c4595"
+              "sha256": "f9a4aa43acf8810a6ebaad06110f5ac54047172fe9ec3b22fd8bd0285a1f23f1"
             },
             {
               "bytes": 3743,
@@ -16065,11 +16065,11 @@
               "sha256": "799ebcd803b53e8c65909ece1c72a3394ac166f96d188ce763a748be1b4818d6"
             },
             {
-              "bytes": 68811,
+              "bytes": 68898,
               "executable": false,
               "path": "dist/replay.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b4e6f0198093eb8d82155d53d51a59c3bb62a92bfc4be27f95d07fc02b790459"
+              "sha256": "c1d5913eed88dc8c53ae62bd8639e3d3f7855a69cd0584998118096a6bbf7666"
             },
             {
               "bytes": 10987,
@@ -16440,7 +16440,7 @@
               "executable": false,
               "path": "dist/route.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "38e0e2503e34284c08b71f92023bef1da3046de9e8e825c3dca1f8aa12849497"
+              "sha256": "0c0314e20f7c6b0728ac80cbd367802352f96195d5fe6bf04209c2d83a2e3093"
             },
             {
               "bytes": 42952,
@@ -16450,11 +16450,11 @@
               "sha256": "a067c2f3465fafde3f2e9474f561d733522e8d45f0d37c4d85e3c8171c63edd6"
             },
             {
-              "bytes": 98278,
+              "bytes": 98394,
               "executable": false,
               "path": "dist/route.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "2afe4ac4ade3b7d9fb5929d02e4b5b121338b4c2953fd38ae07f71b035162013"
+              "sha256": "18ddfd6773660c0e87ac3c4b6a9b0e4e775679022d1f10c88f1a7ce848fa54b1"
             },
             {
               "bytes": 1651,
@@ -17437,11 +17437,11 @@
               "sha256": "653b2bf02c33bb63bdb569340ed40c2e52731aa17412480a3425c5d6644823d0"
             },
             {
-              "bytes": 20052,
+              "bytes": 20124,
               "executable": false,
               "path": "dist/task-cron.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "f9f648c6eadcb1947c9ffe9821b104bcbc3fe20c622298e6b0f695c9250ecf46"
+              "sha256": "f250cec5c358bc816b0d583215640485e1e531a849c7cda529617c36e4540ae3"
             },
             {
               "bytes": 4035,
@@ -17507,11 +17507,11 @@
               "sha256": "823b9214a5cc6c6a4761efc22ece9eeb8c2b1f212492bc3282b9ac0e8f23b3d2"
             },
             {
-              "bytes": 60806,
+              "bytes": 61194,
               "executable": false,
               "path": "dist/task-runner.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b05ac189198af19697366b50589060bef61fb540c8ac1d488bfe938f2dee31e1"
+              "sha256": "a3c7037eff1bc613f524090713ed7ea1eb8a475bd32cb40d1d41655b60da5970"
             },
             {
               "bytes": 6448,
@@ -17521,11 +17521,11 @@
               "sha256": "0894645b16b38bfd79d269bfdfa60e4b94622f1b4ddfd578524bd9346cbc5a99"
             },
             {
-              "bytes": 12162,
+              "bytes": 12198,
               "executable": false,
               "path": "dist/task-runtime.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "51b44ebb60b99ea5b5a35ec06325b3102ee34c47d8ff3d3fe0d0d8d4e94f7df8"
+              "sha256": "7e7d50d4790f204046529e6ce6d156b0b191598407535157b278a62b8f320103"
             },
             {
               "bytes": 31315,
@@ -17619,25 +17619,25 @@
               "sha256": "1eb59a14fa27d65b3c0eeacf4493499cb491b01c2f406f0038787a4bb68271db"
             },
             {
-              "bytes": 527,
+              "bytes": 530,
               "executable": false,
               "path": "dist/upload-sniff.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "d93a6d9d62a3a830e9951262b791e77817513298f22c0092d7d5f9c77c391975"
+              "sha256": "2fc41b98ee8c20737e2747b6453da6fc2e0fb780155bdcbb86b883afa07d5a30"
             },
             {
-              "bytes": 11456,
+              "bytes": 11377,
               "executable": false,
               "path": "dist/upload-sniff.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "53d8bf7127625315b336c124bade8f48a9924b4a5f05c7e34ab1e4eb0d38db4d"
+              "sha256": "3da2775bf92ae1d8ee97fee508d923f1e54d852b9834190d417c373de824ecb6"
             },
             {
-              "bytes": 24623,
+              "bytes": 24719,
               "executable": false,
               "path": "dist/upload-sniff.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "4fee72a022b6d15e12ecaae841be090610afa8261ed3d98e998aba2e4db76b02"
+              "sha256": "173f72280ed0f9c099448d507116f0e7685551a5b3c8d7551f77ed0f6ee09b3f"
             },
             {
               "bytes": 3793,
@@ -17780,18 +17780,18 @@
               "sha256": "8709c5ea914f03dc471ec38868eae41606fa1a0ad1be55c8f48e42bf532718fd"
             },
             {
-              "bytes": 86799,
+              "bytes": 86848,
               "executable": false,
               "path": "dist/vite-dev.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b7829a5b6c1c9b1a3d5445e4144471724dc444c1ee7e5df6b290c2a0e984db32"
+              "sha256": "658ca7f77c6ae39829369e156271509a906b3311419a8ae8c9e38422a2ee9b31"
             },
             {
-              "bytes": 166379,
+              "bytes": 166409,
               "executable": false,
               "path": "dist/vite-dev.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "f8695718b42bf901c0c61b314abecf2eea6dcf2cb5bcd7b020e3aff9dd6d54bc"
+              "sha256": "7f9e88d5573910a4f70619c407ed6116a8c5b82ffdc0bf6276e92e0ef2695e1b"
             },
             {
               "bytes": 7302,
@@ -18050,27 +18050,27 @@
             "schema": "kovo.app-contract-d1-file-subject/v1",
             "sha256": "ef1ddc51c0246b6e4b510c25fc0f1c4ed5fc2335e144aa1de177fa232e39f761"
           },
-          "generatedModuleSource": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { app as app } from '../src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: '76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: '7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
+          "generatedModuleSource": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { app as app } from '../src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: 'c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: 'd157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
           "generatedModuleSubject": {
             "bytes": 991,
             "executable": false,
             "path": "app/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "e512bcc055dc464b4aff29d36d67202bce3f8639c8d2202564bff68e7aca522c"
+            "sha256": "febb6912d7aa0a272e7c670e752d5cf733f867d186b0a6d788e2eaedfd99421c"
           },
           "manifest": {
             "appId": "00000000-0000-4000-8000-000000000006",
-            "compilerSourceSha256": "76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89",
+            "compilerSourceSha256": "c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b",
             "completed": "complete",
             "configSha256": "ef1ddc51c0246b6e4b510c25fc0f1c4ed5fc2335e144aa1de177fa232e39f761",
-            "generatedModuleSha256": "e512bcc055dc464b4aff29d36d67202bce3f8639c8d2202564bff68e7aca522c",
+            "generatedModuleSha256": "febb6912d7aa0a272e7c670e752d5cf733f867d186b0a6d788e2eaedfd99421c",
             "ownerKey": "d1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1",
             "providerExportBinding": "contactsProvider",
             "providerImportSpecifier": "./provider.js",
             "providerKey": "contacts-provider-v6",
             "providerSourceSha256": "7fe04d65fad502f337b2fe85a40968d425aaaa712721233aae827c23001b8e8d",
             "schema": "kovo.generated-app-contract/v6",
-            "serverPackedContentsSha256": "7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635"
+            "serverPackedContentsSha256": "d157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8"
           },
           "providerSource": "export const contactsProvider = { key: 'contacts-provider-v6' } as const;\n",
           "providerSubject": {
@@ -18090,27 +18090,27 @@
             "schema": "kovo.app-contract-d1-file-subject/v1",
             "sha256": "ef1ddc51c0246b6e4b510c25fc0f1c4ed5fc2335e144aa1de177fa232e39f761"
           },
-          "generatedModuleSource": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { app as app } from '../../../app/src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: '76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: '7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
+          "generatedModuleSource": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { app as app } from '../../../app/src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: 'c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: 'd157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
           "generatedModuleSubject": {
             "bytes": 1001,
             "executable": false,
             "path": "packages/shared/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "8f7cfc450ff16948b75c9929cd6a18cf830ca7e083db2bb9c4c51b713da8a94d"
+            "sha256": "23b2c28e6466954886b1cc6fc57b2e524021d35a8716486cdd65a78228afa3f4"
           },
           "manifest": {
             "appId": "00000000-0000-4000-8000-000000000006",
-            "compilerSourceSha256": "76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89",
+            "compilerSourceSha256": "c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b",
             "completed": "complete",
             "configSha256": "ef1ddc51c0246b6e4b510c25fc0f1c4ed5fc2335e144aa1de177fa232e39f761",
-            "generatedModuleSha256": "8f7cfc450ff16948b75c9929cd6a18cf830ca7e083db2bb9c4c51b713da8a94d",
+            "generatedModuleSha256": "23b2c28e6466954886b1cc6fc57b2e524021d35a8716486cdd65a78228afa3f4",
             "ownerKey": "d1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1",
             "providerExportBinding": "contactsProvider",
             "providerImportSpecifier": "./provider.js",
             "providerKey": "contacts-provider-v6",
             "providerSourceSha256": "7fe04d65fad502f337b2fe85a40968d425aaaa712721233aae827c23001b8e8d",
             "schema": "kovo.generated-app-contract/v6",
-            "serverPackedContentsSha256": "7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635"
+            "serverPackedContentsSha256": "d157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8"
           },
           "providerSource": "export const contactsProvider = { key: 'contacts-provider-v6' } as const;\n",
           "providerSubject": {
@@ -18130,27 +18130,27 @@
             "schema": "kovo.app-contract-d1-file-subject/v1",
             "sha256": "ef1ddc51c0246b6e4b510c25fc0f1c4ed5fc2335e144aa1de177fa232e39f761"
           },
-          "generatedModuleSource": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { sameOwnerApp as app } from '../src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: '76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: '7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
+          "generatedModuleSource": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { sameOwnerApp as app } from '../src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: 'c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: 'd157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
           "generatedModuleSubject": {
             "bytes": 1000,
             "executable": false,
             "path": "packages/secondary/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "b6d3bc500ccc5b2e790ab09476dea937af5dc36fbb15a5740bdf1cb98bd2cd78"
+            "sha256": "5898b04ce90b8b1ac9122d600f5e8999aedb70c84d493b16e892da06164938f8"
           },
           "manifest": {
             "appId": "00000000-0000-4000-8000-000000000006",
-            "compilerSourceSha256": "76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89",
+            "compilerSourceSha256": "c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b",
             "completed": "complete",
             "configSha256": "ef1ddc51c0246b6e4b510c25fc0f1c4ed5fc2335e144aa1de177fa232e39f761",
-            "generatedModuleSha256": "b6d3bc500ccc5b2e790ab09476dea937af5dc36fbb15a5740bdf1cb98bd2cd78",
+            "generatedModuleSha256": "5898b04ce90b8b1ac9122d600f5e8999aedb70c84d493b16e892da06164938f8",
             "ownerKey": "d1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1",
             "providerExportBinding": "contactsProvider",
             "providerImportSpecifier": "./provider.js",
             "providerKey": "contacts-provider-v6",
             "providerSourceSha256": "4b98fa09133bfb2b26b66b08c79c267b6c8523428e189ecccda083f208acf345",
             "schema": "kovo.generated-app-contract/v6",
-            "serverPackedContentsSha256": "7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635"
+            "serverPackedContentsSha256": "d157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8"
           },
           "providerSource": "export const billingProvider = { key: 'billing-provider-v6' } as const;\nexport const contactsProvider = { key: 'contacts-provider-v6' } as const;\n",
           "providerSubject": {
@@ -19098,7 +19098,7 @@
         {
           "blockIndex": 0,
           "iteration": 0,
-          "milliseconds": 131.5,
+          "milliseconds": 130.12,
           "orderIndex": 0,
           "sampleId": "cold-completion:0:baseline>arm-a>arm-b:baseline",
           "variant": "baseline",
@@ -19108,7 +19108,7 @@
         {
           "blockIndex": 0,
           "iteration": 1,
-          "milliseconds": 100.69,
+          "milliseconds": 98.62,
           "orderIndex": 0,
           "sampleId": "cold-completion:1:baseline>arm-b>arm-a:baseline",
           "variant": "baseline",
@@ -19118,7 +19118,7 @@
         {
           "blockIndex": 0,
           "iteration": 2,
-          "milliseconds": 92.74,
+          "milliseconds": 100.2,
           "orderIndex": 1,
           "sampleId": "cold-completion:2:arm-a>baseline>arm-b:baseline",
           "variant": "baseline",
@@ -19128,7 +19128,7 @@
         {
           "blockIndex": 0,
           "iteration": 3,
-          "milliseconds": 88.41,
+          "milliseconds": 111.23,
           "orderIndex": 2,
           "sampleId": "cold-completion:3:arm-a>arm-b>baseline:baseline",
           "variant": "baseline",
@@ -19138,7 +19138,7 @@
         {
           "blockIndex": 0,
           "iteration": 4,
-          "milliseconds": 94.1,
+          "milliseconds": 89.59,
           "orderIndex": 1,
           "sampleId": "cold-completion:4:arm-b>baseline>arm-a:baseline",
           "variant": "baseline",
@@ -19148,7 +19148,7 @@
         {
           "blockIndex": 0,
           "iteration": 5,
-          "milliseconds": 94.19,
+          "milliseconds": 92.53,
           "orderIndex": 2,
           "sampleId": "cold-completion:5:arm-b>arm-a>baseline:baseline",
           "variant": "baseline",
@@ -19158,7 +19158,7 @@
         {
           "blockIndex": 1,
           "iteration": 6,
-          "milliseconds": 114.31,
+          "milliseconds": 87.65,
           "orderIndex": 0,
           "sampleId": "cold-completion:6:baseline>arm-a>arm-b:baseline",
           "variant": "baseline",
@@ -19168,7 +19168,7 @@
         {
           "blockIndex": 1,
           "iteration": 7,
-          "milliseconds": 94.46,
+          "milliseconds": 88.71,
           "orderIndex": 0,
           "sampleId": "cold-completion:7:baseline>arm-b>arm-a:baseline",
           "variant": "baseline",
@@ -19178,7 +19178,7 @@
         {
           "blockIndex": 1,
           "iteration": 8,
-          "milliseconds": 89.41,
+          "milliseconds": 88.8,
           "orderIndex": 1,
           "sampleId": "cold-completion:8:arm-a>baseline>arm-b:baseline",
           "variant": "baseline",
@@ -19188,7 +19188,7 @@
         {
           "blockIndex": 1,
           "iteration": 9,
-          "milliseconds": 88.77,
+          "milliseconds": 85.28,
           "orderIndex": 2,
           "sampleId": "cold-completion:9:arm-a>arm-b>baseline:baseline",
           "variant": "baseline",
@@ -19198,7 +19198,7 @@
         {
           "blockIndex": 1,
           "iteration": 10,
-          "milliseconds": 89.98,
+          "milliseconds": 87.58,
           "orderIndex": 1,
           "sampleId": "cold-completion:10:arm-b>baseline>arm-a:baseline",
           "variant": "baseline",
@@ -19208,7 +19208,7 @@
         {
           "blockIndex": 1,
           "iteration": 11,
-          "milliseconds": 88.26,
+          "milliseconds": 86.27,
           "orderIndex": 2,
           "sampleId": "cold-completion:11:arm-b>arm-a>baseline:baseline",
           "variant": "baseline",
@@ -19216,12 +19216,12 @@
           "candidateDigest": "7a3824b477b68558af819b2d70b9af1fb4940c43e814dd1fcbc55420d71b9958"
         }
       ],
-      "coldCompletionP50Ms": 92.74,
+      "coldCompletionP50Ms": 88.8,
       "coldTscSamples": [
         {
           "blockIndex": 0,
           "iteration": 0,
-          "milliseconds": 257.99,
+          "milliseconds": 289.75,
           "orderIndex": 0,
           "sampleId": "cold-tsc:0:baseline>arm-a>arm-b:baseline",
           "variant": "baseline"
@@ -19229,7 +19229,7 @@
         {
           "blockIndex": 0,
           "iteration": 1,
-          "milliseconds": 274.28,
+          "milliseconds": 252.99,
           "orderIndex": 0,
           "sampleId": "cold-tsc:1:baseline>arm-b>arm-a:baseline",
           "variant": "baseline"
@@ -19237,7 +19237,7 @@
         {
           "blockIndex": 0,
           "iteration": 2,
-          "milliseconds": 254.94,
+          "milliseconds": 254.85,
           "orderIndex": 1,
           "sampleId": "cold-tsc:2:arm-a>baseline>arm-b:baseline",
           "variant": "baseline"
@@ -19245,7 +19245,7 @@
         {
           "blockIndex": 0,
           "iteration": 3,
-          "milliseconds": 279.39,
+          "milliseconds": 255.24,
           "orderIndex": 2,
           "sampleId": "cold-tsc:3:arm-a>arm-b>baseline:baseline",
           "variant": "baseline"
@@ -19253,7 +19253,7 @@
         {
           "blockIndex": 0,
           "iteration": 4,
-          "milliseconds": 253.47,
+          "milliseconds": 253.86,
           "orderIndex": 1,
           "sampleId": "cold-tsc:4:arm-b>baseline>arm-a:baseline",
           "variant": "baseline"
@@ -19261,7 +19261,7 @@
         {
           "blockIndex": 0,
           "iteration": 5,
-          "milliseconds": 255.7,
+          "milliseconds": 268.77,
           "orderIndex": 2,
           "sampleId": "cold-tsc:5:arm-b>arm-a>baseline:baseline",
           "variant": "baseline"
@@ -19269,7 +19269,7 @@
         {
           "blockIndex": 1,
           "iteration": 6,
-          "milliseconds": 258.68,
+          "milliseconds": 247.67,
           "orderIndex": 0,
           "sampleId": "cold-tsc:6:baseline>arm-a>arm-b:baseline",
           "variant": "baseline"
@@ -19277,7 +19277,7 @@
         {
           "blockIndex": 1,
           "iteration": 7,
-          "milliseconds": 256.49,
+          "milliseconds": 257,
           "orderIndex": 0,
           "sampleId": "cold-tsc:7:baseline>arm-b>arm-a:baseline",
           "variant": "baseline"
@@ -19285,7 +19285,7 @@
         {
           "blockIndex": 1,
           "iteration": 8,
-          "milliseconds": 261.43,
+          "milliseconds": 252.28,
           "orderIndex": 1,
           "sampleId": "cold-tsc:8:arm-a>baseline>arm-b:baseline",
           "variant": "baseline"
@@ -19293,7 +19293,7 @@
         {
           "blockIndex": 1,
           "iteration": 9,
-          "milliseconds": 257.53,
+          "milliseconds": 253.14,
           "orderIndex": 2,
           "sampleId": "cold-tsc:9:arm-a>arm-b>baseline:baseline",
           "variant": "baseline"
@@ -19301,7 +19301,7 @@
         {
           "blockIndex": 1,
           "iteration": 10,
-          "milliseconds": 255.54,
+          "milliseconds": 253.28,
           "orderIndex": 1,
           "sampleId": "cold-tsc:10:arm-b>baseline>arm-a:baseline",
           "variant": "baseline"
@@ -19309,13 +19309,13 @@
         {
           "blockIndex": 1,
           "iteration": 11,
-          "milliseconds": 257.62,
+          "milliseconds": 252.6,
           "orderIndex": 2,
           "sampleId": "cold-tsc:11:arm-b>arm-a>baseline:baseline",
           "variant": "baseline"
         }
       ],
-      "coldTscP50Ms": 257.53,
+      "coldTscP50Ms": 253.28,
       "completionCandidateCount": 10,
       "completionCandidateDigest": "7a3824b477b68558af819b2d70b9af1fb4940c43e814dd1fcbc55420d71b9958",
       "completionCandidateNames": [
@@ -19336,7 +19336,7 @@
         {
           "blockIndex": 0,
           "iteration": 0,
-          "milliseconds": 0.16,
+          "milliseconds": 0.17,
           "orderIndex": 0,
           "sampleId": "warm-completion:0:baseline>arm-a>arm-b:baseline",
           "variant": "baseline",
@@ -19346,7 +19346,7 @@
         {
           "blockIndex": 0,
           "iteration": 1,
-          "milliseconds": 0.13,
+          "milliseconds": 0.14,
           "orderIndex": 0,
           "sampleId": "warm-completion:1:baseline>arm-b>arm-a:baseline",
           "variant": "baseline",
@@ -19356,7 +19356,7 @@
         {
           "blockIndex": 0,
           "iteration": 2,
-          "milliseconds": 0.13,
+          "milliseconds": 0.12,
           "orderIndex": 1,
           "sampleId": "warm-completion:2:arm-a>baseline>arm-b:baseline",
           "variant": "baseline",
@@ -19386,7 +19386,7 @@
         {
           "blockIndex": 0,
           "iteration": 5,
-          "milliseconds": 0.11,
+          "milliseconds": 0.1,
           "orderIndex": 2,
           "sampleId": "warm-completion:5:arm-b>arm-a>baseline:baseline",
           "variant": "baseline",
@@ -19396,7 +19396,7 @@
         {
           "blockIndex": 1,
           "iteration": 6,
-          "milliseconds": 0.09,
+          "milliseconds": 0.1,
           "orderIndex": 0,
           "sampleId": "warm-completion:6:baseline>arm-a>arm-b:baseline",
           "variant": "baseline",
@@ -19426,7 +19426,7 @@
         {
           "blockIndex": 1,
           "iteration": 9,
-          "milliseconds": 0.09,
+          "milliseconds": 0.1,
           "orderIndex": 2,
           "sampleId": "warm-completion:9:arm-a>arm-b>baseline:baseline",
           "variant": "baseline",
@@ -19516,7 +19516,7 @@
         {
           "blockIndex": 3,
           "iteration": 18,
-          "milliseconds": 0.08,
+          "milliseconds": 0.09,
           "orderIndex": 0,
           "sampleId": "warm-completion:18:baseline>arm-a>arm-b:baseline",
           "variant": "baseline",
@@ -19756,7 +19756,7 @@
         {
           "blockIndex": 7,
           "iteration": 42,
-          "milliseconds": 0.08,
+          "milliseconds": 0.07,
           "orderIndex": 0,
           "sampleId": "warm-completion:42:baseline>arm-a>arm-b:baseline",
           "variant": "baseline",
@@ -19939,7 +19939,7 @@
         {
           "blockIndex": 0,
           "iteration": 0,
-          "milliseconds": 187.55,
+          "milliseconds": 189.26,
           "orderIndex": 0,
           "sampleId": "warm-tsc:0:baseline>arm-a>arm-b:baseline",
           "variant": "baseline"
@@ -19947,7 +19947,7 @@
         {
           "blockIndex": 0,
           "iteration": 1,
-          "milliseconds": 204.76,
+          "milliseconds": 187.58,
           "orderIndex": 0,
           "sampleId": "warm-tsc:1:baseline>arm-b>arm-a:baseline",
           "variant": "baseline"
@@ -19955,7 +19955,7 @@
         {
           "blockIndex": 0,
           "iteration": 2,
-          "milliseconds": 189.93,
+          "milliseconds": 186.17,
           "orderIndex": 1,
           "sampleId": "warm-tsc:2:arm-a>baseline>arm-b:baseline",
           "variant": "baseline"
@@ -19963,7 +19963,7 @@
         {
           "blockIndex": 0,
           "iteration": 3,
-          "milliseconds": 211.98,
+          "milliseconds": 187.23,
           "orderIndex": 2,
           "sampleId": "warm-tsc:3:arm-a>arm-b>baseline:baseline",
           "variant": "baseline"
@@ -19971,7 +19971,7 @@
         {
           "blockIndex": 0,
           "iteration": 4,
-          "milliseconds": 192.12,
+          "milliseconds": 187.06,
           "orderIndex": 1,
           "sampleId": "warm-tsc:4:arm-b>baseline>arm-a:baseline",
           "variant": "baseline"
@@ -19979,7 +19979,7 @@
         {
           "blockIndex": 0,
           "iteration": 5,
-          "milliseconds": 188.06,
+          "milliseconds": 186.11,
           "orderIndex": 2,
           "sampleId": "warm-tsc:5:arm-b>arm-a>baseline:baseline",
           "variant": "baseline"
@@ -19987,7 +19987,7 @@
         {
           "blockIndex": 1,
           "iteration": 6,
-          "milliseconds": 189.67,
+          "milliseconds": 190.34,
           "orderIndex": 0,
           "sampleId": "warm-tsc:6:baseline>arm-a>arm-b:baseline",
           "variant": "baseline"
@@ -19995,7 +19995,7 @@
         {
           "blockIndex": 1,
           "iteration": 7,
-          "milliseconds": 191.48,
+          "milliseconds": 185.32,
           "orderIndex": 0,
           "sampleId": "warm-tsc:7:baseline>arm-b>arm-a:baseline",
           "variant": "baseline"
@@ -20003,7 +20003,7 @@
         {
           "blockIndex": 1,
           "iteration": 8,
-          "milliseconds": 193.25,
+          "milliseconds": 182.29,
           "orderIndex": 1,
           "sampleId": "warm-tsc:8:arm-a>baseline>arm-b:baseline",
           "variant": "baseline"
@@ -20011,7 +20011,7 @@
         {
           "blockIndex": 1,
           "iteration": 9,
-          "milliseconds": 198.09,
+          "milliseconds": 193.96,
           "orderIndex": 2,
           "sampleId": "warm-tsc:9:arm-a>arm-b>baseline:baseline",
           "variant": "baseline"
@@ -20019,7 +20019,7 @@
         {
           "blockIndex": 1,
           "iteration": 10,
-          "milliseconds": 187.83,
+          "milliseconds": 190.86,
           "orderIndex": 1,
           "sampleId": "warm-tsc:10:arm-b>baseline>arm-a:baseline",
           "variant": "baseline"
@@ -20027,20 +20027,20 @@
         {
           "blockIndex": 1,
           "iteration": 11,
-          "milliseconds": 188.41,
+          "milliseconds": 182.35,
           "orderIndex": 2,
           "sampleId": "warm-tsc:11:arm-b>arm-a>baseline:baseline",
           "variant": "baseline"
         }
       ],
-      "warmTscP50Ms": 189.93
+      "warmTscP50Ms": 187.06
     },
     "arm-a": {
       "coldCompletionSamples": [
         {
           "blockIndex": 0,
           "iteration": 0,
-          "milliseconds": 104.49,
+          "milliseconds": 103.93,
           "orderIndex": 1,
           "sampleId": "cold-completion:0:baseline>arm-a>arm-b:arm-a",
           "variant": "arm-a",
@@ -20050,7 +20050,7 @@
         {
           "blockIndex": 0,
           "iteration": 1,
-          "milliseconds": 101.58,
+          "milliseconds": 92.57,
           "orderIndex": 2,
           "sampleId": "cold-completion:1:baseline>arm-b>arm-a:arm-a",
           "variant": "arm-a",
@@ -20060,7 +20060,7 @@
         {
           "blockIndex": 0,
           "iteration": 2,
-          "milliseconds": 112.51,
+          "milliseconds": 102.51,
           "orderIndex": 0,
           "sampleId": "cold-completion:2:arm-a>baseline>arm-b:arm-a",
           "variant": "arm-a",
@@ -20070,7 +20070,7 @@
         {
           "blockIndex": 0,
           "iteration": 3,
-          "milliseconds": 97.07,
+          "milliseconds": 98.96,
           "orderIndex": 0,
           "sampleId": "cold-completion:3:arm-a>arm-b>baseline:arm-a",
           "variant": "arm-a",
@@ -20080,7 +20080,7 @@
         {
           "blockIndex": 0,
           "iteration": 4,
-          "milliseconds": 93.81,
+          "milliseconds": 93.97,
           "orderIndex": 2,
           "sampleId": "cold-completion:4:arm-b>baseline>arm-a:arm-a",
           "variant": "arm-a",
@@ -20090,7 +20090,7 @@
         {
           "blockIndex": 0,
           "iteration": 5,
-          "milliseconds": 101.62,
+          "milliseconds": 88.24,
           "orderIndex": 1,
           "sampleId": "cold-completion:5:arm-b>arm-a>baseline:arm-a",
           "variant": "arm-a",
@@ -20100,7 +20100,7 @@
         {
           "blockIndex": 1,
           "iteration": 6,
-          "milliseconds": 98.28,
+          "milliseconds": 87.72,
           "orderIndex": 1,
           "sampleId": "cold-completion:6:baseline>arm-a>arm-b:arm-a",
           "variant": "arm-a",
@@ -20110,7 +20110,7 @@
         {
           "blockIndex": 1,
           "iteration": 7,
-          "milliseconds": 90.04,
+          "milliseconds": 99.2,
           "orderIndex": 2,
           "sampleId": "cold-completion:7:baseline>arm-b>arm-a:arm-a",
           "variant": "arm-a",
@@ -20120,7 +20120,7 @@
         {
           "blockIndex": 1,
           "iteration": 8,
-          "milliseconds": 94.85,
+          "milliseconds": 115.27,
           "orderIndex": 0,
           "sampleId": "cold-completion:8:arm-a>baseline>arm-b:arm-a",
           "variant": "arm-a",
@@ -20130,7 +20130,7 @@
         {
           "blockIndex": 1,
           "iteration": 9,
-          "milliseconds": 95.77,
+          "milliseconds": 95.18,
           "orderIndex": 0,
           "sampleId": "cold-completion:9:arm-a>arm-b>baseline:arm-a",
           "variant": "arm-a",
@@ -20140,7 +20140,7 @@
         {
           "blockIndex": 1,
           "iteration": 10,
-          "milliseconds": 93.1,
+          "milliseconds": 88.02,
           "orderIndex": 2,
           "sampleId": "cold-completion:10:arm-b>baseline>arm-a:arm-a",
           "variant": "arm-a",
@@ -20150,7 +20150,7 @@
         {
           "blockIndex": 1,
           "iteration": 11,
-          "milliseconds": 90.69,
+          "milliseconds": 88.81,
           "orderIndex": 1,
           "sampleId": "cold-completion:11:arm-b>arm-a>baseline:arm-a",
           "variant": "arm-a",
@@ -20158,12 +20158,12 @@
           "candidateDigest": "7a3824b477b68558af819b2d70b9af1fb4940c43e814dd1fcbc55420d71b9958"
         }
       ],
-      "coldCompletionP50Ms": 95.77,
+      "coldCompletionP50Ms": 93.97,
       "coldTscSamples": [
         {
           "blockIndex": 0,
           "iteration": 0,
-          "milliseconds": 260.67,
+          "milliseconds": 252.61,
           "orderIndex": 1,
           "sampleId": "cold-tsc:0:baseline>arm-a>arm-b:arm-a",
           "variant": "arm-a"
@@ -20171,7 +20171,7 @@
         {
           "blockIndex": 0,
           "iteration": 1,
-          "milliseconds": 260.62,
+          "milliseconds": 256.61,
           "orderIndex": 2,
           "sampleId": "cold-tsc:1:baseline>arm-b>arm-a:arm-a",
           "variant": "arm-a"
@@ -20179,7 +20179,7 @@
         {
           "blockIndex": 0,
           "iteration": 2,
-          "milliseconds": 257.86,
+          "milliseconds": 254.66,
           "orderIndex": 0,
           "sampleId": "cold-tsc:2:arm-a>baseline>arm-b:arm-a",
           "variant": "arm-a"
@@ -20187,7 +20187,7 @@
         {
           "blockIndex": 0,
           "iteration": 3,
-          "milliseconds": 266.74,
+          "milliseconds": 260.23,
           "orderIndex": 0,
           "sampleId": "cold-tsc:3:arm-a>arm-b>baseline:arm-a",
           "variant": "arm-a"
@@ -20195,7 +20195,7 @@
         {
           "blockIndex": 0,
           "iteration": 4,
-          "milliseconds": 262.62,
+          "milliseconds": 256.22,
           "orderIndex": 2,
           "sampleId": "cold-tsc:4:arm-b>baseline>arm-a:arm-a",
           "variant": "arm-a"
@@ -20203,7 +20203,7 @@
         {
           "blockIndex": 0,
           "iteration": 5,
-          "milliseconds": 262.11,
+          "milliseconds": 269.4,
           "orderIndex": 1,
           "sampleId": "cold-tsc:5:arm-b>arm-a>baseline:arm-a",
           "variant": "arm-a"
@@ -20211,7 +20211,7 @@
         {
           "blockIndex": 1,
           "iteration": 6,
-          "milliseconds": 262.98,
+          "milliseconds": 255.9,
           "orderIndex": 1,
           "sampleId": "cold-tsc:6:baseline>arm-a>arm-b:arm-a",
           "variant": "arm-a"
@@ -20219,7 +20219,7 @@
         {
           "blockIndex": 1,
           "iteration": 7,
-          "milliseconds": 259.7,
+          "milliseconds": 257.38,
           "orderIndex": 2,
           "sampleId": "cold-tsc:7:baseline>arm-b>arm-a:arm-a",
           "variant": "arm-a"
@@ -20227,7 +20227,7 @@
         {
           "blockIndex": 1,
           "iteration": 8,
-          "milliseconds": 261.38,
+          "milliseconds": 256.4,
           "orderIndex": 0,
           "sampleId": "cold-tsc:8:arm-a>baseline>arm-b:arm-a",
           "variant": "arm-a"
@@ -20235,7 +20235,7 @@
         {
           "blockIndex": 1,
           "iteration": 9,
-          "milliseconds": 264.15,
+          "milliseconds": 254.48,
           "orderIndex": 0,
           "sampleId": "cold-tsc:9:arm-a>arm-b>baseline:arm-a",
           "variant": "arm-a"
@@ -20243,7 +20243,7 @@
         {
           "blockIndex": 1,
           "iteration": 10,
-          "milliseconds": 258.03,
+          "milliseconds": 255.84,
           "orderIndex": 2,
           "sampleId": "cold-tsc:10:arm-b>baseline>arm-a:arm-a",
           "variant": "arm-a"
@@ -20251,13 +20251,13 @@
         {
           "blockIndex": 1,
           "iteration": 11,
-          "milliseconds": 261.12,
+          "milliseconds": 259.76,
           "orderIndex": 1,
           "sampleId": "cold-tsc:11:arm-b>arm-a>baseline:arm-a",
           "variant": "arm-a"
         }
       ],
-      "coldTscP50Ms": 261.12,
+      "coldTscP50Ms": 256.22,
       "completionCandidateCount": 10,
       "completionCandidateDigest": "7a3824b477b68558af819b2d70b9af1fb4940c43e814dd1fcbc55420d71b9958",
       "completionCandidateNames": [
@@ -20278,7 +20278,7 @@
         {
           "blockIndex": 0,
           "iteration": 0,
-          "milliseconds": 0.14,
+          "milliseconds": 0.15,
           "orderIndex": 1,
           "sampleId": "warm-completion:0:baseline>arm-a>arm-b:arm-a",
           "variant": "arm-a",
@@ -20288,7 +20288,7 @@
         {
           "blockIndex": 0,
           "iteration": 1,
-          "milliseconds": 0.12,
+          "milliseconds": 0.13,
           "orderIndex": 2,
           "sampleId": "warm-completion:1:baseline>arm-b>arm-a:arm-a",
           "variant": "arm-a",
@@ -20298,7 +20298,7 @@
         {
           "blockIndex": 0,
           "iteration": 2,
-          "milliseconds": 0.12,
+          "milliseconds": 0.13,
           "orderIndex": 0,
           "sampleId": "warm-completion:2:arm-a>baseline>arm-b:arm-a",
           "variant": "arm-a",
@@ -20308,7 +20308,7 @@
         {
           "blockIndex": 0,
           "iteration": 3,
-          "milliseconds": 0.13,
+          "milliseconds": 0.12,
           "orderIndex": 0,
           "sampleId": "warm-completion:3:arm-a>arm-b>baseline:arm-a",
           "variant": "arm-a",
@@ -20318,7 +20318,7 @@
         {
           "blockIndex": 0,
           "iteration": 4,
-          "milliseconds": 0.11,
+          "milliseconds": 0.12,
           "orderIndex": 2,
           "sampleId": "warm-completion:4:arm-b>baseline>arm-a:arm-a",
           "variant": "arm-a",
@@ -20348,7 +20348,7 @@
         {
           "blockIndex": 1,
           "iteration": 7,
-          "milliseconds": 0.09,
+          "milliseconds": 0.1,
           "orderIndex": 2,
           "sampleId": "warm-completion:7:baseline>arm-b>arm-a:arm-a",
           "variant": "arm-a",
@@ -20358,7 +20358,7 @@
         {
           "blockIndex": 1,
           "iteration": 8,
-          "milliseconds": 0.09,
+          "milliseconds": 0.1,
           "orderIndex": 0,
           "sampleId": "warm-completion:8:arm-a>baseline>arm-b:arm-a",
           "variant": "arm-a",
@@ -20378,7 +20378,7 @@
         {
           "blockIndex": 1,
           "iteration": 10,
-          "milliseconds": 0.09,
+          "milliseconds": 0.1,
           "orderIndex": 2,
           "sampleId": "warm-completion:10:arm-b>baseline>arm-a:arm-a",
           "variant": "arm-a",
@@ -20438,7 +20438,7 @@
         {
           "blockIndex": 2,
           "iteration": 16,
-          "milliseconds": 0.09,
+          "milliseconds": 0.08,
           "orderIndex": 2,
           "sampleId": "warm-completion:16:arm-b>baseline>arm-a:arm-a",
           "variant": "arm-a",
@@ -20458,7 +20458,7 @@
         {
           "blockIndex": 3,
           "iteration": 18,
-          "milliseconds": 0.08,
+          "milliseconds": 0.09,
           "orderIndex": 1,
           "sampleId": "warm-completion:18:baseline>arm-a>arm-b:arm-a",
           "variant": "arm-a",
@@ -20488,7 +20488,7 @@
         {
           "blockIndex": 3,
           "iteration": 21,
-          "milliseconds": 0.08,
+          "milliseconds": 0.09,
           "orderIndex": 0,
           "sampleId": "warm-completion:21:arm-a>arm-b>baseline:arm-a",
           "variant": "arm-a",
@@ -20868,7 +20868,7 @@
         {
           "blockIndex": 9,
           "iteration": 59,
-          "milliseconds": 0.08,
+          "milliseconds": 0.07,
           "orderIndex": 1,
           "sampleId": "warm-completion:59:arm-b>arm-a>baseline:arm-a",
           "variant": "arm-a",
@@ -20881,7 +20881,7 @@
         {
           "blockIndex": 0,
           "iteration": 0,
-          "milliseconds": 188.19,
+          "milliseconds": 190.45,
           "orderIndex": 1,
           "sampleId": "warm-tsc:0:baseline>arm-a>arm-b:arm-a",
           "variant": "arm-a"
@@ -20889,7 +20889,7 @@
         {
           "blockIndex": 0,
           "iteration": 1,
-          "milliseconds": 188.92,
+          "milliseconds": 188.85,
           "orderIndex": 2,
           "sampleId": "warm-tsc:1:baseline>arm-b>arm-a:arm-a",
           "variant": "arm-a"
@@ -20897,7 +20897,7 @@
         {
           "blockIndex": 0,
           "iteration": 2,
-          "milliseconds": 192.11,
+          "milliseconds": 185.74,
           "orderIndex": 0,
           "sampleId": "warm-tsc:2:arm-a>baseline>arm-b:arm-a",
           "variant": "arm-a"
@@ -20905,7 +20905,7 @@
         {
           "blockIndex": 0,
           "iteration": 3,
-          "milliseconds": 190.9,
+          "milliseconds": 185.26,
           "orderIndex": 0,
           "sampleId": "warm-tsc:3:arm-a>arm-b>baseline:arm-a",
           "variant": "arm-a"
@@ -20913,7 +20913,7 @@
         {
           "blockIndex": 0,
           "iteration": 4,
-          "milliseconds": 185.99,
+          "milliseconds": 198.51,
           "orderIndex": 2,
           "sampleId": "warm-tsc:4:arm-b>baseline>arm-a:arm-a",
           "variant": "arm-a"
@@ -20921,7 +20921,7 @@
         {
           "blockIndex": 0,
           "iteration": 5,
-          "milliseconds": 187.53,
+          "milliseconds": 203.17,
           "orderIndex": 1,
           "sampleId": "warm-tsc:5:arm-b>arm-a>baseline:arm-a",
           "variant": "arm-a"
@@ -20929,7 +20929,7 @@
         {
           "blockIndex": 1,
           "iteration": 6,
-          "milliseconds": 196.2,
+          "milliseconds": 187.22,
           "orderIndex": 1,
           "sampleId": "warm-tsc:6:baseline>arm-a>arm-b:arm-a",
           "variant": "arm-a"
@@ -20937,7 +20937,7 @@
         {
           "blockIndex": 1,
           "iteration": 7,
-          "milliseconds": 190.44,
+          "milliseconds": 184.96,
           "orderIndex": 2,
           "sampleId": "warm-tsc:7:baseline>arm-b>arm-a:arm-a",
           "variant": "arm-a"
@@ -20945,7 +20945,7 @@
         {
           "blockIndex": 1,
           "iteration": 8,
-          "milliseconds": 186.65,
+          "milliseconds": 185.29,
           "orderIndex": 0,
           "sampleId": "warm-tsc:8:arm-a>baseline>arm-b:arm-a",
           "variant": "arm-a"
@@ -20953,7 +20953,7 @@
         {
           "blockIndex": 1,
           "iteration": 9,
-          "milliseconds": 188.24,
+          "milliseconds": 186.93,
           "orderIndex": 0,
           "sampleId": "warm-tsc:9:arm-a>arm-b>baseline:arm-a",
           "variant": "arm-a"
@@ -20961,7 +20961,7 @@
         {
           "blockIndex": 1,
           "iteration": 10,
-          "milliseconds": 190.36,
+          "milliseconds": 190.66,
           "orderIndex": 2,
           "sampleId": "warm-tsc:10:arm-b>baseline>arm-a:arm-a",
           "variant": "arm-a"
@@ -20969,20 +20969,20 @@
         {
           "blockIndex": 1,
           "iteration": 11,
-          "milliseconds": 189.42,
+          "milliseconds": 188.44,
           "orderIndex": 1,
           "sampleId": "warm-tsc:11:arm-b>arm-a>baseline:arm-a",
           "variant": "arm-a"
         }
       ],
-      "warmTscP50Ms": 188.92
+      "warmTscP50Ms": 187.22
     },
     "arm-b": {
       "coldCompletionSamples": [
         {
           "blockIndex": 0,
           "iteration": 0,
-          "milliseconds": 102.61,
+          "milliseconds": 95.66,
           "orderIndex": 2,
           "sampleId": "cold-completion:0:baseline>arm-a>arm-b:arm-b",
           "variant": "arm-b",
@@ -20992,7 +20992,7 @@
         {
           "blockIndex": 0,
           "iteration": 1,
-          "milliseconds": 96.09,
+          "milliseconds": 93.52,
           "orderIndex": 1,
           "sampleId": "cold-completion:1:baseline>arm-b>arm-a:arm-b",
           "variant": "arm-b",
@@ -21002,7 +21002,7 @@
         {
           "blockIndex": 0,
           "iteration": 2,
-          "milliseconds": 94.6,
+          "milliseconds": 93.21,
           "orderIndex": 2,
           "sampleId": "cold-completion:2:arm-a>baseline>arm-b:arm-b",
           "variant": "arm-b",
@@ -21012,7 +21012,7 @@
         {
           "blockIndex": 0,
           "iteration": 3,
-          "milliseconds": 97.36,
+          "milliseconds": 102.26,
           "orderIndex": 1,
           "sampleId": "cold-completion:3:arm-a>arm-b>baseline:arm-b",
           "variant": "arm-b",
@@ -21022,7 +21022,7 @@
         {
           "blockIndex": 0,
           "iteration": 4,
-          "milliseconds": 100.36,
+          "milliseconds": 91.84,
           "orderIndex": 0,
           "sampleId": "cold-completion:4:arm-b>baseline>arm-a:arm-b",
           "variant": "arm-b",
@@ -21032,7 +21032,7 @@
         {
           "blockIndex": 0,
           "iteration": 5,
-          "milliseconds": 101.47,
+          "milliseconds": 89.37,
           "orderIndex": 0,
           "sampleId": "cold-completion:5:arm-b>arm-a>baseline:arm-b",
           "variant": "arm-b",
@@ -21042,7 +21042,7 @@
         {
           "blockIndex": 1,
           "iteration": 6,
-          "milliseconds": 93.05,
+          "milliseconds": 92.78,
           "orderIndex": 2,
           "sampleId": "cold-completion:6:baseline>arm-a>arm-b:arm-b",
           "variant": "arm-b",
@@ -21052,7 +21052,7 @@
         {
           "blockIndex": 1,
           "iteration": 7,
-          "milliseconds": 97.42,
+          "milliseconds": 91.06,
           "orderIndex": 1,
           "sampleId": "cold-completion:7:baseline>arm-b>arm-a:arm-b",
           "variant": "arm-b",
@@ -21062,7 +21062,7 @@
         {
           "blockIndex": 1,
           "iteration": 8,
-          "milliseconds": 89.72,
+          "milliseconds": 87.52,
           "orderIndex": 2,
           "sampleId": "cold-completion:8:arm-a>baseline>arm-b:arm-b",
           "variant": "arm-b",
@@ -21072,7 +21072,7 @@
         {
           "blockIndex": 1,
           "iteration": 9,
-          "milliseconds": 92.54,
+          "milliseconds": 92.2,
           "orderIndex": 1,
           "sampleId": "cold-completion:9:arm-a>arm-b>baseline:arm-b",
           "variant": "arm-b",
@@ -21082,7 +21082,7 @@
         {
           "blockIndex": 1,
           "iteration": 10,
-          "milliseconds": 115.74,
+          "milliseconds": 91.99,
           "orderIndex": 0,
           "sampleId": "cold-completion:10:arm-b>baseline>arm-a:arm-b",
           "variant": "arm-b",
@@ -21092,7 +21092,7 @@
         {
           "blockIndex": 1,
           "iteration": 11,
-          "milliseconds": 96.34,
+          "milliseconds": 93.16,
           "orderIndex": 0,
           "sampleId": "cold-completion:11:arm-b>arm-a>baseline:arm-b",
           "variant": "arm-b",
@@ -21100,12 +21100,12 @@
           "candidateDigest": "7a3824b477b68558af819b2d70b9af1fb4940c43e814dd1fcbc55420d71b9958"
         }
       ],
-      "coldCompletionP50Ms": 96.34,
+      "coldCompletionP50Ms": 92.2,
       "coldTscSamples": [
         {
           "blockIndex": 0,
           "iteration": 0,
-          "milliseconds": 266.05,
+          "milliseconds": 260.84,
           "orderIndex": 2,
           "sampleId": "cold-tsc:0:baseline>arm-a>arm-b:arm-b",
           "variant": "arm-b"
@@ -21113,7 +21113,7 @@
         {
           "blockIndex": 0,
           "iteration": 1,
-          "milliseconds": 298.43,
+          "milliseconds": 260.57,
           "orderIndex": 1,
           "sampleId": "cold-tsc:1:baseline>arm-b>arm-a:arm-b",
           "variant": "arm-b"
@@ -21121,7 +21121,7 @@
         {
           "blockIndex": 0,
           "iteration": 2,
-          "milliseconds": 263.69,
+          "milliseconds": 260.16,
           "orderIndex": 2,
           "sampleId": "cold-tsc:2:arm-a>baseline>arm-b:arm-b",
           "variant": "arm-b"
@@ -21129,7 +21129,7 @@
         {
           "blockIndex": 0,
           "iteration": 3,
-          "milliseconds": 264.71,
+          "milliseconds": 266.98,
           "orderIndex": 1,
           "sampleId": "cold-tsc:3:arm-a>arm-b>baseline:arm-b",
           "variant": "arm-b"
@@ -21137,7 +21137,7 @@
         {
           "blockIndex": 0,
           "iteration": 4,
-          "milliseconds": 283.81,
+          "milliseconds": 258.33,
           "orderIndex": 0,
           "sampleId": "cold-tsc:4:arm-b>baseline>arm-a:arm-b",
           "variant": "arm-b"
@@ -21145,7 +21145,7 @@
         {
           "blockIndex": 0,
           "iteration": 5,
-          "milliseconds": 264.53,
+          "milliseconds": 275.64,
           "orderIndex": 0,
           "sampleId": "cold-tsc:5:arm-b>arm-a>baseline:arm-b",
           "variant": "arm-b"
@@ -21153,7 +21153,7 @@
         {
           "blockIndex": 1,
           "iteration": 6,
-          "milliseconds": 262.91,
+          "milliseconds": 263.14,
           "orderIndex": 2,
           "sampleId": "cold-tsc:6:baseline>arm-a>arm-b:arm-b",
           "variant": "arm-b"
@@ -21161,7 +21161,7 @@
         {
           "blockIndex": 1,
           "iteration": 7,
-          "milliseconds": 262.38,
+          "milliseconds": 259.97,
           "orderIndex": 1,
           "sampleId": "cold-tsc:7:baseline>arm-b>arm-a:arm-b",
           "variant": "arm-b"
@@ -21169,7 +21169,7 @@
         {
           "blockIndex": 1,
           "iteration": 8,
-          "milliseconds": 264.42,
+          "milliseconds": 263.39,
           "orderIndex": 2,
           "sampleId": "cold-tsc:8:arm-a>baseline>arm-b:arm-b",
           "variant": "arm-b"
@@ -21177,7 +21177,7 @@
         {
           "blockIndex": 1,
           "iteration": 9,
-          "milliseconds": 261.48,
+          "milliseconds": 266.81,
           "orderIndex": 1,
           "sampleId": "cold-tsc:9:arm-a>arm-b>baseline:arm-b",
           "variant": "arm-b"
@@ -21185,7 +21185,7 @@
         {
           "blockIndex": 1,
           "iteration": 10,
-          "milliseconds": 264.52,
+          "milliseconds": 261.36,
           "orderIndex": 0,
           "sampleId": "cold-tsc:10:arm-b>baseline>arm-a:arm-b",
           "variant": "arm-b"
@@ -21193,13 +21193,13 @@
         {
           "blockIndex": 1,
           "iteration": 11,
-          "milliseconds": 267.36,
+          "milliseconds": 271.2,
           "orderIndex": 0,
           "sampleId": "cold-tsc:11:arm-b>arm-a>baseline:arm-b",
           "variant": "arm-b"
         }
       ],
-      "coldTscP50Ms": 264.52,
+      "coldTscP50Ms": 261.36,
       "completionCandidateCount": 10,
       "completionCandidateDigest": "7a3824b477b68558af819b2d70b9af1fb4940c43e814dd1fcbc55420d71b9958",
       "completionCandidateNames": [
@@ -21230,7 +21230,7 @@
         {
           "blockIndex": 0,
           "iteration": 1,
-          "milliseconds": 0.12,
+          "milliseconds": 0.13,
           "orderIndex": 1,
           "sampleId": "warm-completion:1:baseline>arm-b>arm-a:arm-b",
           "variant": "arm-b",
@@ -21240,7 +21240,7 @@
         {
           "blockIndex": 0,
           "iteration": 2,
-          "milliseconds": 0.13,
+          "milliseconds": 0.12,
           "orderIndex": 2,
           "sampleId": "warm-completion:2:arm-a>baseline>arm-b:arm-b",
           "variant": "arm-b",
@@ -21250,7 +21250,7 @@
         {
           "blockIndex": 0,
           "iteration": 3,
-          "milliseconds": 0.11,
+          "milliseconds": 0.12,
           "orderIndex": 1,
           "sampleId": "warm-completion:3:arm-a>arm-b>baseline:arm-b",
           "variant": "arm-b",
@@ -21280,7 +21280,7 @@
         {
           "blockIndex": 1,
           "iteration": 6,
-          "milliseconds": 0.09,
+          "milliseconds": 0.1,
           "orderIndex": 2,
           "sampleId": "warm-completion:6:baseline>arm-a>arm-b:arm-b",
           "variant": "arm-b",
@@ -21290,7 +21290,7 @@
         {
           "blockIndex": 1,
           "iteration": 7,
-          "milliseconds": 0.09,
+          "milliseconds": 0.1,
           "orderIndex": 1,
           "sampleId": "warm-completion:7:baseline>arm-b>arm-a:arm-b",
           "variant": "arm-b",
@@ -21320,7 +21320,7 @@
         {
           "blockIndex": 1,
           "iteration": 10,
-          "milliseconds": 0.09,
+          "milliseconds": 0.1,
           "orderIndex": 0,
           "sampleId": "warm-completion:10:arm-b>baseline>arm-a:arm-b",
           "variant": "arm-b",
@@ -21370,7 +21370,7 @@
         {
           "blockIndex": 2,
           "iteration": 15,
-          "milliseconds": 0.08,
+          "milliseconds": 0.09,
           "orderIndex": 1,
           "sampleId": "warm-completion:15:arm-a>arm-b>baseline:arm-b",
           "variant": "arm-b",
@@ -21470,7 +21470,7 @@
         {
           "blockIndex": 4,
           "iteration": 25,
-          "milliseconds": 0.08,
+          "milliseconds": 0.09,
           "orderIndex": 1,
           "sampleId": "warm-completion:25:baseline>arm-b>arm-a:arm-b",
           "variant": "arm-b",
@@ -21500,7 +21500,7 @@
         {
           "blockIndex": 4,
           "iteration": 28,
-          "milliseconds": 0.08,
+          "milliseconds": 0.09,
           "orderIndex": 0,
           "sampleId": "warm-completion:28:arm-b>baseline>arm-a:arm-b",
           "variant": "arm-b",
@@ -21818,12 +21818,12 @@
           "candidateDigest": "7a3824b477b68558af819b2d70b9af1fb4940c43e814dd1fcbc55420d71b9958"
         }
       ],
-      "warmCompletionP95Ms": 0.11,
+      "warmCompletionP95Ms": 0.12,
       "warmTscSamples": [
         {
           "blockIndex": 0,
           "iteration": 0,
-          "milliseconds": 196.51,
+          "milliseconds": 187.78,
           "orderIndex": 2,
           "sampleId": "warm-tsc:0:baseline>arm-a>arm-b:arm-b",
           "variant": "arm-b"
@@ -21831,7 +21831,7 @@
         {
           "blockIndex": 0,
           "iteration": 1,
-          "milliseconds": 214.92,
+          "milliseconds": 186.74,
           "orderIndex": 1,
           "sampleId": "warm-tsc:1:baseline>arm-b>arm-a:arm-b",
           "variant": "arm-b"
@@ -21839,7 +21839,7 @@
         {
           "blockIndex": 0,
           "iteration": 2,
-          "milliseconds": 199.14,
+          "milliseconds": 189.06,
           "orderIndex": 2,
           "sampleId": "warm-tsc:2:arm-a>baseline>arm-b:arm-b",
           "variant": "arm-b"
@@ -21847,7 +21847,7 @@
         {
           "blockIndex": 0,
           "iteration": 3,
-          "milliseconds": 220.14,
+          "milliseconds": 194.09,
           "orderIndex": 1,
           "sampleId": "warm-tsc:3:arm-a>arm-b>baseline:arm-b",
           "variant": "arm-b"
@@ -21855,7 +21855,7 @@
         {
           "blockIndex": 0,
           "iteration": 4,
-          "milliseconds": 194.84,
+          "milliseconds": 188.63,
           "orderIndex": 0,
           "sampleId": "warm-tsc:4:arm-b>baseline>arm-a:arm-b",
           "variant": "arm-b"
@@ -21863,7 +21863,7 @@
         {
           "blockIndex": 0,
           "iteration": 5,
-          "milliseconds": 194.03,
+          "milliseconds": 218.19,
           "orderIndex": 0,
           "sampleId": "warm-tsc:5:arm-b>arm-a>baseline:arm-b",
           "variant": "arm-b"
@@ -21871,7 +21871,7 @@
         {
           "blockIndex": 1,
           "iteration": 6,
-          "milliseconds": 192.42,
+          "milliseconds": 193.03,
           "orderIndex": 2,
           "sampleId": "warm-tsc:6:baseline>arm-a>arm-b:arm-b",
           "variant": "arm-b"
@@ -21879,7 +21879,7 @@
         {
           "blockIndex": 1,
           "iteration": 7,
-          "milliseconds": 186.73,
+          "milliseconds": 190.52,
           "orderIndex": 1,
           "sampleId": "warm-tsc:7:baseline>arm-b>arm-a:arm-b",
           "variant": "arm-b"
@@ -21887,7 +21887,7 @@
         {
           "blockIndex": 1,
           "iteration": 8,
-          "milliseconds": 189.05,
+          "milliseconds": 189.86,
           "orderIndex": 2,
           "sampleId": "warm-tsc:8:arm-a>baseline>arm-b:arm-b",
           "variant": "arm-b"
@@ -21895,7 +21895,7 @@
         {
           "blockIndex": 1,
           "iteration": 9,
-          "milliseconds": 187.63,
+          "milliseconds": 190.54,
           "orderIndex": 1,
           "sampleId": "warm-tsc:9:arm-a>arm-b>baseline:arm-b",
           "variant": "arm-b"
@@ -21903,7 +21903,7 @@
         {
           "blockIndex": 1,
           "iteration": 10,
-          "milliseconds": 190.77,
+          "milliseconds": 189.26,
           "orderIndex": 0,
           "sampleId": "warm-tsc:10:arm-b>baseline>arm-a:arm-b",
           "variant": "arm-b"
@@ -21911,13 +21911,13 @@
         {
           "blockIndex": 1,
           "iteration": 11,
-          "milliseconds": 192.54,
+          "milliseconds": 188.84,
           "orderIndex": 0,
           "sampleId": "warm-tsc:11:arm-b>arm-a>baseline:arm-b",
           "variant": "arm-b"
         }
       ],
-      "warmTscP50Ms": 192.54
+      "warmTscP50Ms": 189.26
     }
   },
   "mutationCoverage": {
@@ -22002,13 +22002,13 @@
     },
     "selectionBranches": {
       "arm-a-selected-when-both-pass": {
-        "decision": "arm-a"
+        "decision": "fallback"
       },
       "arm-a-selected-when-arm-b-fails": {
-        "decision": "arm-a"
+        "decision": "fallback"
       },
       "arm-b-selected-when-arm-a-fails": {
-        "decision": "arm-b"
+        "decision": "fallback"
       },
       "fallback-when-both-fail": {
         "decision": "fallback"
@@ -22034,10 +22034,10 @@
       "canonicalize @kovojs/server published dependency order",
       "npm pack --ignore-scripts --pack-destination <artifact>/packed/server"
     ],
-    "frameworkHeadCommit": "7e73ad0ff990c2722b016a5a51ab1330028e665c",
-    "frameworkSourceCommit": "135645d719f49c0d41939ed65b274a9a068b7cbf",
+    "frameworkHeadCommit": "a8a3bcf8e844aa5cbc06e930599c6ddff250647c",
+    "frameworkSourceCommit": "5b430a9e0a4810c1eb26fc733505382874b0d23a",
     "frameworkSourceContents": {
-      "digest": "e348bfa1f91c9cc78e367f44354035b9c51696e089e4d061722adb69b60bafc7",
+      "digest": "0436946f64ef5b42774f383f75a8d20149a0780fedb342aef4d299337eb9b693",
       "files": [
         {
           "bytes": 3578,
@@ -22261,14 +22261,14 @@
           "executable": false,
           "path": "packages/browser/src/deferred-app-runtime-identity.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "3327068b419a28f2a3af65a25d409aa46639776a617d694523745daa9d6daef5"
+          "sha256": "e70b7bc10c7c1b19d0992349b3add723cbc855977304ddd07d375b736211dca8"
         },
         {
-          "bytes": 524858,
+          "bytes": 524996,
           "executable": false,
           "path": "packages/browser/src/deferred-app-runtime-module.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "0fc644d8964dcdb6f4d26479cf3aa537e66ec5378ace2994e59c2846c1b7b4f4"
+          "sha256": "fe7a0a1da2ef89d262cadea4cb441acae044c8ee90986ea7285759e248c85dc2"
         },
         {
           "bytes": 552,
@@ -25215,7 +25215,7 @@
           "executable": false,
           "path": "packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "9c5c073affa4ddca9705901d1b046d892a7d5b237ffe0718ec019d27be12d4b5"
+          "sha256": "45499cc5dae61da59d218606513e76793bf5e6cd3b7d736c6b848a668d2ff6b2"
         },
         {
           "bytes": 76439,
@@ -26184,18 +26184,18 @@
           "sha256": "ed4cc09b2f73af6ef41e1ad3180362f2469e3b9f38a7b2eb734741b568b0525a"
         },
         {
-          "bytes": 35257,
+          "bytes": 35462,
           "executable": false,
           "path": "packages/core/src/internal/wire-input-grammar.test.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "188fd3ab9bf9bdc1d70da41e25f9e7c4937007fe763988fe6d89f70561ddcd4d"
+          "sha256": "a9c36f811763c5950b723dce5065542a7aef542d29043c4c2674801cd37f8d4d"
         },
         {
-          "bytes": 61184,
+          "bytes": 61395,
           "executable": false,
           "path": "packages/core/src/internal/wire-input-grammar.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "737facad70d549422e46a434cca6086cf3e9d1576fa2ebbf5fd4de767348f021"
+          "sha256": "932aa768c2cb5172532713deeec1113f5184ca60d79c650508226e4b788ab3b0"
         },
         {
           "bytes": 1156,
@@ -26520,11 +26520,11 @@
           "sha256": "3669e2c34ef86e0d846ad0eb34ff788e05038d20d262f612f559bb17b75011f8"
         },
         {
-          "bytes": 11876,
+          "bytes": 12621,
           "executable": false,
           "path": "packages/server/src/api-topology.test.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "857ad9756206782152cc6494b24d2a2416f6f6e06eb919e758c8b5d00f7af256"
+          "sha256": "6b2a514a01eb52e63c221f4e1a68471d2d20f0f7a472a5f86ef03636c388f9e0"
         },
         {
           "bytes": 11,
@@ -26688,11 +26688,11 @@
           "sha256": "0ace41ebdf09497aa08a448475708f9279a0c3cd6c0634c8f5604da67ae8103a"
         },
         {
-          "bytes": 53533,
+          "bytes": 53596,
           "executable": false,
           "path": "packages/server/src/app-load-shed.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "e788c531c737637357a0f72eaa9ed6d2215f6661ec67764bef28ac1a08c5a418"
+          "sha256": "60bc7874a4425e32a4cf9968fb96daa9c11bf165af7f3887fc9dcd4eec3d5c80"
         },
         {
           "bytes": 1411,
@@ -27136,18 +27136,18 @@
           "sha256": "aaa50ed9e36a69ee393ac4552744ba2ebbc148554f30e45114ea2b604d7ef394"
         },
         {
-          "bytes": 4828,
+          "bytes": 5363,
           "executable": false,
           "path": "packages/server/src/crypto-authority.test.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "77c88a05c6fd61220437de888a90959ac99aa45089f9146585d2551243b35fb3"
+          "sha256": "b35690252e42dd1a8d572b749c39913910546ac91c49bb468feceac0cf4139a9"
         },
         {
-          "bytes": 31743,
+          "bytes": 32215,
           "executable": false,
           "path": "packages/server/src/crypto-authority.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "dbf2a363c0728e932359e611f0edb4781051276c14e74a64592725dbfbeded8a"
+          "sha256": "fee45349ac9f962cf71bd4372f61fae8ac129e7c82f75ee9d6b0cde0652d6f58"
         },
         {
           "bytes": 6244,
@@ -27934,11 +27934,11 @@
           "sha256": "3da69a3628fbf06f850d7fdebc6eb5b7b3646da39dd116ced52b8772116a8636"
         },
         {
-          "bytes": 28355,
+          "bytes": 28446,
           "executable": false,
           "path": "packages/server/src/internal/linear-regex/index.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "bb872ff3bf43a8ae1d4a8c21e2c1f3caa99f772e065a8b48dd6b7da468cd7a67"
+          "sha256": "0dc498934b540272cddfba850abfc88fe53b5612e34324f62851cb53e98d8380"
         },
         {
           "bytes": 607,
@@ -28375,11 +28375,11 @@
           "sha256": "37315695d9427ad6b6875e1dc5c4a54fade586fd0bbf1abcb032a7e492286ea4"
         },
         {
-          "bytes": 36889,
+          "bytes": 36901,
           "executable": false,
           "path": "packages/server/src/mutation-wire.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "e7abf6238e17d99f2cdc9476b0d8a40a5208785debc248da0ed7aba0173d61b3"
+          "sha256": "6802b2a0118a7186bef664384aae977d433fff6efb0795be7a4a4622ea479af4"
         },
         {
           "bytes": 60319,
@@ -28403,11 +28403,11 @@
           "sha256": "3bae4e3b33bd949eaaf80acd21f167e57b7741e5d6cc2385549970a3214da63a"
         },
         {
-          "bytes": 44796,
+          "bytes": 44835,
           "executable": false,
           "path": "packages/server/src/mutation/definition.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "96c59f30046afd2cf6774ac211c6f6bddd1326e62693567db62f5ab57ff14886"
+          "sha256": "49afd267e87149b3362221957bc5dd25921eebcd50bac67d022fff0ab97d96e3"
         },
         {
           "bytes": 2921,
@@ -28499,6 +28499,13 @@
           "path": "packages/server/src/neutral-build.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
           "sha256": "5eb4981ab721b1985d31fee93547860c35c6a8e9ea858e43bd292666d78e4c31"
+        },
+        {
+          "bytes": 2545,
+          "executable": false,
+          "path": "packages/server/src/node-strip-runtime-source.test.ts",
+          "schema": "kovo.app-contract-d1-file-subject/v1",
+          "sha256": "ed6aa5e6e5218c0085a95009c69390f6afa88b94ec36b81e79d524e3fc140353"
         },
         {
           "bytes": 122382,
@@ -28683,11 +28690,11 @@
           "sha256": "b6b06c78cb5df2c61727a8a9d76e20444815af2df9d8dd9a955a3dd083dd011a"
         },
         {
-          "bytes": 404521,
+          "bytes": 404595,
           "executable": false,
           "path": "packages/server/src/postgres-runtime.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "2e92c12f63c55311c8d1675f6b733ced102dee52c3c28012574e02f17c6d08de"
+          "sha256": "14f207efdd0e72294ab71db3ef7f4cf084ae0d956266fcf15baf9e39f883e686"
         },
         {
           "bytes": 5756,
@@ -29082,11 +29089,11 @@
           "sha256": "9e6e0076a72385ad7e90294f4ad36e7d46c1c1e91987917abed28f5508884087"
         },
         {
-          "bytes": 51391,
+          "bytes": 51475,
           "executable": false,
           "path": "packages/server/src/replay.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "6f622f6218442b178df739430f0e51386984b2ee0ea98fdcb639e1c9b70510b9"
+          "sha256": "194d2d8d37bd44920750270da682529f7568b27b9bc7cd5a627057b1bb975c00"
         },
         {
           "bytes": 10696,
@@ -29404,11 +29411,11 @@
           "sha256": "344683b9adc8ca2c77d7e3069755240299adeaf6b04770af0fb473f7b8b56d41"
         },
         {
-          "bytes": 74818,
+          "bytes": 74928,
           "executable": false,
           "path": "packages/server/src/route.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "156165898bedc5b93eda3d74a2efc7eea07659db2631910cca3d5f2ed1d0ceac"
+          "sha256": "9b7401f56822bc5ae5bca1c45c4dedb70bde65ea450a59296f679f4b011803e3"
         },
         {
           "bytes": 3900,
@@ -30041,11 +30048,11 @@
           "sha256": "dd0ac56073968bcdf6ef2480ab1973ac948a324bc626827ea3777d26b7a983e5"
         },
         {
-          "bytes": 13674,
+          "bytes": 13744,
           "executable": false,
           "path": "packages/server/src/task-cron.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "c76370c836a56aad0019d866994e47945099ee5b88623bb30e6cd0e43f31a4e1"
+          "sha256": "4fa28b0558758c3776614f8dac2a996a26d029cab9c91fdb0622828b7b21719b"
         },
         {
           "bytes": 18180,
@@ -30083,11 +30090,11 @@
           "sha256": "681f2f5c34a1f78c9580de86d832d7dc47318097abdbb3c288df75b036ef3705"
         },
         {
-          "bytes": 41660,
+          "bytes": 42029,
           "executable": false,
           "path": "packages/server/src/task-runner.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "20cbbbb512901c691a386a6092f7076036b37cade1bc2d3d29416255d24540d7"
+          "sha256": "d5eabeec7d94df87c2b8d062463738a41a0e3a0dede3c35f6c6bad2ab0d96b46"
         },
         {
           "bytes": 20555,
@@ -30097,11 +30104,11 @@
           "sha256": "eb1571bf7c986c285792701fdce6c8aa1ce4488f1a43023d6b0fb8fb9cedbe51"
         },
         {
-          "bytes": 8431,
+          "bytes": 8467,
           "executable": false,
           "path": "packages/server/src/task-runtime.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "7802e8721bee0c6f8f78555b8688305d4c6b2358f82ed2bf8c93b73c275cd631"
+          "sha256": "cf14b1b0db2716e2966deccd20dd61f7fda4848d480e58c1c2a57356a69becf8"
         },
         {
           "bytes": 1056,
@@ -30181,11 +30188,11 @@
           "sha256": "51602a593b5ec30fc0d2ec9633f2f87e52a62becc33e45d7b385f6e4c99c9ab8"
         },
         {
-          "bytes": 19396,
+          "bytes": 19500,
           "executable": false,
           "path": "packages/server/src/upload-sniff.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "d1afe77f8c85645b6b084cf2c9ef5f82ed7bedc596024661390b01952712d92e"
+          "sha256": "79c687fbc201f964fbd0a1881e4992535b83d8ce8d3cae90dc9a7e17a0de4918"
         },
         {
           "bytes": 10360,
@@ -30286,11 +30293,11 @@
           "sha256": "219de211b4a894cbf69953894a9d0a1ab62aa0d59307b7a1ee3b51b19b67ffc1"
         },
         {
-          "bytes": 121722,
+          "bytes": 121770,
           "executable": false,
           "path": "packages/server/src/vite-dev.ts",
           "schema": "kovo.app-contract-d1-file-subject/v1",
-          "sha256": "b2c264e1ec80d88ce3bbfdab64bb8673129f90115f3e095d025a11c2a8938193"
+          "sha256": "a664b5627331b33c83d317978fc6cfe3d527ff033397b28fe9f2ea857b2a2c1a"
         },
         {
           "bytes": 7852,
@@ -30503,7 +30510,7 @@
       {
         "name": "@kovojs/browser",
         "packedContents": {
-          "digest": "73682f0381d61f26041ef6429d1a33a3f497c25a65308ee2415b67b515410f5f",
+          "digest": "7d65b16861f1a1763955e3605164cc26b8daae196401c371eeb1cbea39881884",
           "files": [
             {
               "bytes": 2294,
@@ -30552,14 +30559,14 @@
               "executable": false,
               "path": "dist/deferred-app-runtime-identity.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "cf685b0e0fb8138de00f78ec75375c5d7109c9ad0861463b9a4e6d276ca5b07e"
+              "sha256": "7af0789d0210b5aa4f856537c521b87dedffec543725761736241cd1a7f89427"
             },
             {
               "bytes": 691,
               "executable": false,
               "path": "dist/deferred-app-runtime-identity.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "ce95ad601725fc3fef66143bb5d6f5c5ee4996ecf787ce791a1577a7342f1729"
+              "sha256": "6938842ec2ca8a9691d46b65932c55d56125e6d5358768c67109a3aea1a23086"
             },
             {
               "bytes": 285,
@@ -30576,18 +30583,18 @@
               "sha256": "1ae4c96b047bebb43bd9827d1d14c3f68611c0042c61da7a0c4fcea5436ed122"
             },
             {
-              "bytes": 540019,
+              "bytes": 540165,
               "executable": false,
               "path": "dist/deferred-app-runtime-module.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "d6acc34e5dc73af2059f43c23e4dd44f6575f1dbabf0ca7f73d7778f50bea379"
+              "sha256": "035cf74ebf801bb9f86344c7552481b09fd9f6a66ed8249f746279f3e5570281"
             },
             {
-              "bytes": 541216,
+              "bytes": 541362,
               "executable": false,
               "path": "dist/deferred-app-runtime-module.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "9f4738e04017a961f3b8be2d9bd7c06bd323bec872976533da587ea322ccb955"
+              "sha256": "96484a84e3da6660c1d6f408128bf42f829b8065a36982eea2c8ce17f3bb536b"
             },
             {
               "bytes": 4244,
@@ -31090,7 +31097,7 @@
           "schema": "kovo.app-contract-d1-content-subject/v1"
         },
         "sourceContents": {
-          "digest": "7888ae04349906d670ea4881cb1f851c3c4757c2241964610eb6372a775ba7d2",
+          "digest": "d72b858ed340a1e68da031128d9b831cce07a2585bd42a342e9c7f4373ac9155",
           "files": [
             {
               "bytes": 3578,
@@ -31314,14 +31321,14 @@
               "executable": false,
               "path": "packages/browser/src/deferred-app-runtime-identity.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "3327068b419a28f2a3af65a25d409aa46639776a617d694523745daa9d6daef5"
+              "sha256": "e70b7bc10c7c1b19d0992349b3add723cbc855977304ddd07d375b736211dca8"
             },
             {
-              "bytes": 524858,
+              "bytes": 524996,
               "executable": false,
               "path": "packages/browser/src/deferred-app-runtime-module.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "0fc644d8964dcdb6f4d26479cf3aa537e66ec5378ace2994e59c2846c1b7b4f4"
+              "sha256": "fe7a0a1da2ef89d262cadea4cb441acae044c8ee90986ea7285759e248c85dc2"
             },
             {
               "bytes": 552,
@@ -32670,13 +32677,13 @@
           ],
           "schema": "kovo.app-contract-d1-content-subject/v1"
         },
-        "sourceSha256": "7888ae04349906d670ea4881cb1f851c3c4757c2241964610eb6372a775ba7d2",
-        "tarballSha256": "d4d97c799f37e52ae7cc0814c2ba18a3df82c0452020d07eafd1ab5e028171af"
+        "sourceSha256": "d72b858ed340a1e68da031128d9b831cce07a2585bd42a342e9c7f4373ac9155",
+        "tarballSha256": "92c6b9d0833f0c20c62dc7d8b09463f6f4626f22a75e6cc4736d94886afee6a5"
       },
       {
         "name": "@kovojs/compiler",
         "packedContents": {
-          "digest": "d5afb8272abd2dba954a69572ab4da51b6353758a3de4808e05e12ca45d1efe1",
+          "digest": "d916ead4a9831dcd46ddddb24ddf5989f0671b3a00e54a6ee50f2923d9c8f83c",
           "files": [
             {
               "bytes": 260432,
@@ -32844,14 +32851,14 @@
               "executable": false,
               "path": "dist/internal.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "49537d356d619869d210f2ceb36312f66b64bfae28cb443e97ca294e2f0623bd"
+              "sha256": "77f410a15e9e02344bb9e6ab0c9fdc91e286c9f823417075f2f9f821de518d3f"
             },
             {
               "bytes": 1223495,
               "executable": false,
               "path": "dist/internal.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "024212dc68f297186bf5ac70b8ceee9328a5ba64dd7a13203f87a1ae337d3f72"
+              "sha256": "286eb00cc3175151ca4844de864a4c2d4fd1a96ab678c700cb0a52b4e7cf6aaa"
             },
             {
               "bytes": 558,
@@ -33053,7 +33060,7 @@
           "schema": "kovo.app-contract-d1-content-subject/v1"
         },
         "sourceContents": {
-          "digest": "76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89",
+          "digest": "c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b",
           "files": [
             {
               "bytes": 2497,
@@ -34656,7 +34663,7 @@
               "executable": false,
               "path": "packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "9c5c073affa4ddca9705901d1b046d892a7d5b237ffe0718ec019d27be12d4b5"
+              "sha256": "45499cc5dae61da59d218606513e76793bf5e6cd3b7d736c6b848a668d2ff6b2"
             },
             {
               "bytes": 76439,
@@ -35053,13 +35060,13 @@
           ],
           "schema": "kovo.app-contract-d1-content-subject/v1"
         },
-        "sourceSha256": "76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89",
-        "tarballSha256": "92fd904c599e65cce0390fc7ead7693bd3912608718bb63b838d21306f1b84a3"
+        "sourceSha256": "c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b",
+        "tarballSha256": "f0af891fb4a88a7f039c400f2cf9f39770a46f1d65ee832686134b260b28628f"
       },
       {
         "name": "@kovojs/core",
         "packedContents": {
-          "digest": "60c7d7c1c4ff90b6a9bd0e4aa335b58f83510fe132b18751ed28c5e81dea6ce5",
+          "digest": "55f877a31ea1bed482253de019e9d5bbe6793a9df5c1b678440c6ea1f1d55424",
           "files": [
             {
               "bytes": 1115,
@@ -36168,32 +36175,32 @@
               "sha256": "7f0835c163904fc5fd61136db86fdbdd45fa71069d42a67b0d1fe01f85ab0cf3"
             },
             {
-              "bytes": 12850,
+              "bytes": 12992,
               "executable": false,
               "path": "dist/internal/wire-input-grammar.d.mts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "70dae7f38b38b8ac1b50d2ce65868d235e361e03f6deb277425870bf5a67b95c"
+              "sha256": "1774d8a1a72a0ab5083df9312211ee526701479bb267a3058e981fc6e6727f39"
             },
             {
-              "bytes": 2329,
+              "bytes": 2331,
               "executable": false,
               "path": "dist/internal/wire-input-grammar.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "6e63ffcfe0678fdebea6dfef2777a192295b48c644e435fcf3843ddfab8cf054"
+              "sha256": "538ae583075e95b1d85377859beb06228e262f0948b4d279bb4d14539d4107d2"
             },
             {
-              "bytes": 44814,
+              "bytes": 44978,
               "executable": false,
               "path": "dist/internal/wire-input-grammar.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "beba907028674359b59c1f7df98b4bd7d3598f822526df6bac3a8f7a897ca306"
+              "sha256": "5d195cc5597d8484934d4374e7e0fb01dd85a9cad18fb77c82f32391bad5b445"
             },
             {
-              "bytes": 87843,
+              "bytes": 88111,
               "executable": false,
               "path": "dist/internal/wire-input-grammar.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b79b763620e4585829a58109f90b583487f39b6474c1c5176ed7bd746298c8d2"
+              "sha256": "f43bfe1549be3a18a2510d93b025c3a76e9402de3e8d1a3dd98072d259e2ef2e"
             },
             {
               "bytes": 3133,
@@ -36493,7 +36500,7 @@
           "schema": "kovo.app-contract-d1-content-subject/v1"
         },
         "sourceContents": {
-          "digest": "1920cd60dfe1ebdee6b42bad17b59cd7c94185f2a39322d12c3a504e3572ccda",
+          "digest": "a5049d0f3baae511a0a9bfcff506f462ef62447a4b53150befe75e9010f5d76c",
           "files": [
             {
               "bytes": 11408,
@@ -37070,18 +37077,18 @@
               "sha256": "ed4cc09b2f73af6ef41e1ad3180362f2469e3b9f38a7b2eb734741b568b0525a"
             },
             {
-              "bytes": 35257,
+              "bytes": 35462,
               "executable": false,
               "path": "packages/core/src/internal/wire-input-grammar.test.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "188fd3ab9bf9bdc1d70da41e25f9e7c4937007fe763988fe6d89f70561ddcd4d"
+              "sha256": "a9c36f811763c5950b723dce5065542a7aef542d29043c4c2674801cd37f8d4d"
             },
             {
-              "bytes": 61184,
+              "bytes": 61395,
               "executable": false,
               "path": "packages/core/src/internal/wire-input-grammar.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "737facad70d549422e46a434cca6086cf3e9d1576fa2ebbf5fd4de767348f021"
+              "sha256": "932aa768c2cb5172532713deeec1113f5184ca60d79c650508226e4b788ab3b0"
             },
             {
               "bytes": 1156,
@@ -37338,13 +37345,13 @@
           ],
           "schema": "kovo.app-contract-d1-content-subject/v1"
         },
-        "sourceSha256": "1920cd60dfe1ebdee6b42bad17b59cd7c94185f2a39322d12c3a504e3572ccda",
-        "tarballSha256": "7432bcd2ceda9d47b5c9e2566a635c7087c7b305ff2ac9f85cd6dc5127b4463d"
+        "sourceSha256": "a5049d0f3baae511a0a9bfcff506f462ef62447a4b53150befe75e9010f5d76c",
+        "tarballSha256": "de6601835fbd86a8e455caa476993fb2ed9b6716a9331a1cdc7feba6fde037cb"
       },
       {
         "name": "@kovojs/server",
         "packedContents": {
-          "digest": "7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635",
+          "digest": "d157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8",
           "files": [
             {
               "bytes": 590,
@@ -37550,11 +37557,11 @@
               "sha256": "f0e3da47db4a4d357637a379d2f8dc42a1511c46a7193e9a76aa096a2010117f"
             },
             {
-              "bytes": 75962,
+              "bytes": 76027,
               "executable": false,
               "path": "dist/app-load-shed.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "236c3c36aa8dce919a9443a69deab807e653dbbf6381b98d82995b941eb8476e"
+              "sha256": "9d42cf53c6dda419f1c5f4606c32cd290ec30d98372ea1aee6ea227922cff314"
             },
             {
               "bytes": 694,
@@ -38331,21 +38338,21 @@
               "executable": false,
               "path": "dist/crypto-authority.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "7ba6a0e422c4b39da8851d986f0237de24542f68f461af00f627cde464d157c0"
+              "sha256": "d8f0bbea59fc6043d1d021e278f5cf76554af6cb33e9bf5959726af374033bad"
             },
             {
-              "bytes": 23912,
+              "bytes": 24386,
               "executable": false,
               "path": "dist/crypto-authority.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "df05ed26cff452beb307ac528717be35d8a8ba7e1aa216077c14b672332815f9"
+              "sha256": "d57dc77f3d0bc18c0cc38ddca837262910da768cd89f53a75abed941ae2e1db5"
             },
             {
-              "bytes": 45157,
+              "bytes": 45796,
               "executable": false,
               "path": "dist/crypto-authority.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b21e559e3dfed3c30355ef2c1f8b87e57f470084151e463483daac965da20b3c"
+              "sha256": "f7ab8f2909852769262a1b5fe542c38dd31c3f527fbe44899ba7966552be716b"
             },
             {
               "bytes": 9433,
@@ -39678,11 +39685,11 @@
               "sha256": "5aa6d2c09c743de42448201a41bb2d6c301a7793a1bf480773428d892de2676e"
             },
             {
-              "bytes": 45481,
+              "bytes": 45573,
               "executable": false,
               "path": "dist/internal/linear-regex/index.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "eeabee743423b8feb39c41c3d99e8ac9b42e3ac011d9b7164587ef4340c31ff3"
+              "sha256": "c0affd3d3305c2fa2689281a87f8534cc3fe9d7e52956a3ea9a98189b5307e9a"
             },
             {
               "bytes": 443,
@@ -40375,21 +40382,21 @@
               "executable": false,
               "path": "dist/mutation-wire.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "2ad3ded64cd7a99c7ecce1ef8acc8dcc1e2e448c23320646cade1c7f6c737dd9"
+              "sha256": "4c6e0fe1ea7b68d3032fd37608906f4d4740e94610bbc46b5c1adb74f5cc42dc"
             },
             {
-              "bytes": 15954,
+              "bytes": 15962,
               "executable": false,
               "path": "dist/mutation-wire.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "6c365eba2007e194ed9665636c6214959350358aa4c63f55436ab0714a698de0"
+              "sha256": "9f6809f908dc11668dadb1798c42aa753e7057b12412458d1b04d86e51dc59f7"
             },
             {
-              "bytes": 44623,
+              "bytes": 44617,
               "executable": false,
               "path": "dist/mutation-wire.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "4147ff9ddf6af48c42c0a85ead4582824ec5435a37e2b0fa13a5c59913fe47bc"
+              "sha256": "038c3020a6d174682b5f75e901e025e5870587e67d34d14e082681242afd1109"
             },
             {
               "bytes": 5723,
@@ -40445,7 +40452,7 @@
               "executable": false,
               "path": "dist/mutation/definition.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "deda61d9f2688eb0bf7f449bfc0fc330077a7c9370887b668a11c3144779d32a"
+              "sha256": "4babbaebabb21f31b8517078cb4744a5819d29fb30c452697d8697ebf710828c"
             },
             {
               "bytes": 12309,
@@ -40455,11 +40462,11 @@
               "sha256": "5f6381e31880e39f739688390f022d537d34b89eeec6669f49f803744da24be5"
             },
             {
-              "bytes": 51162,
+              "bytes": 51202,
               "executable": false,
               "path": "dist/mutation/definition.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "0d1ed3059b6994b1ac09c0a0458abd4e23eb98aa3ef133a1f5294287df317481"
+              "sha256": "a364dd90bed39c4d2b73fef7732d537166660bda0d4839aa05e9f3df113a60bb"
             },
             {
               "bytes": 4012,
@@ -40854,11 +40861,11 @@
               "sha256": "984b009f27b52215be76966d15a70beed61eff66b95c73efb01006b52cbd6b82"
             },
             {
-              "bytes": 538861,
+              "bytes": 538934,
               "executable": false,
               "path": "dist/postgres-runtime.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "936a7025a274286e4f57c172b9b8d83b866f54520202d4c162a25aef762c4595"
+              "sha256": "f9a4aa43acf8810a6ebaad06110f5ac54047172fe9ec3b22fd8bd0285a1f23f1"
             },
             {
               "bytes": 3743,
@@ -41596,11 +41603,11 @@
               "sha256": "799ebcd803b53e8c65909ece1c72a3394ac166f96d188ce763a748be1b4818d6"
             },
             {
-              "bytes": 68811,
+              "bytes": 68898,
               "executable": false,
               "path": "dist/replay.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b4e6f0198093eb8d82155d53d51a59c3bb62a92bfc4be27f95d07fc02b790459"
+              "sha256": "c1d5913eed88dc8c53ae62bd8639e3d3f7855a69cd0584998118096a6bbf7666"
             },
             {
               "bytes": 10987,
@@ -41971,7 +41978,7 @@
               "executable": false,
               "path": "dist/route.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "38e0e2503e34284c08b71f92023bef1da3046de9e8e825c3dca1f8aa12849497"
+              "sha256": "0c0314e20f7c6b0728ac80cbd367802352f96195d5fe6bf04209c2d83a2e3093"
             },
             {
               "bytes": 42952,
@@ -41981,11 +41988,11 @@
               "sha256": "a067c2f3465fafde3f2e9474f561d733522e8d45f0d37c4d85e3c8171c63edd6"
             },
             {
-              "bytes": 98278,
+              "bytes": 98394,
               "executable": false,
               "path": "dist/route.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "2afe4ac4ade3b7d9fb5929d02e4b5b121338b4c2953fd38ae07f71b035162013"
+              "sha256": "18ddfd6773660c0e87ac3c4b6a9b0e4e775679022d1f10c88f1a7ce848fa54b1"
             },
             {
               "bytes": 1651,
@@ -42968,11 +42975,11 @@
               "sha256": "653b2bf02c33bb63bdb569340ed40c2e52731aa17412480a3425c5d6644823d0"
             },
             {
-              "bytes": 20052,
+              "bytes": 20124,
               "executable": false,
               "path": "dist/task-cron.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "f9f648c6eadcb1947c9ffe9821b104bcbc3fe20c622298e6b0f695c9250ecf46"
+              "sha256": "f250cec5c358bc816b0d583215640485e1e531a849c7cda529617c36e4540ae3"
             },
             {
               "bytes": 4035,
@@ -43038,11 +43045,11 @@
               "sha256": "823b9214a5cc6c6a4761efc22ece9eeb8c2b1f212492bc3282b9ac0e8f23b3d2"
             },
             {
-              "bytes": 60806,
+              "bytes": 61194,
               "executable": false,
               "path": "dist/task-runner.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b05ac189198af19697366b50589060bef61fb540c8ac1d488bfe938f2dee31e1"
+              "sha256": "a3c7037eff1bc613f524090713ed7ea1eb8a475bd32cb40d1d41655b60da5970"
             },
             {
               "bytes": 6448,
@@ -43052,11 +43059,11 @@
               "sha256": "0894645b16b38bfd79d269bfdfa60e4b94622f1b4ddfd578524bd9346cbc5a99"
             },
             {
-              "bytes": 12162,
+              "bytes": 12198,
               "executable": false,
               "path": "dist/task-runtime.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "51b44ebb60b99ea5b5a35ec06325b3102ee34c47d8ff3d3fe0d0d8d4e94f7df8"
+              "sha256": "7e7d50d4790f204046529e6ce6d156b0b191598407535157b278a62b8f320103"
             },
             {
               "bytes": 31315,
@@ -43150,25 +43157,25 @@
               "sha256": "1eb59a14fa27d65b3c0eeacf4493499cb491b01c2f406f0038787a4bb68271db"
             },
             {
-              "bytes": 527,
+              "bytes": 530,
               "executable": false,
               "path": "dist/upload-sniff.d.mts.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "d93a6d9d62a3a830e9951262b791e77817513298f22c0092d7d5f9c77c391975"
+              "sha256": "2fc41b98ee8c20737e2747b6453da6fc2e0fb780155bdcbb86b883afa07d5a30"
             },
             {
-              "bytes": 11456,
+              "bytes": 11377,
               "executable": false,
               "path": "dist/upload-sniff.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "53d8bf7127625315b336c124bade8f48a9924b4a5f05c7e34ab1e4eb0d38db4d"
+              "sha256": "3da2775bf92ae1d8ee97fee508d923f1e54d852b9834190d417c373de824ecb6"
             },
             {
-              "bytes": 24623,
+              "bytes": 24719,
               "executable": false,
               "path": "dist/upload-sniff.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "4fee72a022b6d15e12ecaae841be090610afa8261ed3d98e998aba2e4db76b02"
+              "sha256": "173f72280ed0f9c099448d507116f0e7685551a5b3c8d7551f77ed0f6ee09b3f"
             },
             {
               "bytes": 3793,
@@ -43311,18 +43318,18 @@
               "sha256": "8709c5ea914f03dc471ec38868eae41606fa1a0ad1be55c8f48e42bf532718fd"
             },
             {
-              "bytes": 86799,
+              "bytes": 86848,
               "executable": false,
               "path": "dist/vite-dev.mjs",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b7829a5b6c1c9b1a3d5445e4144471724dc444c1ee7e5df6b290c2a0e984db32"
+              "sha256": "658ca7f77c6ae39829369e156271509a906b3311419a8ae8c9e38422a2ee9b31"
             },
             {
-              "bytes": 166379,
+              "bytes": 166409,
               "executable": false,
               "path": "dist/vite-dev.mjs.map",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "f8695718b42bf901c0c61b314abecf2eea6dcf2cb5bcd7b020e3aff9dd6d54bc"
+              "sha256": "7f9e88d5573910a4f70619c407ed6116a8c5b82ffdc0bf6276e92e0ef2695e1b"
             },
             {
               "bytes": 7302,
@@ -43566,7 +43573,7 @@
           "schema": "kovo.app-contract-d1-content-subject/v1"
         },
         "sourceContents": {
-          "digest": "850e560a87b2411b56fea71f808a2e6cf1585c3835ca97e30a3dace92c390ead",
+          "digest": "cb1bfd4ae8b13161eeb30e1473b3e0bdcfe5cab7e74e09cac33adfc51465fc97",
           "files": [
             {
               "bytes": 16649,
@@ -43639,11 +43646,11 @@
               "sha256": "3669e2c34ef86e0d846ad0eb34ff788e05038d20d262f612f559bb17b75011f8"
             },
             {
-              "bytes": 11876,
+              "bytes": 12621,
               "executable": false,
               "path": "packages/server/src/api-topology.test.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "857ad9756206782152cc6494b24d2a2416f6f6e06eb919e758c8b5d00f7af256"
+              "sha256": "6b2a514a01eb52e63c221f4e1a68471d2d20f0f7a472a5f86ef03636c388f9e0"
             },
             {
               "bytes": 11,
@@ -43807,11 +43814,11 @@
               "sha256": "0ace41ebdf09497aa08a448475708f9279a0c3cd6c0634c8f5604da67ae8103a"
             },
             {
-              "bytes": 53533,
+              "bytes": 53596,
               "executable": false,
               "path": "packages/server/src/app-load-shed.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "e788c531c737637357a0f72eaa9ed6d2215f6661ec67764bef28ac1a08c5a418"
+              "sha256": "60bc7874a4425e32a4cf9968fb96daa9c11bf165af7f3887fc9dcd4eec3d5c80"
             },
             {
               "bytes": 1411,
@@ -44255,18 +44262,18 @@
               "sha256": "aaa50ed9e36a69ee393ac4552744ba2ebbc148554f30e45114ea2b604d7ef394"
             },
             {
-              "bytes": 4828,
+              "bytes": 5363,
               "executable": false,
               "path": "packages/server/src/crypto-authority.test.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "77c88a05c6fd61220437de888a90959ac99aa45089f9146585d2551243b35fb3"
+              "sha256": "b35690252e42dd1a8d572b749c39913910546ac91c49bb468feceac0cf4139a9"
             },
             {
-              "bytes": 31743,
+              "bytes": 32215,
               "executable": false,
               "path": "packages/server/src/crypto-authority.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "dbf2a363c0728e932359e611f0edb4781051276c14e74a64592725dbfbeded8a"
+              "sha256": "fee45349ac9f962cf71bd4372f61fae8ac129e7c82f75ee9d6b0cde0652d6f58"
             },
             {
               "bytes": 6244,
@@ -45053,11 +45060,11 @@
               "sha256": "3da69a3628fbf06f850d7fdebc6eb5b7b3646da39dd116ced52b8772116a8636"
             },
             {
-              "bytes": 28355,
+              "bytes": 28446,
               "executable": false,
               "path": "packages/server/src/internal/linear-regex/index.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "bb872ff3bf43a8ae1d4a8c21e2c1f3caa99f772e065a8b48dd6b7da468cd7a67"
+              "sha256": "0dc498934b540272cddfba850abfc88fe53b5612e34324f62851cb53e98d8380"
             },
             {
               "bytes": 607,
@@ -45494,11 +45501,11 @@
               "sha256": "37315695d9427ad6b6875e1dc5c4a54fade586fd0bbf1abcb032a7e492286ea4"
             },
             {
-              "bytes": 36889,
+              "bytes": 36901,
               "executable": false,
               "path": "packages/server/src/mutation-wire.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "e7abf6238e17d99f2cdc9476b0d8a40a5208785debc248da0ed7aba0173d61b3"
+              "sha256": "6802b2a0118a7186bef664384aae977d433fff6efb0795be7a4a4622ea479af4"
             },
             {
               "bytes": 60319,
@@ -45522,11 +45529,11 @@
               "sha256": "3bae4e3b33bd949eaaf80acd21f167e57b7741e5d6cc2385549970a3214da63a"
             },
             {
-              "bytes": 44796,
+              "bytes": 44835,
               "executable": false,
               "path": "packages/server/src/mutation/definition.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "96c59f30046afd2cf6774ac211c6f6bddd1326e62693567db62f5ab57ff14886"
+              "sha256": "49afd267e87149b3362221957bc5dd25921eebcd50bac67d022fff0ab97d96e3"
             },
             {
               "bytes": 2921,
@@ -45618,6 +45625,13 @@
               "path": "packages/server/src/neutral-build.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
               "sha256": "5eb4981ab721b1985d31fee93547860c35c6a8e9ea858e43bd292666d78e4c31"
+            },
+            {
+              "bytes": 2545,
+              "executable": false,
+              "path": "packages/server/src/node-strip-runtime-source.test.ts",
+              "schema": "kovo.app-contract-d1-file-subject/v1",
+              "sha256": "ed6aa5e6e5218c0085a95009c69390f6afa88b94ec36b81e79d524e3fc140353"
             },
             {
               "bytes": 122382,
@@ -45802,11 +45816,11 @@
               "sha256": "b6b06c78cb5df2c61727a8a9d76e20444815af2df9d8dd9a955a3dd083dd011a"
             },
             {
-              "bytes": 404521,
+              "bytes": 404595,
               "executable": false,
               "path": "packages/server/src/postgres-runtime.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "2e92c12f63c55311c8d1675f6b733ced102dee52c3c28012574e02f17c6d08de"
+              "sha256": "14f207efdd0e72294ab71db3ef7f4cf084ae0d956266fcf15baf9e39f883e686"
             },
             {
               "bytes": 5756,
@@ -46201,11 +46215,11 @@
               "sha256": "9e6e0076a72385ad7e90294f4ad36e7d46c1c1e91987917abed28f5508884087"
             },
             {
-              "bytes": 51391,
+              "bytes": 51475,
               "executable": false,
               "path": "packages/server/src/replay.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "6f622f6218442b178df739430f0e51386984b2ee0ea98fdcb639e1c9b70510b9"
+              "sha256": "194d2d8d37bd44920750270da682529f7568b27b9bc7cd5a627057b1bb975c00"
             },
             {
               "bytes": 10696,
@@ -46523,11 +46537,11 @@
               "sha256": "344683b9adc8ca2c77d7e3069755240299adeaf6b04770af0fb473f7b8b56d41"
             },
             {
-              "bytes": 74818,
+              "bytes": 74928,
               "executable": false,
               "path": "packages/server/src/route.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "156165898bedc5b93eda3d74a2efc7eea07659db2631910cca3d5f2ed1d0ceac"
+              "sha256": "9b7401f56822bc5ae5bca1c45c4dedb70bde65ea450a59296f679f4b011803e3"
             },
             {
               "bytes": 3900,
@@ -47160,11 +47174,11 @@
               "sha256": "dd0ac56073968bcdf6ef2480ab1973ac948a324bc626827ea3777d26b7a983e5"
             },
             {
-              "bytes": 13674,
+              "bytes": 13744,
               "executable": false,
               "path": "packages/server/src/task-cron.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "c76370c836a56aad0019d866994e47945099ee5b88623bb30e6cd0e43f31a4e1"
+              "sha256": "4fa28b0558758c3776614f8dac2a996a26d029cab9c91fdb0622828b7b21719b"
             },
             {
               "bytes": 18180,
@@ -47202,11 +47216,11 @@
               "sha256": "681f2f5c34a1f78c9580de86d832d7dc47318097abdbb3c288df75b036ef3705"
             },
             {
-              "bytes": 41660,
+              "bytes": 42029,
               "executable": false,
               "path": "packages/server/src/task-runner.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "20cbbbb512901c691a386a6092f7076036b37cade1bc2d3d29416255d24540d7"
+              "sha256": "d5eabeec7d94df87c2b8d062463738a41a0e3a0dede3c35f6c6bad2ab0d96b46"
             },
             {
               "bytes": 20555,
@@ -47216,11 +47230,11 @@
               "sha256": "eb1571bf7c986c285792701fdce6c8aa1ce4488f1a43023d6b0fb8fb9cedbe51"
             },
             {
-              "bytes": 8431,
+              "bytes": 8467,
               "executable": false,
               "path": "packages/server/src/task-runtime.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "7802e8721bee0c6f8f78555b8688305d4c6b2358f82ed2bf8c93b73c275cd631"
+              "sha256": "cf14b1b0db2716e2966deccd20dd61f7fda4848d480e58c1c2a57356a69becf8"
             },
             {
               "bytes": 1056,
@@ -47300,11 +47314,11 @@
               "sha256": "51602a593b5ec30fc0d2ec9633f2f87e52a62becc33e45d7b385f6e4c99c9ab8"
             },
             {
-              "bytes": 19396,
+              "bytes": 19500,
               "executable": false,
               "path": "packages/server/src/upload-sniff.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "d1afe77f8c85645b6b084cf2c9ef5f82ed7bedc596024661390b01952712d92e"
+              "sha256": "79c687fbc201f964fbd0a1881e4992535b83d8ce8d3cae90dc9a7e17a0de4918"
             },
             {
               "bytes": 10360,
@@ -47405,11 +47419,11 @@
               "sha256": "219de211b4a894cbf69953894a9d0a1ab62aa0d59307b7a1ee3b51b19b67ffc1"
             },
             {
-              "bytes": 121722,
+              "bytes": 121770,
               "executable": false,
               "path": "packages/server/src/vite-dev.ts",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b2c264e1ec80d88ce3bbfdab64bb8673129f90115f3e095d025a11c2a8938193"
+              "sha256": "a664b5627331b33c83d317978fc6cfe3d527ff033397b28fe9f2ea857b2a2c1a"
             },
             {
               "bytes": 7852,
@@ -47617,8 +47631,8 @@
           ],
           "schema": "kovo.app-contract-d1-content-subject/v1"
         },
-        "sourceSha256": "850e560a87b2411b56fea71f808a2e6cf1585c3835ca97e30a3dace92c390ead",
-        "tarballSha256": "cc28d5d321528a3cd02af323dd1f1e6b5d328545ed925dd320560dbfd33b8e1c"
+        "sourceSha256": "cb1bfd4ae8b13161eeb30e1473b3e0bdcfe5cab7e74e09cac33adfc51465fc97",
+        "tarballSha256": "7c5edaf26aa40aa164a739f69d88d6098d893ab3627f3f2105ee0ce769c0d7af"
       }
     ],
     "packedCompiler": {
@@ -47641,11 +47655,11 @@
             "executable": false,
             "path": "dist/internal.mjs",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "49537d356d619869d210f2ceb36312f66b64bfae28cb443e97ca294e2f0623bd"
+            "sha256": "77f410a15e9e02344bb9e6ab0c9fdc91e286c9f823417075f2f9f821de518d3f"
           },
           "realpath": "<artifact>/compiler/dist/internal.mjs",
           "requested": "@kovojs/compiler/internal",
-          "resolvedSha256": "49537d356d619869d210f2ceb36312f66b64bfae28cb443e97ca294e2f0623bd"
+          "resolvedSha256": "77f410a15e9e02344bb9e6ab0c9fdc91e286c9f823417075f2f9f821de518d3f"
         }
       ],
       "schema": "kovo.app-contract-d1-packed-compiler/v1",
@@ -48188,11 +48202,11 @@
     ]
   },
   "sealedArtifacts": {
-    "compilerPackedSha256": "92fd904c599e65cce0390fc7ead7693bd3912608718bb63b838d21306f1b84a3",
+    "compilerPackedSha256": "f0af891fb4a88a7f039c400f2cf9f39770a46f1d65ee832686134b260b28628f",
     "configSha256": "ef1ddc51c0246b6e4b510c25fc0f1c4ed5fc2335e144aa1de177fa232e39f761",
-    "generatedAppSha256": "e512bcc055dc464b4aff29d36d67202bce3f8639c8d2202564bff68e7aca522c",
+    "generatedAppSha256": "febb6912d7aa0a272e7c670e752d5cf733f867d186b0a6d788e2eaedfd99421c",
     "providerSha256": "7fe04d65fad502f337b2fe85a40968d425aaaa712721233aae827c23001b8e8d",
-    "serverOverlayPackedSha256": "4c2d6c5a81e8fa9a5dd380adeba6d2abed6a507d5b59f1285eb69941bd7bf8de"
+    "serverOverlayPackedSha256": "4887a096d680568fc1792bb60b3d9aa0df664ec262d2215cd9701aa8ad615530"
   },
   "schema": "kovo.app-contract-d1-raw-evidence/v6",
   "semanticEquivalence": {
@@ -48288,14 +48302,14 @@
   "workloadSubjects": {
     "appSourcesAfter": {
       "content": {
-        "digest": "91d94241f0ce6996cd88d9c4d551563aa98ea69608ffe6214b1de1212ec460f6",
+        "digest": "ef580decd902ad096229272d7ec0a833d0ba4eaea2b7b28b1d8d1b562efb3625",
         "files": [
           {
             "bytes": 991,
             "executable": false,
             "path": "app/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "e512bcc055dc464b4aff29d36d67202bce3f8639c8d2202564bff68e7aca522c"
+            "sha256": "febb6912d7aa0a272e7c670e752d5cf733f867d186b0a6d788e2eaedfd99421c"
           },
           {
             "bytes": 219,
@@ -48862,7 +48876,7 @@
             "executable": false,
             "path": "packages/secondary/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "b6d3bc500ccc5b2e790ab09476dea937af5dc36fbb15a5740bdf1cb98bd2cd78"
+            "sha256": "5898b04ce90b8b1ac9122d600f5e8999aedb70c84d493b16e892da06164938f8"
           },
           {
             "bytes": 23,
@@ -48911,7 +48925,7 @@
             "executable": false,
             "path": "packages/shared/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "8f7cfc450ff16948b75c9929cd6a18cf830ca7e083db2bb9c4c51b713da8a94d"
+            "sha256": "23b2c28e6466954886b1cc6fc57b2e524021d35a8716486cdd65a78228afa3f4"
           },
           {
             "bytes": 126,
@@ -48932,13 +48946,13 @@
       },
       "inputs": [
         {
-          "source": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { app as app } from '../src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: '76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: '7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
+          "source": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { app as app } from '../src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: 'c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: 'd157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
           "subject": {
             "bytes": 991,
             "executable": false,
             "path": "app/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "e512bcc055dc464b4aff29d36d67202bce3f8639c8d2202564bff68e7aca522c"
+            "sha256": "febb6912d7aa0a272e7c670e752d5cf733f867d186b0a6d788e2eaedfd99421c"
           }
         },
         {
@@ -49742,13 +49756,13 @@
           }
         },
         {
-          "source": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { sameOwnerApp as app } from '../src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: '76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: '7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
+          "source": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { sameOwnerApp as app } from '../src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: 'c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: 'd157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
           "subject": {
             "bytes": 1000,
             "executable": false,
             "path": "packages/secondary/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "b6d3bc500ccc5b2e790ab09476dea937af5dc36fbb15a5740bdf1cb98bd2cd78"
+            "sha256": "5898b04ce90b8b1ac9122d600f5e8999aedb70c84d493b16e892da06164938f8"
           }
         },
         {
@@ -49812,13 +49826,13 @@
           }
         },
         {
-          "source": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { app as app } from '../../../app/src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: '76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: '7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
+          "source": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { app as app } from '../../../app/src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: 'c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: 'd157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
           "subject": {
             "bytes": 1001,
             "executable": false,
             "path": "packages/shared/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "8f7cfc450ff16948b75c9929cd6a18cf830ca7e083db2bb9c4c51b713da8a94d"
+            "sha256": "23b2c28e6466954886b1cc6fc57b2e524021d35a8716486cdd65a78228afa3f4"
           }
         },
         {
@@ -49846,14 +49860,14 @@
     },
     "appSourcesBefore": {
       "content": {
-        "digest": "91d94241f0ce6996cd88d9c4d551563aa98ea69608ffe6214b1de1212ec460f6",
+        "digest": "ef580decd902ad096229272d7ec0a833d0ba4eaea2b7b28b1d8d1b562efb3625",
         "files": [
           {
             "bytes": 991,
             "executable": false,
             "path": "app/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "e512bcc055dc464b4aff29d36d67202bce3f8639c8d2202564bff68e7aca522c"
+            "sha256": "febb6912d7aa0a272e7c670e752d5cf733f867d186b0a6d788e2eaedfd99421c"
           },
           {
             "bytes": 219,
@@ -50420,7 +50434,7 @@
             "executable": false,
             "path": "packages/secondary/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "b6d3bc500ccc5b2e790ab09476dea937af5dc36fbb15a5740bdf1cb98bd2cd78"
+            "sha256": "5898b04ce90b8b1ac9122d600f5e8999aedb70c84d493b16e892da06164938f8"
           },
           {
             "bytes": 23,
@@ -50469,7 +50483,7 @@
             "executable": false,
             "path": "packages/shared/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "8f7cfc450ff16948b75c9929cd6a18cf830ca7e083db2bb9c4c51b713da8a94d"
+            "sha256": "23b2c28e6466954886b1cc6fc57b2e524021d35a8716486cdd65a78228afa3f4"
           },
           {
             "bytes": 126,
@@ -50490,13 +50504,13 @@
       },
       "inputs": [
         {
-          "source": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { app as app } from '../src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: '76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: '7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
+          "source": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { app as app } from '../src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: 'c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: 'd157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
           "subject": {
             "bytes": 991,
             "executable": false,
             "path": "app/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "e512bcc055dc464b4aff29d36d67202bce3f8639c8d2202564bff68e7aca522c"
+            "sha256": "febb6912d7aa0a272e7c670e752d5cf733f867d186b0a6d788e2eaedfd99421c"
           }
         },
         {
@@ -51300,13 +51314,13 @@
           }
         },
         {
-          "source": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { sameOwnerApp as app } from '../src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: '76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: '7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
+          "source": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { sameOwnerApp as app } from '../src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: 'c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: 'd157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
           "subject": {
             "bytes": 1000,
             "executable": false,
             "path": "packages/secondary/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "b6d3bc500ccc5b2e790ab09476dea937af5dc36fbb15a5740bdf1cb98bd2cd78"
+            "sha256": "5898b04ce90b8b1ac9122d600f5e8999aedb70c84d493b16e892da06164938f8"
           }
         },
         {
@@ -51370,13 +51384,13 @@
           }
         },
         {
-          "source": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { app as app } from '../../../app/src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: '76a9e70375930d2311b41886fccb5aa3e518771febfcc4679eaf044fdd50cb89',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: '7f7e6e54fac50aaa05b786581c94acd2c24b21e91bb5cfd37daf3bad5daff635',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
+          "source": "/* kovo-app-contract-prototype/v6: compiler generated; do not edit */\nimport { app as app } from '../../../app/src/kovo.js';\nexport { publicAccess } from '@kovojs/server';\nexport const __kovoGeneratedContract = Object.freeze({\n  appId: '00000000-0000-4000-8000-000000000006',\n  compilerSourceSha256: 'c402de50734cbd9f7434b51cb840746ffb2d53c26c1f05a0f79edd4aa044c53b',\n  ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',\n  providerExportBinding: 'contactsProvider',\n  providerImportSpecifier: './provider.js',\n  providerKey: 'contacts-provider-v6',\n  serverPackedContentsSha256: 'd157bf6ec1606dec34e12d5ab1ebcad7baf40d0dcd9be0366040e043b8ea63c8',\n});\nexport const endpoint: typeof app.endpoint = app.endpoint;\nexport const layout: typeof app.layout = app.layout;\nexport const mutation: typeof app.mutation = app.mutation;\nexport const query: typeof app.query = app.query;\nexport const route: typeof app.route = app.route;\nexport const task: typeof app.task = app.task;\n",
           "subject": {
             "bytes": 1001,
             "executable": false,
             "path": "packages/shared/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "8f7cfc450ff16948b75c9929cd6a18cf830ca7e083db2bb9c4c51b713da8a94d"
+            "sha256": "23b2c28e6466954886b1cc6fc57b2e524021d35a8716486cdd65a78228afa3f4"
           }
         },
         {
