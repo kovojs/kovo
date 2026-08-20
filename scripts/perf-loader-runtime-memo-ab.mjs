@@ -330,13 +330,35 @@ export function authenticateHistoricalScratchpad(manifest, dependencies = {}) {
   const artifacts = manifest?.scratchpad?.artifacts;
   if (!Array.isArray(artifacts))
     throw new TypeError('historical scratchpad artifact census is missing');
-  const authenticated = [];
+  const declared = [];
   for (const artifact of artifacts) {
     const absolute = path.resolve(root, artifact.path);
     if (!absolute.startsWith(`${path.resolve(root)}${path.sep}`)) {
       throw new Error(`historical scratchpad path escapes its root: ${artifact.path}`);
     }
-    const bytes = readFileSync(absolute);
+    declared.push({ absolute, artifact });
+  }
+
+  // A cleanup can leave the scratchpad directory (and even some subdirectories) behind after its
+  // raw files are gone. Such a partial local cache is not evidence: authenticate it only when the
+  // complete manifest-declared set can be read into this process. Read every member before hashing
+  // any member so a partial set cannot produce a misleading partially-authenticated result.
+  const available = [];
+  for (const entry of declared) {
+    let bytes;
+    try {
+      bytes = readFileSync(entry.absolute);
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error) {
+        return { root: path.resolve(root), status: 'unavailable-on-current-host' };
+      }
+      throw error;
+    }
+    available.push({ ...entry, bytes });
+  }
+
+  const authenticated = [];
+  for (const { artifact, bytes } of available) {
     if (bytes.byteLength !== artifact.bytes || sha256(bytes) !== artifact.sha256) {
       throw new Error(`historical scratchpad artifact differs: ${artifact.path}`);
     }

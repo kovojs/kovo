@@ -27,10 +27,11 @@ candidate.
 The machine-readable origin manifest is
 `docs/performance/loader-runtime-memo-origin.json`. The runner authenticates its own pinned manifest
 digest, the commit-parent chain, the canonical binary patch SHA-256 and stable patch ID. When the
-host-local scratchpad still exists, it also re-hashes all 13 raw artifacts, including both CPU
-profiles, `ab-results.jsonl`, the original driver, rendered documents, and the Wasm spike report.
-The manifest records the exact argv used to serialize the production patch; its digest is over the
-command's raw stdout bytes.
+complete host-local scratchpad remains present and readable, it also re-hashes all 13 raw artifacts,
+including both CPU profiles, `ab-results.jsonl`, the original driver, rendered documents, and the
+Wasm spike report. A missing or partially cleaned local set is unavailable rather than evidence; a
+complete set with any byte/hash mismatch still fails closed. The manifest records the exact argv
+used to serialize the production patch; its digest is over the command's raw stdout bytes.
 
 The authenticated exploratory evidence says the benchmark rendered the same 276,420-byte module
 on every forced render. Product-route medians were 623.7 to 854.3 req/s at c=1, 712.5 to 946.8 at

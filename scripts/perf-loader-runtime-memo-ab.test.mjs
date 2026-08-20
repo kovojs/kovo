@@ -74,6 +74,39 @@ describe('loader-runtime memo authenticated A/B runner', () => {
     );
   });
 
+  it('treats a partial scratchpad as unavailable and authenticates only a complete set', () => {
+    const root = temporaryDirectory('kovo-loader-origin-partial-');
+    const first = Buffer.from('{"first":true}\n');
+    const second = Buffer.from('{"second":true}\n');
+    writeFileSync(path.join(root, 'first.json'), first);
+    const manifest = {
+      scratchpad: {
+        artifacts: [
+          { bytes: first.byteLength, path: 'first.json', sha256: digest(first) },
+          { bytes: second.byteLength, path: 'second.json', sha256: digest(second) },
+        ],
+        root,
+      },
+    };
+
+    expect(authenticateHistoricalScratchpad(manifest)).toEqual({
+      root: path.resolve(root),
+      status: 'unavailable-on-current-host',
+    });
+
+    writeFileSync(path.join(root, 'second.json'), second);
+    expect(authenticateHistoricalScratchpad(manifest)).toEqual({
+      artifacts: ['first.json', 'second.json'],
+      root: path.resolve(root),
+      status: 'authenticated',
+    });
+
+    writeFileSync(path.join(root, 'first.json'), '{"first":false}\n');
+    expect(() => authenticateHistoricalScratchpad(manifest)).toThrow(
+      /historical scratchpad artifact differs: first\.json/u,
+    );
+  });
+
   it('re-authenticates the exact constant runtime module source under test', () => {
     expect(loaderRuntimeModuleSourceEvidence()).toEqual({
       bytes: 276_420,
