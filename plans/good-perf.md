@@ -239,11 +239,15 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
       `baseline, spike, spike, baseline` order on forced-dynamic listing/detail routes at
       c={1,8,32}; retain throughput, p50/p95/p99, CPU, peak RSS, byte-equivalence, and before/after
       CPU profiles, and apply the plan's declared acceptance rule.
-  - Evidence: [run `31754297930`, artifact
+  - Evidence: `docs/performance/loader-runtime-memo-origin.json` authenticates the removed
+    throwaway-worktree origin through durable ref `perf-spike/loader-memo-e54c595b5`, its exact
+    baseline/candidate commits, and raw-artifact digests. [Run `31754297930`, artifact
     `9203129430`](https://github.com/kovojs/kovo/actions/runs/31754297930/artifacts/9203129430)
-    authenticated `3010e8df3…d87b4a132`, 84 windows/42 B,S,S,B pairs and four profiles; zero
-    misses, +29.08% median throughput with paired 95% CI `[+26.07%, +30.23%]`, all p95 cells
-    improved, byte-identical bodies, and loader profile share fell from 14.89%/21.57% to 0.02%.
+    independently authenticated clean `3010e8df3…d87b4a132`: 84 windows on exact per-cell schedule
+    `bssbbssbbssbbs`, 42 adjacent baseline/spike occurrence pairs, and four profiles; zero misses,
+    +29.08% median throughput with paired 95% CI `[+26.07%, +30.23%]`, improved p95 in every cell,
+    byte-identical bodies, and loader profile share of 14.89%/21.57% to 0.02%. Criterion A accepted
+    the production memo.
 - [ ] Freeze and run the current matched L0/L1 browser matrix before any further navigation or
       runtime-emission change. Preserve inert documents at zero JS; the deterministic spike found
       the ordinary deferred runtime at 49,236 B Brotli and the enhanced-navigation closure alone at
@@ -309,12 +313,13 @@ packages/server/src/node.test.ts --reporter=dot` passed 88/88 and covers private
       statistically ratified family.
 - [ ] Store raw reports as CI artifacts and commit only a clean reviewed baseline summary. A dirty,
       null, load-shed, wrong-posture, or integrity-failed run cannot update budgets.
-- [ ] Ratify budgets from at least five independent baseline runs in one exact normalized
-      per-family hosted-runner/workload cohort using median, MAD, p95, and the acceptance rules
-      above; replace the rationale-only arrays for the realistic seven-family tier with the 21
-      linked derived baseline, budget, and holdout-evaluation documents. The separate deterministic
-      `perf-budgets.json` tier remains authoritative for the five exact production-byte gates and is
-      linked through the required publication sidecar above.
+- [ ] Select at least six independent reports in one exact normalized per-family
+      hosted-runner/workload cohort; ratify budgets from the first five and evaluate the sixth as an
+      independent holdout using median, MAD, p95, and the acceptance rules above. Replace the
+      rationale-only arrays for the realistic seven-family tier with the 21 linked derived baseline,
+      budget, and holdout-evaluation documents. The separate deterministic `perf-budgets.json` tier
+      remains authoritative for the five exact production-byte gates and is linked through the
+      required publication sidecar above.
 - [x] Add a regression comparator that requires matching source/lock/workload identities and reports
       `unproven` rather than pass when load, sample count, or identity is outside policy.
   - Evidence: `faf00c5de`, `49f83a2a9`, `3aabc77ae`; comparator/ratifier tests passed 26/26 and

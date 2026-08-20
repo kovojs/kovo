@@ -1,10 +1,11 @@
 # Realistic performance baseline publication
 
 The `perf-measure-baselines` label runs seven independently scheduled baseline jobs. Repeat the
-label cycle until each subject has at least five reports with the same source commit, dependency
-locks, workload digest, and normalized host digest. Jobs from one workflow run can land on
-different machines; cohorts are selected per subject, not by assuming all seven jobs shared a host.
-Five attempts of one Actions run do not count: every accepted report has a distinct run ID.
+label cycle until each subject has at least six admitted reports with the same source commit,
+dependency locks, workload digest, and normalized host digest: the first five ratify the baseline
+and the sixth is its independent holdout. Jobs from one workflow run can land on different machines;
+cohorts are selected per subject, not by assuming all seven jobs shared a host. Multiple attempts of
+one Actions run do not count as independent reports; all six admitted reports need distinct run IDs.
 
 Use the metrics-blind collection and five-plus-one holdout workflow in
 [`baseline-collection.md`](./baseline-collection.md) to preserve raw GitHub custody and select exact
@@ -12,15 +13,18 @@ cohorts. The manual commands below describe the same individual ratification sta
 useful for inspecting a selected family; they are not a substitute for the aggregate collector and
 publication gate.
 
-## Collect one host cohort without repeating completed families
+## Preflight focused producers; collect the campaign by PR label
 
 Manual dispatch accepts two optional collection controls. `baseline_focus` selects `all`, `check`,
 `browser`, `dev-n24`, `dev-n216`, `build-n24`, `build-n216`, or `server`. The selected dev or build
-focus reduces that job's matrix to the exact corpus size. The five publication-authenticated job
-conditions remain unchanged: an early admission step stops every non-selected producer before Kovo
-setup, isolated dependency installs, browser installation, corpus generation, or measurement. Those
-expected non-selected jobs fail without an artifact; their failure does not invalidate the selected
-successful producer. Use another focused dispatch for each family still missing a report instead of
+focus reduces that job's matrix to the exact corpus size. Use focused `workflow_dispatch` runs only
+as preflight before the inclusive publication-campaign boundary. The publication-authenticated
+producer conditions remain unchanged: an early admission step stops every non-selected producer
+before Kovo setup, isolated dependency installs, browser installation, corpus generation, or
+measurement. Those expected non-selected jobs fail without an artifact, and a rejected selected
+producer can leave the exact-source run with zero literal publication artifacts. Inside the
+inclusive boundary, that run makes metrics-blind campaign collection fail closed. Outside the
+boundary, use another focused dispatch for each family still missing a preflight report instead of
 rerunning already-complete three-hour families.
 
 `baseline_cpu_model_sha256` optionally admits only runners whose exact UTF-8 Node
@@ -40,9 +44,12 @@ gh workflow run perf-realistic.yml \
   -f baseline_cpu_model_sha256=f56edd1ddb32e98359af80267bba52d80fedc60bf40440adea1c3ea0e0f429c7
 ```
 
-When workflow dispatch is unavailable, a labeled pull request provides a closed fallback. The only
-CPU alias is `perf-baseline-cpu-amd-7763`, which resolves to the full digest above. The reviewed
-focus aliases are `perf-baseline-focus-check`, `perf-baseline-focus-browser`,
+Use a labeled pull request for the inclusive publication campaign. Its PR-only `Production bytes`
+producer and `kovo-perf-bytes` upload are the declared literal-artifact floor for every baseline
+label cycle, including a cycle whose selected family is rejected by admission; a missing or invalid
+bytes artifact still invalidates the campaign. The only CPU alias is `perf-baseline-cpu-amd-7763`,
+which resolves to the full digest above. The reviewed focus aliases are
+`perf-baseline-focus-check`, `perf-baseline-focus-browser`,
 `perf-baseline-focus-dev-n24`, `perf-baseline-focus-dev-n216`,
 `perf-baseline-focus-build-n24`, `perf-baseline-focus-build-n216`, and
 `perf-baseline-focus-server`. Apply at most one CPU alias and at most one focus alias, then apply
@@ -61,9 +68,9 @@ selectors into the env-only admission step. For another family, remove the old f
 labels, add the next exact focus, then re-add `perf-measure-baselines`. With no selector labels the
 PR path remains all-family and CPU-unconstrained. More than one CPU/focus selector, malformed label
 JSON, or any unknown label beginning `perf-baseline-cpu` or `perf-baseline-focus` fails closed before
-setup. Workflow-dispatch inputs remain the primary, general API and take precedence over label
-aliases; pull-request jobs deliberately receive empty dispatch-input environment values so their
-reviewed labels can apply.
+setup. Workflow-dispatch inputs remain the general preflight API and take precedence over label
+aliases; they are never campaign inputs. Pull-request jobs deliberately receive empty
+dispatch-input environment values so their reviewed labels can apply.
 
 That AMD digest is a collection-time operator choice based on the current hosted-runner cohort, not
 a permanent default or a portable hardware requirement. CPU admission only reduces wasted retries.
@@ -72,29 +79,32 @@ ratifier/publication gate still requires the exact full `host.digest` for each c
 memory capacity class, Node version, OS release, runner image, and browser versions can therefore
 still separate two reports that passed the same CPU-model admission.
 
-After a mismatch, rerun only the affected `baseline_focus` until the family has five independent
-baseline run IDs plus its sixth holdout. If the build-persistence decision requires the optional
-N=216 build profile, dispatch `measurement_scope=decisions` with
+After a preflight mismatch, rerun only the affected `workflow_dispatch` `baseline_focus` outside
+the campaign boundary. During the campaign, retry that family through the PR focus-label cycle
+above until it has five independent baseline run IDs plus its sixth holdout. If the
+build-persistence decision requires the optional N=216 build profile, dispatch
+`measurement_scope=decisions` outside the baseline campaign boundary with
 `decision_focus=build-profile` and the same `baseline_cpu_model_sha256`; the profile producer uses
 the same early CPU admission, while publication still requires its exact host identity to match the
-build-N=216 evidence. On the PR-label fallback, apply `perf-baseline-cpu-amd-7763` (and, if a focus
-selector is present, `perf-baseline-focus-build-n216`) before applying
+build-N=216 evidence. For the separate PR-label decision path, apply
+`perf-baseline-cpu-amd-7763` (and, if a focus selector is present,
+`perf-baseline-focus-build-n216`) before applying
 `perf-measure-build-profile`.
 
 ## Artifact map
 
 | Subject       | Artifact                   | Report inside the artifact | Required reports |
 | ------------- | -------------------------- | -------------------------- | ---------------: |
-| check scaling | `kovo-perf-check-scaling`  | `check-scaling.json`       |                5 |
-| browser       | `kovo-perf-browser-matrix` | `comparison.json`          |                5 |
-| dev N=24      | `kovo-perf-dev-n24`        | `comparison.json`          |                5 |
-| dev N=216     | `kovo-perf-dev-n216`       | `comparison.json`          |                5 |
-| build N=24    | `kovo-perf-build-n24`      | `comparison.json`          |                5 |
-| build N=216   | `kovo-perf-build-n216`     | `comparison.json`          |                5 |
-| server        | `kovo-perf-server-matrix`  | `comparison.json`          |                5 |
+| check scaling | `kovo-perf-check-scaling`  | `check-scaling.json`       |                6 |
+| browser       | `kovo-perf-browser-matrix` | `comparison.json`          |                6 |
+| dev N=24      | `kovo-perf-dev-n24`        | `comparison.json`          |                6 |
+| dev N=216     | `kovo-perf-dev-n216`       | `comparison.json`          |                6 |
+| build N=24    | `kovo-perf-build-n24`      | `comparison.json`          |                6 |
+| build N=216   | `kovo-perf-build-n216`     | `comparison.json`          |                6 |
+| server        | `kovo-perf-server-matrix`  | `comparison.json`          |                6 |
 
 The separate `kovo-perf-bytes` / `bytes.json` artifact contributes one Production-bytes sidecar,
-not another five-report family. It is emitted only by the PR-only `bytes` / `Production bytes` job.
+not another six-report family. It is emitted only by the PR-only `bytes` / `Production bytes` job.
 The metrics-blind collector retains every such artifact in the selected runs and chooses the
 earliest authenticated candidate by immutable run chronology for the final manifest.
 
@@ -129,8 +139,9 @@ artifact-page URL is stable during retention, but it is not permanent storage.
 
 ## Ratify each subject
 
-Create a custody directory outside the measured checkout, then supply the five downloaded report
-paths and their matching artifact URLs:
+Create a custody directory outside the measured checkout, then supply the first five admitted
+baseline report paths and their matching artifact URLs. Retain the sixth admitted report separately
+as the independent holdout:
 
 ```sh
 kovo_perf_custody="$(realpath "$(mktemp -d)")"
