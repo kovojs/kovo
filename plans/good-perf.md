@@ -289,8 +289,9 @@ packages/server/src/node.test.ts --reporter=dot` passed 88/88 and covers private
 - [x] Measure per-route stylesheet splitting on the matched multi-route fixtures; implement only if
       it saves at least 10% route critical-path bytes without duplicating enough shared CSS to regress
       total session bytes.
-  - Evidence: `402b0138b`; authenticated counterfactual rejected splitting: listing/detail Brotli
-    regressed 2.83%/1.60% and the full session regressed 24.62%, so production remains unsplit.
+  - Evidence: `docs/performance/route-css-counterfactual.md`; authenticated counterfactual rejected
+    splitting: listing/detail Brotli regressed 2.38%/1.23% and the full session regressed 22.75%, so
+    production remains unsplit.
 - [x] Profile current forced-dynamic SSR before proposing hot-path work. The 2026-08-08 profile
       refuted JSX lowering, HKDF/HMAC, request proxy, head serialization, CSP rescan, and the claimed
       38% `Reflect.apply` opportunity; do not revive them without current contradictory evidence.
