@@ -303,23 +303,24 @@ describe('serialized comparison analysis', () => {
 
     const firstRoot = await mkdtemp(path.join(os.tmpdir(), 'kovo-packed-workload-first-'));
     const secondRoot = await mkdtemp(path.join(os.tmpdir(), 'kovo-packed-workload-second-'));
+    const generateManifests = async (outDir) =>
+      Object.fromEntries(
+        await Promise.all(
+          ['kovo', 'nextjs'].map(async (framework) => [
+            framework,
+            await generateCorpus({ dependencyMode: 'deferred', framework, outDir, size: 24 }),
+          ]),
+        ),
+      );
     try {
-      const firstManifest = await generateCorpus({
-        dependencyMode: 'deferred',
-        framework: 'kovo',
-        outDir: firstRoot,
-        size: 24,
-      });
-      const secondManifest = await generateCorpus({
-        dependencyMode: 'deferred',
-        framework: 'kovo',
-        outDir: secondRoot,
-        size: 24,
-      });
+      const [firstManifests, secondManifests] = await Promise.all([
+        generateManifests(firstRoot),
+        generateManifests(secondRoot),
+      ]);
       const firstExternal = await performanceWorkloadIdentity(
         {
           cells: ['build'],
-          corpusManifests: { kovo: firstManifest },
+          corpusManifests: firstManifests,
           corpusSize: 24,
           iterations: 10,
         },
@@ -328,13 +329,20 @@ describe('serialized comparison analysis', () => {
       const secondExternal = await performanceWorkloadIdentity(
         {
           cells: ['build'],
-          corpusManifests: { kovo: secondManifest },
+          corpusManifests: secondManifests,
           corpusSize: 24,
           iterations: 10,
         },
         ['build'],
       );
       expect(firstExternal.complete).toBe(true);
+      expect(firstExternal.identity.corpus.kovo.shapeDigest).toBe(
+        firstExternal.identity.corpus.nextjs.shapeDigest,
+      );
+      expect(secondExternal.complete).toBe(true);
+      expect(secondExternal.identity.corpus.kovo.shapeDigest).toBe(
+        secondExternal.identity.corpus.nextjs.shapeDigest,
+      );
       expect(secondExternal.digest).toBe(firstExternal.digest);
     } finally {
       await Promise.all([
