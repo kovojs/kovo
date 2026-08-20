@@ -266,35 +266,43 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        timeout-minutes: 3
         with:
           persist-credentials: false
           ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
       - name: Authenticate checked-out performance source
+        timeout-minutes: 1
         run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - name: Admit requested baseline CPU model
         uses: ./.github/actions/kovo-perf-baseline-cpu-admission
+        timeout-minutes: 1
         env:
           KOVO_PERF_BASELINE_FAMILY: browser
           KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}
           KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}
           KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
       - uses: ./.github/actions/kovo-setup
+        timeout-minutes: 5
       - name: Bind the report to the runner image
+        timeout-minutes: 1
         run: |
           : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
           : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
           image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
           printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       - name: Install isolated benchmark dependencies
+        timeout-minutes: 5
         run: |
           vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile
           vp exec pnpm --dir benchmarks/harness install --ignore-workspace --frozen-lockfile
       - uses: ./.github/actions/playwright-install
+        timeout-minutes: 45
         with:
           browsers: chromium
           cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml', 'benchmarks/harness/pnpm-lock.yaml') }}
           restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
       - name: Collect default and matched browser evidence
+        timeout-minutes: 285
         run: >-
           vp exec node benchmarks/compare.mjs
           --cells browser
@@ -305,6 +313,7 @@ jobs:
           --out-dir "$RUNNER_TEMP/kovo-perf/browser"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
+        timeout-minutes: 3
         with:
           if-no-files-found: warn
           name: kovo-perf-browser-matrix

@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  BROWSER_COMPARISON_JOB_TIMEOUT_MS,
+  BROWSER_WORKFLOW_STEP_TIMEOUT_MINUTES,
+} from '../benchmarks/harness/browser-timeout-policy.mjs';
+import {
   inspectDevPortAllocation,
   inspectHostEphemeralPortRanges,
 } from '../benchmarks/harness/dev-port-allocation.mjs';
@@ -436,6 +440,24 @@ describe('realistic performance CI policy', () => {
     }
     expect(jobSource('server-matrix')).toContain('timeout --signal=TERM --kill-after=30s 330m');
     expect(jobSource('server-matrix')).toContain('timeout-minutes: 360');
+  });
+
+  it('enforces the reviewed timeout cap on every browser-matrix workflow step', () => {
+    const browser = jobSource('browser-matrix');
+    const stepTimeouts = [...browser.matchAll(/^        timeout-minutes: (\d+)$/gmu)].map((match) =>
+      Number(match[1]),
+    );
+    expect(stepTimeouts).toEqual([3, 1, 1, 5, 1, 5, 45, 285, 3]);
+    expect(stepTimeouts.reduce((total, value) => total + value, 0)).toBe(
+      Object.values(BROWSER_WORKFLOW_STEP_TIMEOUT_MINUTES).reduce(
+        (total, value) => total + value,
+        0,
+      ),
+    );
+    expect(stepTimeouts.reduce((total, value) => total + value, 0)).toBe(349);
+    expect(browser.match(/^    timeout-minutes: (\d+)$/mu)?.[1]).toBe('360');
+    expect(BROWSER_COMPARISON_JOB_TIMEOUT_MS / 60_000).toBe(360);
+    expect(BROWSER_COMPARISON_JOB_TIMEOUT_MS / 60_000 - 349).toBe(11);
   });
 
   it('fails closed when a publishable measurement lacks hosted-runner identity', () => {

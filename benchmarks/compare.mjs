@@ -10,6 +10,15 @@ import { fileURLToPath } from 'node:url';
 import { parseIntegerFlag, readArg, readIntegerArg } from './harness/args.mjs';
 import { bfcacheIterationFindings } from './harness/bfcache.mjs';
 import {
+  BROWSER_COMPARISON_CHILD_MAX_OUTPUT_BYTES,
+  BROWSER_COMPARISON_EXECUTION_ORDER,
+  BROWSER_COMPARISON_LANES,
+  BROWSER_COMPARISON_QUIET_HOST_MAX_MS,
+  BROWSER_PREPARATION_SUPERVISOR_TIMEOUT_MS,
+  browserAdapterSupervisorTimeoutMs,
+  browserComparisonTimeoutBudget,
+} from './harness/browser-timeout-policy.mjs';
+import {
   LIGHTHOUSE_METRIC_KEYS,
   lighthouseBrowserIdentityFindings,
   lighthouseSampleFailureFindings,
@@ -63,11 +72,12 @@ import {
   serverConditions,
 } from '../scripts/perf-server-benchmark.mjs';
 import { preparePackedCliBenchmark } from '../scripts/perf-cli-startup-benchmark.mjs';
+import { runBoundedTestProcess } from '../packages/create-kovo/src/index.test-process-supervisor.mjs';
 
 export const COMPARE_SCHEMA = 'kovo-next-performance-comparison/v1';
 export const BROWSER_PREPARE_SCHEMA = 'kovo-browser-benchmark-prepare/v1';
 export const COMPARE_ADAPTER_FAILURE_SCHEMA = 'kovo-comparison-adapter-failure/v1';
-export const EXECUTION_ORDER = Object.freeze(['kovo', 'nextjs', 'nextjs', 'kovo']);
+export const EXECUTION_ORDER = BROWSER_COMPARISON_EXECUTION_ORDER;
 export const WORKLOAD_IDENTITY_SCHEMA = 'kovo-performance-workload-identity/v1';
 
 const DEV_EDIT_CLASSES = Object.freeze(['leaf', 'entry', 'data', 'syntaxError', 'recovery']);
@@ -79,7 +89,7 @@ const MAX_HOST_SETTLE_MAX_MS = 60_000;
 
 const benchmarkRoot = fileURLToPath(new URL('.', import.meta.url));
 const repoRoot = path.resolve(benchmarkRoot, '..');
-const lanes = Object.freeze(['default', 'matched-l0', 'matched-l1']);
+const lanes = BROWSER_COMPARISON_LANES;
 const buildModes = Object.freeze(['clean', 'unchanged', 'edit']);
 const defaultCells = Object.freeze(['browser', 'dev', 'build', 'server']);
 const lockFiles = Object.freeze([
@@ -108,6 +118,28 @@ export async function runComparison(options = {}, dependencies = {}) {
   }
   const quietHostPolicy = comparisonQuietHostPolicy(options);
   for (const lane of options.lanes ?? lanes) assertMember('--lanes', lane, lanes);
+  const browserTimeoutBudget = cells.includes('browser')
+    ? browserComparisonTimeoutBudget({
+        lanes: options.lanes ?? lanes,
+        lighthouseRuns: options.lighthouseRuns ?? 5,
+        skipLighthouse: options.skipLighthouse === true,
+      })
+    : null;
+  if (
+    cells.includes('browser') &&
+    quietHostPolicy.maxWaitMs > BROWSER_COMPARISON_QUIET_HOST_MAX_MS
+  ) {
+    throw new Error(
+      `browser comparison quiet-host admission cannot exceed ${String(
+        BROWSER_COMPARISON_QUIET_HOST_MAX_MS,
+      )}ms`,
+    );
+  }
+  if ((browserTimeoutBudget?.collectFinalizationHeadroomMs ?? 1) <= 0) {
+    throw new Error(
+      'browser comparison schedule exceeds the enforced collection-step timeout budget',
+    );
+  }
   for (const mode of options.buildModes ?? buildModes)
     assertMember('--build-modes', mode, buildModes);
   const devSchedule = cells.includes('dev')
@@ -256,6 +288,7 @@ export async function runComparison(options = {}, dependencies = {}) {
           }
           const resultFile = path.join(scratch, `${lane}-${orderIndex}-browser.json`);
           const retainedReference = `raw/${lane}-${String(orderIndex)}-${framework}-browser-failed.json`;
+          const scheduledLighthouseRepeats = Math.max(1, lighthouseCounts[occurrence]);
           const captured = await captureBrowserCell({
             adapter: {
               args: [
@@ -270,7 +303,7 @@ export async function runComparison(options = {}, dependencies = {}) {
                 String(warmupCount),
                 ...(options.skipLighthouse
                   ? ['--skip-lighthouse']
-                  : ['--lighthouse-runs', String(Math.max(1, lighthouseCounts[occurrence]))]),
+                  : ['--lighthouse-runs', String(scheduledLighthouseRepeats)]),
                 '--bfcache-iterations',
                 String(Math.max(1, bfcacheCounts[occurrence])),
                 '--skip-build',
@@ -281,6 +314,10 @@ export async function runComparison(options = {}, dependencies = {}) {
               ],
               cwd: repoRoot,
               label: `${lane}/${framework}/browser/${occurrence}`,
+              supervisorTimeoutMs: browserAdapterSupervisorTimeoutMs({
+                lighthouseRepeats: scheduledLighthouseRepeats,
+                skipLighthouse: options.skipLighthouse === true,
+              }),
             },
             cell: {
               cell: 'browser',
@@ -604,6 +641,7 @@ export async function runComparison(options = {}, dependencies = {}) {
         bfcacheIterations: options.bfcacheIterations ?? 10,
         bootstrapIterations: options.bootstrapIterations ?? 10_000,
         browserSamples: iterations,
+        browserTimeouts: browserTimeoutBudget,
         devEditSamples: options.devIterations ?? 30,
         devEditSessionSamples: devSchedule.filter(({ framework }) => framework === 'kovo').length,
         devOccurrenceSchedule: devSchedule,
@@ -1165,8 +1203,8 @@ function assertServerMatrixOptions(options) {
   serverSampleSchedule(options.serverSamples ?? 7);
 }
 
-async function runAdapter({ args, cwd, label }) {
-  await runChildProcess({ args, command: process.execPath, cwd, label });
+async function runAdapter({ args, cwd, label, supervisorTimeoutMs }) {
+  await runChildProcess({ args, command: process.execPath, cwd, label, supervisorTimeoutMs });
 }
 
 /**
@@ -1409,7 +1447,41 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function runChildProcess({ args, command, cwd, label }) {
+export async function runChildProcess({ args, command, cwd, label, supervisorTimeoutMs }) {
+  if (supervisorTimeoutMs !== undefined) {
+    const outcome = await runBoundedTestProcess({
+      args,
+      captureOutput: false,
+      command,
+      cwd,
+      forwardOutput: true,
+      maxOutputBytes: BROWSER_COMPARISON_CHILD_MAX_OUTPUT_BYTES,
+      supervisorTimeoutMs,
+    });
+    const failures = [];
+    if (outcome.timedOut) {
+      failures.push(`time ceiling exceeded after ${String(supervisorTimeoutMs)}ms`);
+    }
+    if (outcome.outputOverflowed) {
+      failures.push(
+        `combined output exceeded ${String(BROWSER_COMPARISON_CHILD_MAX_OUTPUT_BYTES)} bytes`,
+      );
+    }
+    if (outcome.cleanupError !== null)
+      failures.push(`process-tree cleanup: ${outcome.cleanupError}`);
+    if (outcome.error !== null) failures.push(`child process error: ${outcome.error}`);
+    if (outcome.signal !== null) failures.push(`terminated by ${outcome.signal}`);
+    if (outcome.exitCode === null) failures.push('child process exit status is absent');
+    else if (outcome.exitCode !== 0)
+      failures.push(`child process exited ${String(outcome.exitCode)}`);
+    if (failures.length === 0) return;
+    const error = new Error(`${label} failed: ${failures.join('; ')}`);
+    error.adapterExit = {
+      signal: outcome.signal,
+      status: Number.isSafeInteger(outcome.exitCode) ? outcome.exitCode : null,
+    };
+    throw error;
+  }
   await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
@@ -1446,7 +1518,8 @@ async function runChildProcess({ args, command, cwd, label }) {
   });
 }
 
-async function prepareBrowserEntrants() {
+export async function prepareBrowserEntrants(dependencies = {}) {
+  const executeChild = dependencies.runChildProcess ?? runChildProcess;
   const definitions = [
     {
       artifacts: [path.join(repoRoot, 'benchmarks/kovo/dist/server/server.mjs')],
@@ -1471,11 +1544,12 @@ async function prepareBrowserEntrants() {
         ? undefined
         : await readFile(definition.generatedInput);
     try {
-      await runChildProcess({
+      await executeChild({
         args: definition.command,
         command: 'vp',
         cwd: repoRoot,
         label: `browser/prepare/${definition.framework}`,
+        supervisorTimeoutMs: BROWSER_PREPARATION_SUPERVISOR_TIMEOUT_MS,
       });
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));

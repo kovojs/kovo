@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { canonicalJson } from '../scripts/lib/perf-host.mjs';
 import { performanceHostFingerprint } from '../scripts/lib/perf-host.mjs';
 import { devSessionHandoffFindings } from '../scripts/lib/perf-dev-session-evidence.mjs';
+import { BROWSER_PREPARATION_SUPERVISOR_TIMEOUT_MS } from './harness/browser-timeout-policy.mjs';
 import {
   LIGHTHOUSE_BROWSER_IDENTITY_SCHEMA,
   LIGHTHOUSE_SAMPLE_FAILURE_SCHEMA,
@@ -38,7 +39,9 @@ import {
   pairedAnalysis,
   performanceWorkloadIdentity,
   productArtifactCellFindings,
+  prepareBrowserEntrants,
   runBrowserComparisonAdapterCell,
+  runChildProcess,
   runComparison,
   runDevComparisonAdapterCell,
   serverSampleSchedule,
@@ -59,6 +62,19 @@ describe('serialized comparison analysis', () => {
     );
     await expect(runComparison({ cells: ['browser'], skipBuild: true })).rejects.toThrow(
       /prepares fresh production artifacts once/u,
+    );
+  });
+
+  it('caps only browser-comparison quiet-host admission at the budgeted 30 seconds', async () => {
+    await expect(runComparison({ cells: ['browser'], hostSettleMaxMs: 30_001 })).rejects.toThrow(
+      /browser comparison quiet-host admission cannot exceed 30000ms/u,
+    );
+    expect(() => createQuietHostAdmission({ maxWaitMs: 60_000, pollMs: 1_000 })).not.toThrow();
+  });
+
+  it('rejects a browser schedule whose supervised maximum exceeds the collect-step cap', async () => {
+    await expect(runComparison({ cells: ['browser'], lighthouseRuns: 6 })).rejects.toThrow(
+      /browser comparison schedule exceeds the enforced collection-step timeout budget/u,
     );
   });
 
@@ -1346,6 +1362,148 @@ describe('serialized comparison analysis', () => {
     }
   });
 
+  it('serializes supervised preparation timeouts into an unproven top-level comparison', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-compare-prepare-timeout-'));
+    const invocations = [];
+    try {
+      let rejected;
+      try {
+        await runComparison(
+          {
+            allowDirty: true,
+            bfcacheIterations: 2,
+            bootstrapIterations: 10,
+            cells: ['browser'],
+            hostSettleMaxMs: 0,
+            iterations: 2,
+            lanes: ['default'],
+            lighthouseRuns: 2,
+            maxLoadPerCpu: 1_000_000,
+            outDir: root,
+            skipLighthouse: true,
+            warmups: 0,
+          },
+          {
+            prepareBrowserEntrants: () =>
+              prepareBrowserEntrants({
+                runChildProcess: async (invocation) => {
+                  invocations.push(invocation);
+                  throw new Error(`${invocation.label} reached its synthetic preparation deadline`);
+                },
+              }),
+            runBrowserComparisonAdapterCell: async () => {
+              throw new Error('browser adapter must not run after failed preparation');
+            },
+          },
+        );
+      } catch (error) {
+        rejected = error;
+      }
+
+      const comparisonPath = path.join(root, 'comparison.json');
+      const report = JSON.parse(await readFile(comparisonPath, 'utf8'));
+      expect(rejected).toBeInstanceOf(Error);
+      expect(rejected.message).toContain(`Evidence preserved at ${comparisonPath}`);
+      expect(invocations).toHaveLength(2);
+      expect(
+        invocations.every(
+          ({ supervisorTimeoutMs }) =>
+            supervisorTimeoutMs === BROWSER_PREPARATION_SUPERVISOR_TIMEOUT_MS,
+        ),
+      ).toBe(true);
+      expect(report.browserPreparation.map(({ framework }) => framework)).toEqual([
+        'kovo',
+        'nextjs',
+      ]);
+      expect(report.browserPreparation.every(({ integrity }) => integrity.complete === false)).toBe(
+        true,
+      );
+      expect(
+        report.browserPreparation.every(({ integrity }) =>
+          integrity.errors.some((error) => error.includes('synthetic preparation deadline')),
+        ),
+      ).toBe(true);
+      expect(report.rawCells).toEqual([]);
+      expect(report.verdict.status).toBe('unproven');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it.runIf(process.platform !== 'win32')(
+    'times out an adapter, kills its detached descendant, and retains missing-report custody',
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-compare-tree-timeout-'));
+      const descendantPidFile = path.join(root, 'descendant.pid');
+      let descendantPid = null;
+      let descendantGoneBeforeCustody = false;
+      try {
+        const descendantSource = [
+          "process.on('SIGTERM', () => undefined);",
+          'setInterval(() => undefined, 1_000);',
+        ].join('');
+        const adapterSource = [
+          "const { spawn } = require('node:child_process');",
+          "const { writeFileSync } = require('node:fs');",
+          `const child = spawn(process.execPath, ['-e', ${JSON.stringify(descendantSource)}], { detached: true, env: process.env, stdio: 'ignore' });`,
+          'child.unref();',
+          `writeFileSync(${JSON.stringify(descendantPidFile)}, String(child.pid));`,
+          "process.on('SIGTERM', () => undefined);",
+          'setInterval(() => undefined, 1_000);',
+        ].join('\n');
+        const captured = await runBrowserComparisonAdapterCell(
+          {
+            adapter: {
+              args: ['-e', adapterSource],
+              cwd: root,
+              label: 'default/kovo/browser/0',
+              supervisorTimeoutMs: 500,
+            },
+            cell: { cell: 'browser', framework: 'kovo', lane: 'default', occurrence: 0 },
+            resultFile: path.join(root, 'missing-result.json'),
+            retainedFile: path.join(root, 'raw', 'missing-result.json'),
+            retainedReference: 'raw/missing-result.json',
+          },
+          {
+            runAdapter: async (adapter) => {
+              try {
+                await runChildProcess({ ...adapter, command: process.execPath });
+              } finally {
+                descendantPid = Number(await readFile(descendantPidFile, 'utf8'));
+                descendantGoneBeforeCustody = await processStopsWithin(descendantPid, 1_000);
+              }
+            },
+          },
+        );
+
+        expect(captured.error).toContain('time ceiling exceeded after 500ms');
+        expect(descendantGoneBeforeCustody).toBe(true);
+        expect(captured.cell).toMatchObject({
+          adapterFailure: {
+            process: { signal: 'SIGKILL', status: null },
+            rawReport: {
+              available: false,
+              reportBytes: null,
+              reportSha256: null,
+              retainedPath: null,
+            },
+            schema: COMPARE_ADAPTER_FAILURE_SCHEMA,
+          },
+          report: null,
+        });
+      } finally {
+        if (Number.isSafeInteger(descendantPid) && descendantPid > 0) {
+          try {
+            process.kill(descendantPid, 'SIGKILL');
+          } catch (error) {
+            if (error?.code !== 'ESRCH') throw error;
+          }
+        }
+        await rm(root, { force: true, recursive: true });
+      }
+    },
+  );
+
   it.each([
     {
       bytes: null,
@@ -1715,4 +1873,18 @@ function serverSemanticEvidence(bodySha256, route) {
     source: structuredClone(MATCHED_SERVER_SEMANTIC_SOURCE),
     validated: true,
   };
+}
+
+async function processStopsWithin(pid, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      if (error?.code === 'ESRCH') return true;
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return false;
 }
