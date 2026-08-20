@@ -188,6 +188,7 @@ for (const app of apps) {
 }
 
 const results = [];
+let executionError = null;
 for (const app of apps) {
   const serverLog = [];
   const server = spawn(app.start[0], app.start[1], {
@@ -205,7 +206,9 @@ for (const app of apps) {
   pipeServerLogs(app.id, server, serverLog);
   // A server that dies mid-run leaves the scenarios timing a dead origin, so surface it loudly.
   let serverExit = null;
+  let stoppingServer = false;
   server.on('exit', (code, signal) => {
+    if (stoppingServer) return;
     serverExit = `${app.id} server exited early (code ${code}, signal ${signal}).`;
     process.stderr.write(`[${app.id}] ${serverExit}\n`);
   });
@@ -233,12 +236,23 @@ for (const app of apps) {
     // Checked per entrant, not at the end: a rejected run should not first spend the remaining
     // entrants' wall clock producing numbers it is going to refuse to publish anyway.
     assertMeasurementIntegrity(results.slice(-1));
+  } catch (error) {
+    executionError = error;
   } finally {
+    stoppingServer = true;
     await stopServer(server);
   }
+  if (executionError) break;
 }
 
 const output = {
+  adapterFailure:
+    executionError === null
+      ? null
+      : {
+          error: boundedAdapterDiagnostic(executionError),
+          schema: 'kovo-browser-benchmark-adapter-failure/v1',
+        },
   generatedAt: new Date().toISOString(),
   iterations,
   lane,
@@ -271,8 +285,15 @@ const resultsPath = path.join(outDir, 'results.json');
 const reportPath = path.join(outDir, 'report.md');
 await writeFile(resultsPath, `${JSON.stringify(output, null, 2)}\n`);
 if (resultFile) await writeFile(path.resolve(resultFile), `${JSON.stringify(output, null, 2)}\n`);
+if (executionError) throw executionError;
 await writeReport(resultsPath, reportPath);
 process.stdout.write(`benchmark results written to ${path.relative(process.cwd(), reportPath)}\n`);
+
+function boundedAdapterDiagnostic(error) {
+  return (error instanceof Error ? error.message : String(error))
+    .replace(/[\r\n\0]+/gu, ' ')
+    .slice(0, 1_024);
+}
 
 /**
  * Refuses to report numbers taken in a posture the run did not actually achieve.

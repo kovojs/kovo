@@ -9,6 +9,12 @@ import { fileURLToPath } from 'node:url';
 
 import { parseIntegerFlag, readArg, readIntegerArg } from './harness/args.mjs';
 import { bfcacheIterationFindings } from './harness/bfcache.mjs';
+import {
+  LIGHTHOUSE_METRIC_KEYS,
+  lighthouseBrowserIdentityFindings,
+  lighthouseSampleFailureFindings,
+  lighthouseTimeoutPolicyFindings,
+} from './harness/lighthouse-policy.mjs';
 import { BROWSER_BENCHMARK_SCHEMA } from './harness/schema.mjs';
 import { navigationAttributionFindings, sessionBytePhaseFindings } from './harness/scenarios.mjs';
 import {
@@ -66,15 +72,6 @@ export const WORKLOAD_IDENTITY_SCHEMA = 'kovo-performance-workload-identity/v1';
 
 const DEV_EDIT_CLASSES = Object.freeze(['leaf', 'entry', 'data', 'syntaxError', 'recovery']);
 const DEV_LOOP_REPORT_SCHEMA = 'kovo-dev-loop-report/v1';
-const LIGHTHOUSE_METRIC_KEYS = Object.freeze([
-  'bytes',
-  'fcpMs',
-  'lcpMs',
-  'performanceScore',
-  'speedIndexMs',
-  'tbtMs',
-  'ttiMs',
-]);
 const MAX_COMPARISON_RAW_REPORT_BYTES = 64 * 1024 * 1024;
 const DEFAULT_HOST_SETTLE_MAX_MS = 30_000;
 const DEFAULT_HOST_SETTLE_POLL_MS = 1_000;
@@ -255,8 +252,9 @@ export async function runComparison(options = {}) {
             break;
           }
           const resultFile = path.join(scratch, `${lane}-${orderIndex}-browser.json`);
-          try {
-            await runAdapter({
+          const retainedReference = `raw/${lane}-${String(orderIndex)}-${framework}-browser-failed.json`;
+          const captured = await runBrowserComparisonAdapterCell({
+            adapter: {
               args: [
                 path.join(benchmarkRoot, 'run-all.mjs'),
                 '--apps',
@@ -280,18 +278,22 @@ export async function runComparison(options = {}) {
               ],
               cwd: repoRoot,
               label: `${lane}/${framework}/browser/${occurrence}`,
-            });
-          } catch (error) {
-            executionError = error instanceof Error ? error.message : String(error);
+            },
+            cell: {
+              cell: 'browser',
+              framework,
+              lane,
+              occurrence,
+            },
+            resultFile,
+            retainedFile: path.join(outDir, retainedReference),
+            retainedReference,
+          });
+          rawCells.push(captured.cell);
+          if (captured.error !== null) {
+            executionError = captured.error;
             break;
           }
-          rawCells.push({
-            cell: 'browser',
-            framework,
-            lane,
-            occurrence,
-            report: JSON.parse(await readFile(resultFile, 'utf8')),
-          });
         }
         if (executionError) break;
       }
@@ -1165,6 +1167,65 @@ async function runAdapter({ args, cwd, label }) {
 }
 
 /**
+ * Preserve a failed browser adapter's exact report before comparison scratch cleanup. The browser
+ * runner writes its partial result before rejecting, so per-metric Lighthouse failures and the
+ * pinned browser identity remain inspectable instead of collapsing into one parent error string.
+ */
+export async function runBrowserComparisonAdapterCell(options, dependencies = {}) {
+  const executeAdapter = dependencies.runAdapter ?? runAdapter;
+  let processFailure = null;
+  try {
+    await executeAdapter(options.adapter);
+  } catch (error) {
+    processFailure = error;
+  }
+
+  const raw = await readComparisonAdapterReport(options.resultFile);
+  const app = raw.report?.apps?.[0];
+  const reportFailure =
+    raw.error === null &&
+    (raw.report?.schema !== BROWSER_BENCHMARK_SCHEMA ||
+      raw.report?.adapterFailure !== null ||
+      raw.report?.apps?.length !== 1 ||
+      app?.integrity?.complete !== true ||
+      !Array.isArray(app?.integrity?.errors) ||
+      app.integrity.errors.length > 0)
+      ? 'browser adapter report is not measured and complete'
+      : null;
+  const failed = processFailure !== null || raw.error !== null || reportFailure !== null;
+  const cell = { ...options.cell, report: raw.report };
+  if (!failed) return { cell, error: null };
+
+  const retained = await retainComparisonAdapterReport(raw, options);
+  cell.adapterFailure = validateComparisonAdapterFailure({
+    process: comparisonProcessEvidence(processFailure),
+    rawReport: {
+      available: raw.custody.available,
+      parseError: raw.parseError,
+      reportBytes: raw.custody.reportBytes,
+      reportSha256: raw.custody.reportSha256,
+      retainedPath: retained.path,
+      retentionError: retained.error,
+      schema: optionalComparisonLabel(raw.report?.schema),
+      verdict: optionalComparisonLabel(raw.report?.adapterFailure?.schema),
+    },
+    schema: COMPARE_ADAPTER_FAILURE_SCHEMA,
+  });
+  const reasons = [
+    processFailure === null ? null : errorMessage(processFailure),
+    raw.error,
+    reportFailure,
+    retained.error === null ? null : `failed adapter raw-report retention: ${retained.error}`,
+  ].filter((value) => typeof value === 'string' && value.length > 0);
+  return {
+    cell,
+    error: boundedComparisonDiagnostic(
+      reasons.join('; ') || 'browser adapter evidence is incomplete',
+    ),
+  };
+}
+
+/**
  * Keep a failed dev adapter as an explicit scheduled cell. In particular, a nonzero adapter often
  * leaves the most useful lifecycle report behind; read and retain those exact bytes before the
  * scratch directory is removed.
@@ -1190,6 +1251,34 @@ export async function runDevComparisonAdapterCell(options, dependencies = {}) {
   const cell = { ...options.cell, report: raw.report };
   if (!failed) return { cell, error: null };
 
+  const retained = await retainComparisonAdapterReport(raw, options);
+  cell.adapterFailure = validateComparisonAdapterFailure({
+    process: comparisonProcessEvidence(processFailure),
+    rawReport: {
+      available: raw.custody.available,
+      parseError: raw.parseError,
+      reportBytes: raw.custody.reportBytes,
+      reportSha256: raw.custody.reportSha256,
+      retainedPath: retained.path,
+      retentionError: retained.error,
+      schema: optionalComparisonLabel(raw.report?.schema),
+      verdict: optionalComparisonLabel(raw.report?.verdict?.status),
+    },
+    schema: COMPARE_ADAPTER_FAILURE_SCHEMA,
+  });
+  const reasons = [
+    processFailure === null ? null : errorMessage(processFailure),
+    raw.error,
+    reportFailure,
+    retained.error === null ? null : `failed adapter raw-report retention: ${retained.error}`,
+  ].filter((value) => typeof value === 'string' && value.length > 0);
+  return {
+    cell,
+    error: boundedComparisonDiagnostic(reasons.join('; ') || 'dev adapter evidence is incomplete'),
+  };
+}
+
+async function retainComparisonAdapterReport(raw, options) {
   let retainedPath = null;
   let retentionError = null;
   if (raw.bytes !== null) {
@@ -1201,30 +1290,7 @@ export async function runDevComparisonAdapterCell(options, dependencies = {}) {
       retentionError = boundedComparisonDiagnostic(errorMessage(error));
     }
   }
-  cell.adapterFailure = validateComparisonAdapterFailure({
-    process: comparisonProcessEvidence(processFailure),
-    rawReport: {
-      available: raw.custody.available,
-      parseError: raw.parseError,
-      reportBytes: raw.custody.reportBytes,
-      reportSha256: raw.custody.reportSha256,
-      retainedPath,
-      retentionError,
-      schema: optionalComparisonLabel(raw.report?.schema),
-      verdict: optionalComparisonLabel(raw.report?.verdict?.status),
-    },
-    schema: COMPARE_ADAPTER_FAILURE_SCHEMA,
-  });
-  const reasons = [
-    processFailure === null ? null : errorMessage(processFailure),
-    raw.error,
-    reportFailure,
-    retentionError === null ? null : `failed adapter raw-report retention: ${retentionError}`,
-  ].filter((value) => typeof value === 'string' && value.length > 0);
-  return {
-    cell,
-    error: boundedComparisonDiagnostic(reasons.join('; ') || 'dev adapter evidence is incomplete'),
-  };
+  return { error: retentionError, path: retainedPath };
 }
 
 async function readComparisonAdapterReport(resultFile) {
@@ -1232,7 +1298,7 @@ async function readComparisonAdapterReport(resultFile) {
   try {
     bytes = await readFile(resultFile);
   } catch (error) {
-    const message = `dev adapter report is unavailable: ${errorMessage(error)}`;
+    const message = `comparison adapter report is unavailable: ${errorMessage(error)}`;
     return {
       bytes: null,
       custody: { available: false, reportBytes: null, reportSha256: null },
@@ -1247,7 +1313,7 @@ async function readComparisonAdapterReport(resultFile) {
     reportSha256: comparisonSha256(bytes),
   };
   if (bytes.byteLength === 0 || bytes.byteLength > MAX_COMPARISON_RAW_REPORT_BYTES) {
-    const message = 'dev adapter report is empty or exceeds its evidence bound';
+    const message = 'comparison adapter report is empty or exceeds its evidence bound';
     return { bytes, custody, error: message, parseError: message, report: null };
   }
   try {
@@ -1260,7 +1326,7 @@ async function readComparisonAdapterReport(resultFile) {
     };
   } catch (error) {
     const message = boundedComparisonDiagnostic(
-      `dev adapter report is invalid JSON: ${errorMessage(error)}`,
+      `comparison adapter report is invalid JSON: ${errorMessage(error)}`,
     );
     return { bytes, custody, error: message, parseError: message, report: null };
   }
@@ -2131,21 +2197,26 @@ export function serverSemanticMatrixFindings(
 }
 
 function validateBrowserCell(cell, expected) {
+  if (cell.adapterFailure !== undefined) {
+    expected.reasons.push(
+      `${cell.lane}/${cell.framework} browser adapter process or report failed`,
+    );
+  }
   if (cell.report?.schema !== BROWSER_BENCHMARK_SCHEMA)
     expected.reasons.push(`${cell.lane}/${cell.framework} browser report schema mismatch`);
-  if (cell.report.apps?.length !== 1)
+  if (cell.report?.apps?.length !== 1)
     expected.reasons.push(`${cell.lane}/${cell.framework} expected exactly one app report`);
-  const app = cell.report.apps?.[0];
+  const app = cell.report?.apps?.[0];
   if (app?.app !== cell.framework)
     expected.reasons.push(`${cell.lane}/${cell.framework} app identity mismatch`);
   const expectedFramework = cell.framework === 'kovo' ? 'Kovo' : 'Next.js App Router';
   if (app?.framework !== expectedFramework)
     expected.reasons.push(`${cell.lane}/${cell.framework} framework identity mismatch`);
-  if (cell.report.lane !== cell.lane)
+  if (cell.report?.lane !== cell.lane)
     expected.reasons.push(`${cell.lane}/${cell.framework} lane identity mismatch`);
-  if (cell.report.iterations !== expected.measured)
+  if (cell.report?.iterations !== expected.measured)
     expected.reasons.push(`${cell.lane}/${cell.framework} iteration policy mismatch`);
-  if (cell.report.warmups !== expected.warmups)
+  if (cell.report?.warmups !== expected.warmups)
     expected.reasons.push(`${cell.lane}/${cell.framework} warmup policy mismatch`);
   if (app?.posture?.nodeEnv !== 'production')
     expected.reasons.push(`${cell.lane}/${cell.framework} production posture mismatch`);
@@ -2383,8 +2454,28 @@ export function browserRawMetricCensusFindings(app, expected) {
   } else if (!Array.isArray(lighthouse) || lighthouse.length !== 4) {
     findings.push('Lighthouse raw metric census expected four cells');
   } else {
+    const browserIdentities = new Set();
     for (const [index, cell] of lighthouse.entries()) {
       const where = `Lighthouse[${String(index)}]`;
+      const browserFindings = lighthouseBrowserIdentityFindings(cell?.browser);
+      if (browserFindings.length > 0) {
+        findings.push(`${where} ${browserFindings.join('; ')}`);
+      } else {
+        browserIdentities.add(JSON.stringify(cell.browser));
+      }
+      for (const finding of lighthouseTimeoutPolicyFindings(cell?.policy)) {
+        findings.push(`${where} ${finding}`);
+      }
+      if (!Array.isArray(cell?.failures)) {
+        findings.push(`${where} sample failure evidence is absent`);
+      } else if (cell.failures.length > 0) {
+        findings.push(`${where} contains failed Lighthouse samples`);
+        for (const failure of cell.failures) {
+          for (const malformed of lighthouseSampleFailureFindings(failure)) {
+            findings.push(`${where} ${malformed}`);
+          }
+        }
+      }
       if (
         cell?.repeats !== expected.lighthouseRepeats ||
         cell?.samples?.length !== expected.lighthouseRepeats
@@ -2402,6 +2493,13 @@ export function browserRawMetricCensusFindings(app, expected) {
           findings.push(`${where}.${name} raw metric census is incomplete`);
         }
       }
+    }
+    if (browserIdentities.size !== 1) {
+      findings.push('Lighthouse browser identity differs across raw cells');
+    }
+    const lighthouseVersion = lighthouse[0]?.browser?.version;
+    if (typeof lighthouseVersion !== 'string' || app?.bfcache?.browser !== lighthouseVersion) {
+      findings.push('Lighthouse browser version differs from the Playwright bfcache browser');
     }
   }
   if (
@@ -2468,6 +2566,10 @@ function observedBrowserVersions(cells) {
   for (const cell of cells) {
     const bfcacheVersion = cell.report?.apps?.[0]?.bfcache?.browser;
     if (typeof bfcacheVersion === 'string') versions.push(bfcacheVersion);
+    for (const lighthouse of cell.report?.apps?.[0]?.lighthouse ?? []) {
+      const lighthouseVersion = lighthouse?.browser?.version;
+      if (typeof lighthouseVersion === 'string') versions.push(lighthouseVersion);
+    }
     const devVersion = cell.report?.environment?.browser?.version;
     if (typeof devVersion === 'string') versions.push(devVersion);
   }

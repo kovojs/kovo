@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { summarizeAppBenchmarkIntegrity } from './run.mjs';
+import {
+  LIGHTHOUSE_BROWSER_IDENTITY_SCHEMA,
+  LIGHTHOUSE_SAMPLE_FAILURE_SCHEMA,
+  lighthouseTimeoutPolicy,
+} from './lighthouse-policy.mjs';
 import { analyzeNavigationAttribution } from './scenarios.mjs';
 
 describe('browser adapter integrity', () => {
@@ -63,6 +68,44 @@ describe('browser adapter integrity', () => {
       ],
     });
   });
+
+  it('requires identical pinned Lighthouse identity and surfaces per-metric diagnostics', () => {
+    const result = cleanResult();
+    result.bfcache.browser = '148.0.7778.96';
+    result.lighthouse = Array.from({ length: 4 }, () => cleanLighthouseCell());
+    const policy = {
+      bfcacheIterations: 1,
+      iterations: 1,
+      lighthouse: true,
+      lighthouseRepeats: 1,
+      listingPath: '/',
+      scenarios: ['coldLoad'],
+      warmups: 0,
+    };
+    expect(summarizeAppBenchmarkIntegrity(result, policy)).toMatchObject({
+      complete: true,
+      errors: [],
+    });
+
+    result.lighthouse[1].failures.push({
+      message: 'interactive: NO_TTI_CPU_IDLE_PERIOD',
+      metric: 'ttiMs',
+      sampleIndex: 0,
+      schema: LIGHTHOUSE_SAMPLE_FAILURE_SCHEMA,
+      scope: 'metric',
+    });
+    result.lighthouse[1].samples[0].ttiMs = null;
+    result.lighthouse[1].metrics.ttiMs = null;
+    result.lighthouse[1].nullSamples.ttiMs = 1;
+    expect(summarizeAppBenchmarkIntegrity(result, policy)).toMatchObject({
+      complete: false,
+      errors: expect.arrayContaining([
+        'lighthouse[1]/sample[0]/ttiMs: interactive: NO_TTI_CPU_IDLE_PERIOD',
+        'lighthouse[1]: null metric samples were observed',
+        'lighthouse[1]: aggregate metric is absent',
+      ]),
+    });
+  });
 });
 
 function cleanResult() {
@@ -113,6 +156,43 @@ function cleanScenario() {
     pageErrors: 0,
     rateLimitedResponses: 0,
     settleTimedOut: 0,
+  };
+}
+
+function cleanLighthouseCell() {
+  const metrics = {
+    bytes: 100,
+    fcpMs: 10,
+    lcpMs: 20,
+    performanceScore: 1,
+    speedIndexMs: 12,
+    tbtMs: 0,
+    ttiMs: 25,
+  };
+  return {
+    browser: {
+      executable: {
+        basename: 'chrome',
+        bytes: 123_456,
+        pathSha256: `sha256:${'a'.repeat(64)}`,
+      },
+      provider: 'playwright.chromium',
+      schema: LIGHTHOUSE_BROWSER_IDENTITY_SCHEMA,
+      version: '148.0.7778.96',
+    },
+    failures: [],
+    metrics: { ...metrics },
+    network: {
+      errorResponses: 0,
+      rateLimitedResponses: 0,
+      requests: 1,
+      tracked: true,
+    },
+    nullSamples: Object.fromEntries(Object.keys(metrics).map((name) => [name, 0])),
+    policy: lighthouseTimeoutPolicy(),
+    repeats: 1,
+    samples: [{ ...metrics }],
+    spread: Object.fromEntries(Object.keys(metrics).map((name) => [name, 0])),
   };
 }
 

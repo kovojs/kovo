@@ -3,20 +3,16 @@ import { readArg, readIntegerArg } from './args.mjs';
 import { bfcacheIterationFindings, runBfcacheProbe } from './bfcache.mjs';
 import { DEFAULT_LIGHTHOUSE_REPEATS, runLighthouse } from './lighthouse.mjs';
 import {
+  LIGHTHOUSE_METRIC_KEYS,
+  lighthouseBrowserIdentityFindings,
+  lighthouseSampleFailureFindings,
+  lighthouseTimeoutPolicyFindings,
+} from './lighthouse-policy.mjs';
+import {
   navigationAttributionFindings,
   runScenarios,
   sessionBytePhaseFindings,
 } from './scenarios.mjs';
-
-const LIGHTHOUSE_METRIC_KEYS = Object.freeze([
-  'bytes',
-  'fcpMs',
-  'lcpMs',
-  'performanceScore',
-  'speedIndexMs',
-  'tbtMs',
-  'ttiMs',
-]);
 
 export async function runAppBenchmark({
   app,
@@ -177,7 +173,36 @@ export function summarizeAppBenchmarkIntegrity(
   if (result.lighthouse?.length !== expectedLighthouseCells) {
     errors.push(`lighthouse: expected ${String(expectedLighthouseCells)} cells`);
   }
+  const lighthouseBrowserIdentities = new Set();
   for (const [index, cell] of (result.lighthouse ?? []).entries()) {
+    const browserFindings = lighthouseBrowserIdentityFindings(cell.browser);
+    if (browserFindings.length > 0) {
+      errors.push(`lighthouse[${String(index)}]: ${browserFindings.join('; ')}`);
+    } else {
+      lighthouseBrowserIdentities.add(JSON.stringify(cell.browser));
+    }
+    const timeoutFindings = lighthouseTimeoutPolicyFindings(cell.policy);
+    if (timeoutFindings.length > 0) {
+      errors.push(`lighthouse[${String(index)}]: ${timeoutFindings.join('; ')}`);
+    }
+    if (!Array.isArray(cell.failures)) {
+      errors.push(`lighthouse[${String(index)}]: sample failure evidence is absent`);
+    } else {
+      for (const failure of cell.failures) {
+        const findings = lighthouseSampleFailureFindings(failure);
+        if (findings.length > 0) {
+          errors.push(
+            `lighthouse[${String(index)}]: malformed sample failure evidence: ${findings.join('; ')}`,
+          );
+          continue;
+        }
+        errors.push(
+          `lighthouse[${String(index)}]/sample[${String(failure.sampleIndex)}]${
+            failure.metric === null ? '' : `/${failure.metric}`
+          }: ${failure.message}`,
+        );
+      }
+    }
     if (cell.repeats !== lighthouseRepeats || cell.samples?.length !== lighthouseRepeats) {
       errors.push(`lighthouse[${String(index)}]: repeat policy mismatch`);
     }
@@ -206,6 +231,17 @@ export function summarizeAppBenchmarkIntegrity(
     ) {
       errors.push(`lighthouse[${String(index)}]: network integrity failed`);
     }
+  }
+  if (lighthouse && lighthouseBrowserIdentities.size !== 1) {
+    errors.push('lighthouse: browser executable identity differs across cells');
+  }
+  const lighthouseBrowserVersion = result.lighthouse?.[0]?.browser?.version;
+  if (
+    lighthouse &&
+    (typeof lighthouseBrowserVersion !== 'string' ||
+      result.bfcache?.browser !== lighthouseBrowserVersion)
+  ) {
+    errors.push('lighthouse: pinned browser version differs from the Playwright bfcache browser');
   }
 
   const uniqueErrors = [...new Set(errors)];

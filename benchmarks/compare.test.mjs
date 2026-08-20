@@ -8,6 +8,11 @@ import { describe, expect, it } from 'vitest';
 import { canonicalJson } from '../scripts/lib/perf-host.mjs';
 import { performanceHostFingerprint } from '../scripts/lib/perf-host.mjs';
 import { devSessionHandoffFindings } from '../scripts/lib/perf-dev-session-evidence.mjs';
+import {
+  LIGHTHOUSE_BROWSER_IDENTITY_SCHEMA,
+  LIGHTHOUSE_SAMPLE_FAILURE_SCHEMA,
+  lighthouseTimeoutPolicy,
+} from './harness/lighthouse-policy.mjs';
 import { analyzeNavigationAttribution, sessionBytePhases } from './harness/scenarios.mjs';
 import {
   BROWSER_FIXTURE_RENDERED_EVIDENCE_SCHEMA,
@@ -33,6 +38,7 @@ import {
   pairedAnalysis,
   performanceWorkloadIdentity,
   productArtifactCellFindings,
+  runBrowserComparisonAdapterCell,
   runComparison,
   runDevComparisonAdapterCell,
   serverSampleSchedule,
@@ -885,6 +891,43 @@ describe('serialized comparison analysis', () => {
     );
   });
 
+  it('requires one pinned Lighthouse identity, the exact timeout policy, and no sample failures', () => {
+    const policy = browserCensusPolicy({
+      lighthouseRepeats: 2,
+      scenarios: [],
+      skipLighthouse: false,
+    });
+    const wrongVersion = rawBrowserCensusApp({ lighthouseRepeats: 2, scenarios: [] });
+    wrongVersion.lighthouse[2].browser.version = '147.0.0.1';
+    expect(browserRawMetricCensusFindings(wrongVersion, policy)).toContain(
+      'Lighthouse browser identity differs across raw cells',
+    );
+
+    const bfcacheDrift = rawBrowserCensusApp({ lighthouseRepeats: 2, scenarios: [] });
+    for (const cell of bfcacheDrift.lighthouse) cell.browser.version = '147.0.0.1';
+    expect(browserRawMetricCensusFindings(bfcacheDrift, policy)).toContain(
+      'Lighthouse browser version differs from the Playwright bfcache browser',
+    );
+
+    const wrongPolicy = rawBrowserCensusApp({ lighthouseRepeats: 2, scenarios: [] });
+    wrongPolicy.lighthouse[0].policy.invocationTimeoutMs -= 1;
+    expect(browserRawMetricCensusFindings(wrongPolicy, policy)).toContain(
+      'Lighthouse[0] Lighthouse timeout policy is absent or differs from the pinned policy',
+    );
+
+    const failed = rawBrowserCensusApp({ lighthouseRepeats: 2, scenarios: [] });
+    failed.lighthouse[0].failures.push({
+      message: 'interactive: NO_TTI_CPU_IDLE_PERIOD',
+      metric: 'ttiMs',
+      sampleIndex: 0,
+      schema: LIGHTHOUSE_SAMPLE_FAILURE_SCHEMA,
+      scope: 'metric',
+    });
+    expect(browserRawMetricCensusFindings(failed, policy)).toContain(
+      'Lighthouse[0] contains failed Lighthouse samples',
+    );
+  });
+
   it('requires every supported server throughput/latency/CPU/RSS metric and exact sample count', () => {
     const report = {
       samples: [
@@ -1241,6 +1284,67 @@ describe('serialized comparison analysis', () => {
       await rm(root, { force: true, recursive: true });
     }
   });
+
+  it('retains the exact failed browser adapter report with process and byte custody', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-compare-failed-browser-'));
+    try {
+      const resultFile = path.join(root, 'adapter.json');
+      const retainedFile = path.join(root, 'evidence', 'raw', 'adapter.json');
+      const report = {
+        adapterFailure: {
+          error: 'lighthouse[1]/sample[0]/ttiMs: interactive audit failed',
+          schema: 'kovo-browser-benchmark-adapter-failure/v1',
+        },
+        apps: [
+          {
+            integrity: {
+              complete: false,
+              errors: ['lighthouse[1]/sample[0]/ttiMs: interactive audit failed'],
+            },
+          },
+        ],
+        schema: 'kovo-browser-benchmark/v1',
+      };
+      const bytes = Buffer.from(`${JSON.stringify(report)}\n`);
+      const failure = new Error('browser adapter exited one');
+      failure.adapterExit = { signal: null, status: 1 };
+      const captured = await runBrowserComparisonAdapterCell(
+        {
+          adapter: { args: [], cwd: root, label: 'default/kovo/browser/0' },
+          cell: { cell: 'browser', framework: 'kovo', lane: 'default', occurrence: 0 },
+          resultFile,
+          retainedFile,
+          retainedReference: 'raw/adapter.json',
+        },
+        {
+          runAdapter: async () => {
+            await writeFile(resultFile, bytes);
+            throw failure;
+          },
+        },
+      );
+
+      expect(captured.error).toContain('browser adapter exited one');
+      expect(captured.cell).toMatchObject({
+        adapterFailure: {
+          process: { signal: null, status: 1 },
+          rawReport: {
+            available: true,
+            reportBytes: bytes.byteLength,
+            reportSha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+            retainedPath: 'raw/adapter.json',
+            schema: 'kovo-browser-benchmark/v1',
+            verdict: 'kovo-browser-benchmark-adapter-failure/v1',
+          },
+          schema: COMPARE_ADAPTER_FAILURE_SCHEMA,
+        },
+        report,
+      });
+      expect(await readFile(retainedFile)).toEqual(bytes);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
 });
 
 function completeDevValidationReport({ basePort, readyIterations }) {
@@ -1424,8 +1528,18 @@ function rawBrowserCensusApp({ lighthouseRepeats = 0, scenarios }) {
     tbtMs: 0,
     ttiMs: 25,
   };
+  const lighthouseBrowser = {
+    executable: {
+      basename: 'chrome',
+      bytes: 123_456,
+      pathSha256: `sha256:${'a'.repeat(64)}`,
+    },
+    provider: 'playwright.chromium',
+    schema: LIGHTHOUSE_BROWSER_IDENTITY_SCHEMA,
+    version: '148.0.7778.96',
+  };
   return {
-    bfcache: { available: true, iterations: [{}] },
+    bfcache: { available: true, browser: lighthouseBrowser.version, iterations: [{}] },
     conditions: Object.fromEntries(
       ['desktop', 'mobile'].map((condition) => [
         condition,
@@ -1440,10 +1554,13 @@ function rawBrowserCensusApp({ lighthouseRepeats = 0, scenarios }) {
       lighthouseRepeats === 0
         ? []
         : Array.from({ length: 4 }, () => ({
+            browser: structuredClone(lighthouseBrowser),
+            failures: [],
             metrics: { ...lighthouseMetrics },
             nullSamples: Object.fromEntries(
               Object.keys(lighthouseMetrics).map((name) => [name, 0]),
             ),
+            policy: lighthouseTimeoutPolicy(),
             repeats: lighthouseRepeats,
             samples: Array.from({ length: lighthouseRepeats }, () => ({ ...lighthouseMetrics })),
             spread: Object.fromEntries(Object.keys(lighthouseMetrics).map((name) => [name, 0])),
