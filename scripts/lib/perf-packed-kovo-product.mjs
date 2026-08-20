@@ -4,6 +4,7 @@ import {
   lstatSync,
   readFileSync,
   realpathSync,
+  renameSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
@@ -41,8 +42,11 @@ const LOCK_FILES = Object.freeze([
 ]);
 const DESCRIPTOR_FILE = '.kovo-perf-packed-product.json';
 const PRODUCT_CLI_ENTRY = 'node_modules/@kovojs/cli/dist/bin.mjs';
+const CORPUS_SCHEMA = 'kovo-dev-corpus/v1';
+const ARTIFACT_PROVENANCE_LOCK = 'pnpm-lock.yaml';
 const MAX_DESCRIPTOR_BYTES = 4 * 1024 * 1024;
 const workspaceRoot = fileURLToPath(new URL('../..', import.meta.url));
+let corpusManifestReseal = 0;
 
 /**
  * Seal the path-bearing result of the shared packed-CLI preparation for dev/build adapters.
@@ -51,7 +55,12 @@ const workspaceRoot = fileURLToPath(new URL('../..', import.meta.url));
  * capabilities stored only in the private descriptor, so two clean preparations of the same
  * commit, locks, tarballs, frozen consumer, and installed bytes have the same workload identity.
  */
-export function createPackedKovoProductFixture({ prepared, source, sourceAfter }) {
+export function createPackedKovoProductFixture({
+  prepared,
+  source,
+  sourceAfter,
+  sourceRoot = workspaceRoot,
+}) {
   assertPreparedBoundary(prepared);
   assertExactCleanSource(source, 'packed product source');
   assertExactCleanSource(sourceAfter, 'packed product post-prepare source');
@@ -152,7 +161,13 @@ export function createPackedKovoProductFixture({ prepared, source, sourceAfter }
       try {
         symlinkSync(path.join(consumerRoot, 'node_modules'), link, 'dir');
         assertCorpusBinding(appRoot, consumerRoot);
+        const provenance = bindPackedKovoCorpusArtifactProvenanceLock({
+          expectedSha256: source.locks[ARTIFACT_PROVENANCE_LOCK],
+          manifestPath,
+          sourceRoot,
+        });
         bindings.add(appRoot);
+        return provenance;
       } catch (error) {
         try {
           if (lstatSync(link).isSymbolicLink()) unlinkSync(link);
@@ -194,6 +209,132 @@ export function createPackedKovoProductFixture({ prepared, source, sourceAfter }
     descriptorPath,
     identity,
   };
+}
+
+/**
+ * Give one externally isolated packed-product corpus an app-local copy of the exact measured
+ * source lock, then authenticate that copy through the corpus manifest. Kovo build deliberately
+ * requires the nearest pnpm lock for artifact provenance (SPEC §5.2.3); an external corpus cannot
+ * inherit the repository lock through filesystem ancestry.
+ */
+export function bindPackedKovoCorpusArtifactProvenanceLock({
+  expectedSha256,
+  manifestPath,
+  sourceRoot,
+}) {
+  if (!validSha256(expectedSha256)) {
+    throw new TypeError('expected source artifact-provenance lock digest is invalid');
+  }
+  const measuredSourceRoot = canonicalDirectory(sourceRoot, 'measured source root');
+  const resolvedManifest = path.resolve(requiredString(manifestPath, 'corpus manifest'));
+  const corpusRoot = canonicalDirectory(path.dirname(resolvedManifest), 'external corpus root');
+  const manifestMetadata = lstatSync(resolvedManifest);
+  if (
+    !manifestMetadata.isFile() ||
+    manifestMetadata.isSymbolicLink() ||
+    manifestMetadata.nlink !== 1 ||
+    path.dirname(realpathSync(resolvedManifest)) !== corpusRoot
+  ) {
+    throw new Error(
+      'external corpus manifest must be a single-link regular file inside its canonical parent',
+    );
+  }
+
+  const sourceLock = path.join(measuredSourceRoot, ARTIFACT_PROVENANCE_LOCK);
+  const sourceMetadata = lstatSync(sourceLock);
+  if (!sourceMetadata.isFile() || sourceMetadata.isSymbolicLink() || sourceMetadata.nlink !== 1) {
+    throw new Error('measured source pnpm lock must be a single-link regular non-symlink file');
+  }
+  const lockBytes = readFileSync(sourceLock);
+  const lockSha256 = sha256(lockBytes);
+  if (lockSha256 !== expectedSha256) {
+    throw new Error('measured source pnpm lock differs from authenticated source provenance');
+  }
+
+  const manifestBytes = readFileSync(resolvedManifest);
+  const manifest = JSON.parse(manifestBytes.toString('utf8'));
+  if (manifest?.schema !== CORPUS_SCHEMA || manifest.framework !== 'kovo') {
+    throw new Error('packed product binding requires one generated Kovo corpus manifest');
+  }
+  authenticateCorpusSourceFiles(corpusRoot, manifest);
+
+  const targetLock = path.join(corpusRoot, ARTIFACT_PROVENANCE_LOCK);
+  const enrolledEntries = manifest.sourceFiles.filter(
+    (entry) => entry.file === ARTIFACT_PROVENANCE_LOCK,
+  );
+  const targetExists = existsSync(targetLock);
+  if (targetExists || enrolledEntries.length > 0) {
+    if (!targetExists || enrolledEntries.length !== 1) {
+      throw new Error('external corpus artifact-provenance lock enrollment is partial');
+    }
+    const targetMetadata = lstatSync(targetLock);
+    const expectedEvidence = artifactProvenanceLockEvidence(lockBytes, lockSha256);
+    if (
+      !targetMetadata.isFile() ||
+      targetMetadata.isSymbolicLink() ||
+      targetMetadata.nlink !== 1 ||
+      canonicalJson(enrolledEntries[0]) !== canonicalJson(expectedEvidence) ||
+      !readFileSync(targetLock).equals(lockBytes)
+    ) {
+      throw new Error(
+        'external corpus artifact-provenance lock differs from authenticated source provenance',
+      );
+    }
+    return normalizedArtifactProvenanceLockEvidence(lockBytes, lockSha256);
+  }
+
+  const lockEvidence = artifactProvenanceLockEvidence(lockBytes, lockSha256);
+  const resealedManifest = {
+    ...manifest,
+    sourceFiles: [...manifest.sourceFiles, lockEvidence].sort((left, right) =>
+      bytewise(left.file, right.file),
+    ),
+  };
+  resealedManifest.sourceDigest = sha256(Buffer.from(JSON.stringify(resealedManifest.sourceFiles)));
+  const resealedManifestBytes = Buffer.from(`${JSON.stringify(resealedManifest, null, 2)}\n`);
+  const resealPath = corpusManifestResealPath(corpusRoot, resolvedManifest);
+  let targetCreated = false;
+  let resealCreated = false;
+  let manifestReplaced = false;
+  try {
+    writeFileSync(targetLock, lockBytes, { flag: 'wx', mode: 0o600 });
+    targetCreated = true;
+    writeFileSync(resealPath, resealedManifestBytes, {
+      encoding: 'utf8',
+      flag: 'wx',
+      mode: 0o600,
+    });
+    resealCreated = true;
+    renameSync(resealPath, resolvedManifest);
+    resealCreated = false;
+    manifestReplaced = true;
+    const observedManifest = JSON.parse(readFileSync(resolvedManifest, 'utf8'));
+    authenticateCorpusSourceFiles(corpusRoot, observedManifest);
+    if (!readFileSync(resolvedManifest).equals(resealedManifestBytes)) {
+      throw new Error('resealed external corpus manifest bytes are not canonical');
+    }
+  } catch (error) {
+    const rollbackErrors = rollbackCorpusProvenanceEnrollment({
+      corpusRoot,
+      manifestBytes,
+      manifestPath: resolvedManifest,
+      manifestReplaced,
+      resealCreated,
+      resealPath,
+      targetCreated,
+      targetLock,
+    });
+    if (rollbackErrors.length > 0) {
+      throw new Error(
+        `${errorMessage(error)}; corpus provenance enrollment rollback failed: ${rollbackErrors.join(
+          '; ',
+        )}`,
+      );
+    }
+    throw error;
+  }
+
+  return normalizedArtifactProvenanceLockEvidence(lockBytes, lockSha256);
 }
 
 /** Re-authenticate one descriptor and every package byte it names. */
@@ -728,6 +869,139 @@ function assertContainedOrEqualRealPath(root, candidate, label) {
   if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     throw new Error(`${label} resolves outside its authenticated root`);
   }
+}
+
+function canonicalDirectory(value, label) {
+  const absolute = path.resolve(requiredString(value, label));
+  const metadata = lstatSync(absolute);
+  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+    throw new Error(`${label} must be a non-symlink directory`);
+  }
+  return realpathSync(absolute);
+}
+
+function authenticateCorpusSourceFiles(corpusRoot, manifest) {
+  if (!Array.isArray(manifest?.sourceFiles) || manifest.sourceFiles.length === 0) {
+    throw new Error('external corpus sourceFiles are absent');
+  }
+  let prior = '';
+  const observed = [];
+  for (const entry of manifest.sourceFiles) {
+    if (
+      canonicalJson(Object.keys(entry ?? {}).sort()) !== canonicalJson(['bytes', 'file', 'sha256'])
+    ) {
+      throw new Error('external corpus sourceFiles entry has an unexpected shape');
+    }
+    const file = confinedCorpusSourcePath(corpusRoot, entry.file);
+    if (entry.file <= prior) {
+      throw new Error('external corpus sourceFiles must be unique and sorted');
+    }
+    if (!Number.isSafeInteger(entry.bytes) || entry.bytes < 0 || !validSha256(entry.sha256)) {
+      throw new Error(`external corpus source evidence is invalid for ${entry.file}`);
+    }
+    const metadata = lstatSync(file);
+    if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1) {
+      throw new Error(`external corpus source ${entry.file} is not a single-link regular file`);
+    }
+    const bytes = readFileSync(file);
+    const evidence = { bytes: bytes.byteLength, file: entry.file, sha256: sha256(bytes) };
+    if (canonicalJson(evidence) !== canonicalJson(entry)) {
+      throw new Error(`external corpus source integrity mismatch for ${entry.file}`);
+    }
+    observed.push(evidence);
+    prior = entry.file;
+  }
+  if (
+    !validSha256(manifest.sourceDigest) ||
+    manifest.sourceDigest !== sha256(Buffer.from(JSON.stringify(observed)))
+  ) {
+    throw new Error('external corpus sourceDigest does not authenticate current source bytes');
+  }
+}
+
+function confinedCorpusSourcePath(corpusRoot, value) {
+  const relative = requiredString(value, 'external corpus source path');
+  const parts = relative.split('/');
+  if (
+    path.isAbsolute(relative) ||
+    relative.includes('\\') ||
+    parts.some((part) => part === '' || part === '.' || part === '..')
+  ) {
+    throw new Error(`external corpus source path is unsafe: ${relative}`);
+  }
+  const resolved = path.resolve(corpusRoot, ...parts);
+  const confined = path.relative(corpusRoot, resolved);
+  if (
+    confined === '' ||
+    confined === '..' ||
+    confined.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(confined)
+  ) {
+    throw new Error(`external corpus source path escaped its root: ${relative}`);
+  }
+  return resolved;
+}
+
+function artifactProvenanceLockEvidence(lockBytes, lockSha256) {
+  return {
+    bytes: lockBytes.byteLength,
+    file: ARTIFACT_PROVENANCE_LOCK,
+    sha256: lockSha256,
+  };
+}
+
+function normalizedArtifactProvenanceLockEvidence(lockBytes, lockSha256) {
+  return {
+    bytes: lockBytes.byteLength,
+    path: ARTIFACT_PROVENANCE_LOCK,
+    sha256: lockSha256,
+    source: 'measured-source-root-lock',
+  };
+}
+
+function corpusManifestResealPath(corpusRoot, manifestPath) {
+  corpusManifestReseal += 1;
+  return path.join(
+    corpusRoot,
+    `.${path.basename(manifestPath)}.provenance-${String(process.pid)}-${String(
+      corpusManifestReseal,
+    )}`,
+  );
+}
+
+function rollbackCorpusProvenanceEnrollment({
+  manifestBytes,
+  manifestPath,
+  manifestReplaced,
+  resealCreated,
+  resealPath,
+  targetCreated,
+  targetLock,
+}) {
+  const errors = [];
+  if (resealCreated) {
+    try {
+      unlinkSync(resealPath);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') errors.push(errorMessage(error));
+    }
+  }
+  if (manifestReplaced) {
+    try {
+      writeFileSync(resealPath, manifestBytes, { flag: 'wx', mode: 0o600 });
+      renameSync(resealPath, manifestPath);
+    } catch (error) {
+      errors.push(errorMessage(error));
+    }
+  }
+  if (targetCreated && (!manifestReplaced || errors.length === 0)) {
+    try {
+      unlinkSync(targetLock);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') errors.push(errorMessage(error));
+    }
+  }
+  return errors;
 }
 
 function requiredString(value, label) {

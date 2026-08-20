@@ -52,10 +52,14 @@ describe('authenticated packed Kovo product fixture', () => {
     expect(canonicalJson(second.fixture.identity)).not.toContain(second.root);
 
     const appRoot = path.join(first.root, 'app');
-    mkdirSync(appRoot);
-    const manifest = path.join(appRoot, 'manifest.json');
-    writeFileSync(manifest, '{}\n');
-    first.fixture.bindCorpus(manifest);
+    const manifest = writeMinimalKovoCorpusManifest(appRoot);
+    const provenance = first.fixture.bindCorpus(manifest);
+    expect(provenance).toEqual({
+      bytes: first.sourceLock.byteLength,
+      path: 'pnpm-lock.yaml',
+      sha256: sha256(first.sourceLock),
+      source: 'measured-source-root-lock',
+    });
     expect(() => assertCorpusBinding(appRoot, first.consumerRoot)).not.toThrow();
     const verified = verifyPackedKovoProductFixture(
       first.fixture.descriptorPath,
@@ -111,13 +115,32 @@ describe('authenticated packed Kovo product fixture', () => {
       size: 24,
     });
     const appRoot = path.dirname(manifestPath);
+    const manifestBeforeBinding = JSON.parse(readFileSync(manifestPath, 'utf8'));
     expect(existsSync(path.join(appRoot, 'node_modules'))).toBe(false);
+    expect(existsSync(path.join(appRoot, 'pnpm-lock.yaml'))).toBe(false);
     expect(() => assertPackedCorpusIsolation(appRoot)).not.toThrow();
     await expect(
       verifyCorpusSources(await loadCorpusManifest(manifestPath)),
     ).resolves.toBeUndefined();
 
-    test.fixture.bindCorpus(manifestPath);
+    const provenance = test.fixture.bindCorpus(manifestPath);
+    const boundManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    expect(provenance).toEqual({
+      bytes: test.sourceLock.byteLength,
+      path: 'pnpm-lock.yaml',
+      sha256: sha256(test.sourceLock),
+      source: 'measured-source-root-lock',
+    });
+    expect(readFileSync(path.join(appRoot, 'pnpm-lock.yaml'))).toEqual(test.sourceLock);
+    expect(boundManifest.sourceFiles).toHaveLength(manifestBeforeBinding.sourceFiles.length + 1);
+    expect(boundManifest.sourceFiles).toContainEqual({
+      bytes: test.sourceLock.byteLength,
+      file: 'pnpm-lock.yaml',
+      sha256: sha256(test.sourceLock),
+    });
+    expect(boundManifest.sourceDigest).toBe(
+      sha256(Buffer.from(JSON.stringify(boundManifest.sourceFiles))),
+    );
     expect(() => assertCorpusBinding(appRoot, test.consumerRoot)).not.toThrow();
     // Dependency links remain explicitly outside the authored-source census (SPEC §5.2 rule 9).
     await expect(
@@ -131,6 +154,27 @@ describe('authenticated packed Kovo product fixture', () => {
     await expect(
       verifyCorpusSources(await loadCorpusManifest(manifestPath)),
     ).resolves.toBeUndefined();
+  });
+
+  it('fails closed before dependency binding on manifest tampering or partial lock enrollment', () => {
+    const tampered = productFixture('tampered-corpus-manifest');
+    const tamperedRoot = path.join(tampered.root, 'app');
+    const tamperedManifestPath = writeMinimalKovoCorpusManifest(tamperedRoot);
+    const tamperedManifest = JSON.parse(readFileSync(tamperedManifestPath, 'utf8'));
+    tamperedManifest.sourceDigest = sha256('substituted source census');
+    writeFileSync(tamperedManifestPath, `${JSON.stringify(tamperedManifest, null, 2)}\n`);
+    expect(() => tampered.fixture.bindCorpus(tamperedManifestPath)).toThrow(
+      /sourceDigest does not authenticate/u,
+    );
+    expect(existsSync(path.join(tamperedRoot, 'pnpm-lock.yaml'))).toBe(false);
+    expect(existsSync(path.join(tamperedRoot, 'node_modules'))).toBe(false);
+
+    const partial = productFixture('partial-corpus-lock');
+    const partialRoot = path.join(partial.root, 'app');
+    const partialManifestPath = writeMinimalKovoCorpusManifest(partialRoot);
+    writeFileSync(path.join(partialRoot, 'pnpm-lock.yaml'), partial.sourceLock);
+    expect(() => partial.fixture.bindCorpus(partialManifestPath)).toThrow(/enrollment is partial/u);
+    expect(existsSync(path.join(partialRoot, 'node_modules'))).toBe(false);
   });
 
   it('rejects fake identities, path substitution, source/lock mismatch, and symlink escapes', () => {
@@ -206,9 +250,7 @@ describe('authenticated packed Kovo product fixture', () => {
 
     const clean = productFixture('command');
     const appRoot = path.join(clean.root, 'app');
-    mkdirSync(appRoot);
-    const manifest = path.join(appRoot, 'manifest.json');
-    writeFileSync(manifest, '{}\n');
+    const manifest = writeMinimalKovoCorpusManifest(appRoot);
     clean.fixture.bindCorpus(manifest);
     const verified = verifyPackedKovoProductFixture(
       clean.fixture.descriptorPath,
@@ -234,6 +276,7 @@ function productFixture(label) {
   const root = mkdtempSync(path.join(tmpdir(), `kovo-packed-product-${label}-`));
   roots.push(root);
   const consumerRoot = path.join(root, 'consumer');
+  const sourceRoot = path.join(root, 'source');
   const tarballRoot = path.join(root, 'tarballs');
   const cliRoot = path.join(consumerRoot, 'node_modules/@kovojs/cli');
   const typescriptRoot = path.join(consumerRoot, 'node_modules/typescript');
@@ -242,6 +285,7 @@ function productFixture(label) {
   mkdirSync(typescriptRoot, { recursive: true });
   mkdirSync(vitePlusRoot, { recursive: true });
   mkdirSync(tarballRoot);
+  mkdirSync(sourceRoot);
   const manifestBytes = Buffer.from(
     `${JSON.stringify({ dependencies: { typescript: '6.0.3' }, name: '@kovojs/cli', version: '0.3.0' })}\n`,
   );
@@ -330,14 +374,44 @@ function productFixture(label) {
       temporaryRoot: root,
     },
   };
+  const sourceLock = Buffer.from('lockfileVersion: 9.0\n# measured source lock\n');
+  writeFileSync(path.join(sourceRoot, 'pnpm-lock.yaml'), sourceLock);
   const source = {
     commit: 'a'.repeat(40),
     dirty: false,
     dirtyPaths: [],
-    locks: Object.fromEntries(lockFiles.map((file) => [file, sha256(file)])),
+    locks: Object.fromEntries(
+      lockFiles.map((file) => [
+        file,
+        file === 'pnpm-lock.yaml' ? sha256(sourceLock) : sha256(file),
+      ]),
+    ),
   };
-  const fixture = createPackedKovoProductFixture({ prepared, source, sourceAfter: source });
-  return { consumerRoot, fixture, root, source };
+  const fixture = createPackedKovoProductFixture({
+    prepared,
+    source,
+    sourceAfter: source,
+    sourceRoot,
+  });
+  return { consumerRoot, fixture, root, source, sourceLock, sourceRoot };
+}
+
+function writeMinimalKovoCorpusManifest(appRoot) {
+  mkdirSync(appRoot, { recursive: true });
+  const packageBytes = Buffer.from('{}\n');
+  writeFileSync(path.join(appRoot, 'package.json'), packageBytes);
+  const sourceFiles = [
+    { bytes: packageBytes.byteLength, file: 'package.json', sha256: sha256(packageBytes) },
+  ];
+  const manifest = {
+    framework: 'kovo',
+    schema: 'kovo-dev-corpus/v1',
+    sourceDigest: sha256(Buffer.from(JSON.stringify(sourceFiles))),
+    sourceFiles,
+  };
+  const manifestPath = path.join(appRoot, 'manifest.json');
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  return manifestPath;
 }
 
 function rewriteDescriptor(test, mutate) {
