@@ -1,11 +1,12 @@
 # Realistic performance baseline publication
 
-The `perf-measure-baselines` label runs seven independently scheduled baseline jobs. Repeat the
-label cycle until each subject has at least six admitted reports with the same source commit,
-dependency locks, workload digest, and normalized host digest: the first five ratify the baseline
-and the sixth is its independent holdout. Jobs from one workflow run can land on different machines;
+The `perf-measure-baselines` label runs seven independently hosted baseline jobs. A publication
+campaign is exactly 13 predeclared, all-family label pulses against one frozen pull-request head.
+Each subject needs one admitted six-report cohort with the same source commit, dependency locks,
+workload digest, and normalized host digest: the first five reports ratify the baseline and the
+sixth is its independent holdout. Jobs from one workflow run can land on different machines;
 cohorts are selected per subject, not by assuming all seven jobs shared a host. Multiple attempts of
-one Actions run do not count as independent reports; all six admitted reports need distinct run IDs.
+one Actions run are forbidden in the campaign; all six admitted reports need distinct run IDs.
 
 Use the metrics-blind collection and five-plus-one holdout workflow in
 [`baseline-collection.md`](./baseline-collection.md) to preserve raw GitHub custody and select exact
@@ -13,25 +14,21 @@ cohorts. The manual commands below describe the same individual ratification sta
 useful for inspecting a selected family; they are not a substitute for the aggregate collector and
 publication gate.
 
-## Preflight focused producers; collect the campaign by PR label
+## Preflight separately; collect a fixed PR-label campaign
 
 Manual dispatch accepts two optional collection controls. `baseline_focus` selects `all`, `check`,
 `browser`, `dev-n24`, `dev-n216`, `build-n24`, `build-n216`, or `server`. The selected dev or build
-focus reduces that job's matrix to the exact corpus size. Use focused `workflow_dispatch` runs only
-as preflight before the inclusive publication-campaign boundary. The publication-authenticated
-producer conditions remain unchanged: an early admission step stops every non-selected producer
-before Kovo setup, isolated dependency installs, browser installation, corpus generation, or
-measurement. Those expected non-selected jobs fail without an artifact, and a rejected selected
-producer can leave the exact-source run with zero literal publication artifacts. Inside the
-inclusive boundary, that run makes metrics-blind campaign collection fail closed. Outside the
-boundary, use another focused dispatch for each family still missing a preflight report instead of
-rerunning already-complete three-hour families.
+focus reduces that job's matrix to the exact corpus size. Use `workflow_dispatch` only to establish
+readiness before the inclusive publication boundary. Scheduled runs are also preflight evidence,
+not publication-campaign samples. Neither event is admitted inside a campaign or supplied to its
+collector. A focused preflight's expected non-selected jobs stop before setup or measurement; this
+is useful for diagnosing one producer without spending on the other families.
 
 `baseline_cpu_model_sha256` optionally admits only runners whose exact UTF-8 Node
 `os.cpus()[0].model` string has the requested SHA-256. The value must be exactly 64 lowercase
-hexadecimal characters with no `sha256:` prefix. An empty value remains allowed for schedules,
-label-triggered runs, and unconstrained manual collection. Invalid or mismatched values fail before
-setup and print the observed model digest so the operator can retry without paying measurement cost.
+hexadecimal characters with no `sha256:` prefix. An empty value remains allowed for preflights and
+label-triggered runs. Invalid or mismatched values fail before setup and print the observed model
+digest. Resolve every readiness problem before starting the fixed campaign.
 
 For example, the currently observed `AMD EPYC 7763 64-Core Processor` model hashes to
 `f56edd1ddb32e98359af80267bba52d80fedc60bf40440adea1c3ea0e0f429c7`:
@@ -45,51 +42,80 @@ gh workflow run perf-realistic.yml \
 ```
 
 Use a labeled pull request for the inclusive publication campaign. Its PR-only `Production bytes`
-producer and `kovo-perf-bytes` upload are the declared literal-artifact floor for every baseline
-label cycle, including a cycle whose selected family is rejected by admission; a missing or invalid
-bytes artifact still invalidates the campaign. The only CPU alias is `perf-baseline-cpu-amd-7763`,
-which resolves to the full digest above. The reviewed focus aliases are
-`perf-baseline-focus-check`, `perf-baseline-focus-browser`,
-`perf-baseline-focus-dev-n24`, `perf-baseline-focus-dev-n216`,
-`perf-baseline-focus-build-n24`, `perf-baseline-focus-build-n216`, and
-`perf-baseline-focus-server`. Apply at most one CPU alias and at most one focus alias, then apply
-`perf-measure-baselines` last:
+producer and `kovo-perf-bytes` upload are the declared literal-artifact floor for every pulse; a
+missing or invalid bytes artifact invalidates the campaign. The only CPU alias is
+`perf-baseline-cpu-amd-7763`, which resolves to the full digest above. Before triggering anything,
+predeclare outside the measured checkout:
+
+- the exact source SHA and pull request;
+- exactly 13 all-family pulses, with every `perf-baseline-focus-*` label absent;
+- the frozen non-trigger label census, including either the one CPU alias or no CPU alias;
+- the identity-only cohort rule: for multiple qualifying cohorts choose the largest admitted
+  report count, breaking a tie by the lexicographically smallest cohort digest.
+
+Before launch, require the current exact-source workflow census plus the 13 pulses and any planned
+pre-boundary CPU-label run to total at most 100. The collector rejects a census that cannot fit in
+one complete API page.
+
+The repository can preserve that declaration but cannot cryptographically prove when it was made;
+its timing remains a procedural trust boundary. Freeze the PR head and all non-trigger labels and
+activity through the live publication gate. Do not synchronize or reopen the PR, dispatch the exact
+source, or permit another exact-source performance run inside the boundary. Apply the CPU alias, if
+predeclared, before the first pulse; wait for that ordinary PR run to register and finish outside
+the boundary. Ensure the trigger's absence is visible, then perform exactly 13 add/remove pairs
+without changing any other label:
 
 ```sh
-gh pr edit <pr-number> \
-  --add-label perf-baseline-cpu-amd-7763 \
-  --add-label perf-baseline-focus-dev-n216
+# Omit this command if the campaign was predeclared as CPU-unconstrained.
+gh pr edit <pr-number> --add-label perf-baseline-cpu-amd-7763
+# Wait for this pre-boundary run to become terminal.
+
+# Repeat this pair exactly 13 times; do not choose the count from observed outcomes.
 gh pr edit <pr-number> --add-label perf-measure-baselines
+# Record exactly one new run ID, without opening its status or outcome.
+gh pr edit <pr-number> --remove-label perf-measure-baselines
+# Confirm that removal is visible before the next add.
 ```
 
-The selector-label events do not pass the publication-authenticated producer condition; the final
-`perf-measure-baselines` labeled event does, and its pull-request label census carries both
-selectors into the env-only admission step. For another family, remove the old focus and trigger
-labels, add the next exact focus, then re-add `perf-measure-baselines`. With no selector labels the
-PR path remains all-family and CPU-unconstrained. More than one CPU/focus selector, malformed label
-JSON, or any unknown label beginning `perf-baseline-cpu` or `perf-baseline-focus` fails closed before
-setup. Workflow-dispatch inputs remain the general preflight API and take precedence over label
-aliases; they are never campaign inputs. Pull-request jobs deliberately receive empty
-dispatch-input environment values so their reviewed labels can apply.
+Each add event runs the full seven-family matrix. The 13 workflow runs may overlap because they use
+distinct hosted runners. That is not campaign-wide serialization: only the measurements within one
+report share the harness's one serialized process tree. Pull-request jobs receive empty dispatch
+inputs, and the frozen CPU alias, if present, is enforced by the env-only admission step.
+
+After the thirteenth trigger label is removed, wait only for GitHub to register the 13 run
+identities; do not look at status or conclusions. Then fetch the complete exact-source workflow
+census, identify the first and last pulse IDs, and include every exact-source run between those
+inclusive endpoints. Preregister the complete census's ordered immutable tuple projection
+`{id, run_attempt, created_at, event, head_sha, name, path}` outside the checkout, marking the 13-run
+boundary slice. Every boundary tuple must use the frozen source SHA, the `pull_request` event, the
+name `Perf Realistic Tier`, and the path `.github/workflows/perf-realistic.yml`. An unexpected
+exact-source run invalidates the campaign; never repair the boundary by dropping it.
 
 That AMD digest is a collection-time operator choice based on the current hosted-runner cohort, not
-a permanent default or a portable hardware requirement. CPU admission only reduces wasted retries.
+a permanent default or a portable hardware requirement. CPU admission only reduces wasted jobs.
 It does not replace or weaken the report's normalized `kovo-performance-host/v2` facts, and the
 ratifier/publication gate still requires the exact full `host.digest` for each cohort. CPU count,
 memory capacity class, Node version, OS release, runner image, and browser versions can therefore
 still separate two reports that passed the same CPU-model admission.
 
-After a preflight mismatch, rerun only the affected `workflow_dispatch` `baseline_focus` outside
-the campaign boundary. During the campaign, retry that family through the PR focus-label cycle
-above until it has five independent baseline run IDs plus its sixth holdout. If the
-build-persistence decision requires the optional N=216 build profile, dispatch
+After sealing the tuples, observe only statuses and immutable run, job, and artifact metadata. Do
+not manually open report payloads, artifact ZIPs, logs, or job summaries; leave payload access to the
+metrics-blind collector and authoritative gate. Do not add metric-dependent pulses, rerun a workflow
+run, or replace a failed sample. A genuine metric failure is the campaign's result, not retry
+permission.
+
+Wait for all 13 pulses to become terminal. Fetch the complete exact-source census again immediately
+before collection, re-require `total_count` to equal the complete returned census, project the same
+seven immutable fields, and compare the ordered tuples and boundary membership byte-for-byte. The
+raw API response is not compared byte-for-byte because status, conclusion, and update fields may
+change. A changed attempt, an added or missing run, a dispatch/schedule tuple, or any other identity
+drift invalidates the campaign; start a fresh disjoint 13-pulse campaign.
+
+If the build-persistence decision requires the optional N=216 build profile, dispatch
 `measurement_scope=decisions` outside the baseline campaign boundary with
 `decision_focus=build-profile` and the same `baseline_cpu_model_sha256`; the profile producer uses
 the same early CPU admission, while publication still requires its exact host identity to match the
-build-N=216 evidence. For the separate PR-label decision path, apply
-`perf-baseline-cpu-amd-7763` (and, if a focus selector is present,
-`perf-baseline-focus-build-n216`) before applying
-`perf-measure-build-profile`.
+build-N=216 evidence.
 
 ## Artifact map
 
@@ -134,8 +160,10 @@ host-v2, quiet-host, and workload identities as the comparison reports. A dirty,
 duplicate, or identity-mismatched report produces `unproven`.
 
 Baseline jobs request 90-day Actions retention, while the PR-only Production-bytes artifact requests
-14 days. Collect and publish the selected sidecar before that shorter window closes. The canonical
-artifact-page URL is stable during retention, but it is not permanent storage.
+14 days. Complete collection, manifest creation, and the live publication gate before the oldest
+included bytes artifact expires, including every unselected bytes candidate retained by complete
+campaign custody. The canonical artifact-page URL is stable during retention, but it is not
+permanent storage.
 
 ## Ratify each subject
 
@@ -155,10 +183,11 @@ vp exec node scripts/perf-baseline-ratify.mjs \
 ```
 
 Do not combine N=24 with N=216 or browser with server: each is a different authenticated workload
-digest. If fewer than five reports share a host cohort, collect more independent runs rather than
-relaxing the identity check.
+digest. For ad hoc ratification, fewer than five matching reports is unproven. For the fixed
+publication campaign, any family without one six-report cohort invalidates the campaign and
+requires a fresh disjoint 13-pulse campaign; never top up or relax the identity check.
 
-Publication derivation additionally requires the exact scheduled subject profile: isolated dev or
+Publication derivation additionally requires the exact declared subject profile: isolated dev or
 build cells, the full browser default/L0/L1 matrix (30/5/10 plus three warmups), the full server
 route/encoding/mode/concurrency matrix (seven 15-second samples after five-second warmups), or the
 N={8,24,72,216} one-sample check ladder. A generic scratch ratification with local file locations,
@@ -265,14 +294,14 @@ shows one family's shape:
   "schema": "kovo-performance-publication-input/v5",
   "repository": "kovojs/kovo",
   "campaign": {
-    "boundary": { "firstRunId": 1001, "lastRunId": 1006 },
+    "boundary": { "firstRunId": 1001, "lastRunId": 1013 },
     "workflowRunsApiMetadata": {
       "path": "campaign/workflow-runs.api.json",
       "byteLength": 1234,
       "contentDigest": "sha256:<64-lowercase-hex>"
     },
     "cohortSelections": {},
-    "runs": ["one content-addressed run API and artifact-list API pair per boundary run"],
+    "runs": ["13 content-addressed run API and artifact-list API pairs"],
     "familyCandidates": ["every literal family candidate and its five-file descriptor"],
     "productionBytes": ["complete created_at/run-ID chronology"],
     "productionBytesCandidates": [
@@ -479,7 +508,7 @@ targets are retained as separately reported follow-on checks:
   checks, and correctness remain completion-blocking.
 - The build 6x wall / 2x RSS milestones and the check/product targets remain completion-blocking.
 
-The six-run publication campaign has no authenticated historical-current-Kovo comparator for the
+The selected six-report cohorts have no authenticated historical-current-Kovo comparator for the
 dev 30% ready and 20% leaf/entry improvement rows or the server 10% forced-dynamic improvement row.
 Those historical deltas are therefore explicitly unassessed in the rendered architecture notes;
 the gate never infers them from a Kovo-vs-Next ratio. Browser session-byte and cached-server
@@ -509,15 +538,16 @@ must also remain complete, measured, clean, and byte-authenticated. A failed unr
 does not invalidate an accepted producer's artifact.
 
 The report separately retains `GITHUB_WORKFLOW_SHA`, the commit whose workflow GitHub evaluated.
-For a pull request it is the synthetic merge/event SHA; for other reviewed triggers it equals the
-run head and measured source. The gate fetches the workflow file from GitHub's Contents API at that
+For the required pull-request campaign it is the synthetic merge/event SHA. The gate fetches the
+workflow file from GitHub's Contents API at that
 evaluated workflow SHA, verifies its Git blob and bytes against the clean local workflow, and
 requires local checkout `HEAD` to equal the measured source SHA and the whole checkout to be clean.
 It then extracts the exact reviewed job `if` expression (folded for baseline/profile producers and
 the literal PR-only condition for Production bytes) and requires one uniquely owned, commit-pinned
-`actions/upload-artifact` step with the reviewed literal name template and path. A successful family
-job therefore authenticates the scheduled baseline scope, `measurement_scope=baselines|all`, or the
-exact `perf-measure-baselines` labeled-PR condition instead of trusting an event name alone. The
+`actions/upload-artifact` step with the reviewed literal name template and path. Each admitted
+campaign family job authenticates the exact `perf-measure-baselines` labeled-PR condition instead
+of trusting an event name alone. Dispatch and schedule remain preflight-only even though the
+lower-level producer contract can authenticate them. The
 measured source remains the immutable run/artifact/job `head_sha`; neither the synthetic merge
 identity nor the mutable PR object is substituted for it.
 

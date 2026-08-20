@@ -7,18 +7,53 @@ the exact requested source commit, and each output must be a new directory whose
 exists outside that checkout. The checkout, every collection input, and the manifest output must
 be pairwise disjoint: no one may equal, contain, or be contained by another.
 
-Before looking at report metrics, preregister one inclusive workflow-run ID boundary. Collect every
-exact-source `perf-realistic.yml` run in that boundary into one atomic custody pool. The command
-cross-checks repeated `--run` values against GitHub's complete exact-source workflow-run census and
-fails closed when the census exceeds one 100-run API page. Focused runs may contain one family; an
-all-family run may contain several:
+## Seal the fixed campaign before opening payloads
 
-The one-page limit is an invalidation boundary, not an implicit truncation policy. If the
-exact-source census grows beyond 100 runs, do not collect or publish from it. Before preregistering
-the boundary, an operator may delete obsolete exploratory runs until the complete census fits one
-page, then record that cleanup and preregister the retained endpoints out of band. GitHub deletion
-history and the timing of preregistration remain procedural facts; this repository does not claim
-to prove either one cryptographically.
+The publication campaign is exactly 13 all-family `perf-measure-baselines` PR-label pulses declared
+before triggering. `workflow_dispatch` and schedule runs are preflight-only and are never admitted.
+Freeze the exact PR head and every non-trigger label and activity through the live publication gate.
+In particular, keep every `perf-baseline-focus-*` label absent; predeclare either the one reviewed
+CPU alias or no CPU alias. The fixed pulses may overlap on distinct hosted runners. That does not
+make the campaign one serialized process tree: serialization is a per-report harness property.
+
+Before any pulse, also predeclare this identity-only rule for multiple qualifying cohorts: choose
+the cohort with the largest admitted report count, breaking a tie by the lexicographically smallest
+cohort digest. The rule is fixed before report access and leaves no operator discretion.
+
+If the predeclared CPU alias must be added, wait for its ordinary PR run to register and finish
+before pulse one so it is outside the endpoints. Before looking at campaign status or conclusions,
+inspect only the immutable registration metadata needed to capture exactly one new run ID per label
+add; confirm the trigger label's removal is visible before the next add. After the thirteenth removal,
+fetch GitHub's complete exact-source `perf-realistic.yml` census. The inclusive endpoints are the
+first and last pulse IDs. Include every exact-source run whose ID falls between them, require exactly
+the intended PR-label pulses, and preregister the complete census's ordered immutable projection
+`{id, run_attempt, created_at, event, head_sha, name, path}`, marking the 13-run boundary slice.
+Every boundary tuple must bind the frozen source, the `pull_request` event, workflow name
+`Perf Realistic Tier`, and workflow path `.github/workflows/perf-realistic.yml`.
+
+After that seal, inspect only status and immutable run, job, and artifact metadata. Do not manually
+open report payloads, ZIPs, logs, or job summaries; leave payload access to the metrics-blind
+collector and authoritative gate. Do not append a top-up pulse, rerun an Actions run, or replace a
+failed sample after seeing an outcome. A genuine metric failure is a result, not retry permission.
+
+After all 13 runs are terminal, fetch the complete exact-source census again immediately before
+collection. Re-require `total_count` to equal the complete returned census, project the same seven
+immutable fields, and compare the ordered tuples and boundary membership byte-for-byte. The raw API
+response is not expected to match because status, conclusion, and update fields may change. Any
+attempt change, added or missing run, dispatch/schedule event, or other identity drift invalidates the
+campaign and requires a fresh disjoint 13-pulse campaign. Never omit a run from inside the endpoints.
+
+The command cross-checks repeated `--run` values against GitHub's complete exact-source workflow-run
+census and fails closed when the census exceeds one 100-run API page.
+
+The one-page limit is an invalidation boundary, not an implicit truncation policy. Before launch,
+require the current exact-source `total_count` plus 13 pulses and any planned pre-boundary CPU-label
+run to be at most 100. Any cleanup of obsolete exploratory runs must happen and be recorded before
+the campaign declaration. Never delete or alter a run after the campaign starts. GitHub deletion
+history and the timing of the pulse declaration, tuple preregistration, and endpoint seal remain
+procedural facts; this repository does not claim to prove them cryptographically.
+
+Run collection only after the immutable tuple comparison succeeds:
 
 ```sh
 vp exec node scripts/perf-publication-collect.mjs collect \
@@ -50,8 +85,9 @@ partial report as evidence. The single complete campaign directory is an immutab
 The moment at which its run-ID endpoints were preregistered remains a procedural trust boundary;
 without an external timestamping service the repository cannot prove that timing cryptographically.
 
-Once every family has a six-run cohort, emit the self-contained input for the authoritative
-publication gate:
+Collection prints each family's identity-only cohort digest and admitted report count. If any
+family has no cohort of at least six reports, the campaign is insufficient and invalid: do not top
+it up, and start a fresh disjoint 13-pulse campaign. First invoke `manifest` without any selector:
 
 ```sh
 vp exec node scripts/perf-publication-collect.mjs manifest \
@@ -62,24 +98,43 @@ vp exec node scripts/perf-publication-collect.mjs manifest \
   --out /external/custody/final-publication
 ```
 
+That invocation succeeds when every family has exactly one qualifying cohort and rejects a
+selector as unnecessary in that case. If it fails only because one or more families have multiple
+qualifying cohorts, use the identity-only digest/count lines already printed by `collect`. For each
+ambiguous family, apply the predeclared rule mechanically: choose the greatest admitted count, then
+the lexicographically smallest digest on a tie. Invoke `manifest` again into a new output directory,
+passing `--cohort <family>=<exact-digest>` only for those ambiguous families:
+
+```sh
+vp exec node scripts/perf-publication-collect.mjs manifest \
+  --checkout /absolute/path/to/clean/measured-checkout \
+  --source <exact-source-sha> \
+  --repository kovojs/kovo \
+  --collection /external/custody/complete-campaign \
+  --cohort dev-n216=sha256:<predeclared-rule-result> \
+  --out /external/custody/final-publication-selected
+```
+
+Never use report metrics, budget outcomes, operator preference, or a uniquely matching host shortcut
+to choose a cohort. Any selector pass not forced by the predeclared rule is invalid.
+
 The cohort key contains the exact source, dependency locks, workload identity, full host digest,
 and, for dev/build, concrete packed-product policy and identity. Analysis values and raw benchmark
-timings never enter grouping or ordering. Within the one qualifying cohort, immutable workflow-run
-`created_at` then run ID chooses the first five baselines and the sixth holdout.
-Passing `--cohort` when only one cohort qualifies is rejected as unnecessary; an explicit selector
-is accepted only to resolve multiple qualifying cohorts.
+timings never enter grouping, deterministic cohort choice, or ordering. Within the selected
+qualifying cohort, immutable workflow-run `created_at` then run ID chooses the first five baselines
+and the sixth holdout. Passing `--cohort` when only one cohort qualifies is rejected as unnecessary;
+for multiple qualifying cohorts, pass only the exact digest selected by the predeclared
+count-then-lexicographic rule.
 
 The manifest also selects exactly one authenticated Production-bytes sidecar by the same immutable
 `created_at`, run-ID chronology, choosing the earliest candidate in the complete campaign. Metric
-values, budget outcomes, verdicts, and report payload ordering never enter that choice. The selected report must share the
-exact source and dependency-lock identity of all 42 family reports.
+values, budget outcomes, verdicts, and report payload ordering never enter that choice. The selected
+report must share the exact source and dependency-lock identity of all 42 family reports.
 
-If a family has multiple qualifying cohorts, the command fails and prints their digests. Select
-one exact cohort digest, or a host digest that uniquely identifies one qualifying cohort:
-
-```sh
-  --cohort dev-n216=sha256:<64-lowercase-hex>
-```
+Complete collection, manifest creation, and the live publication gate before the oldest included
+Production-bytes artifact expires. This deadline covers every literal bytes candidate in the
+boundary, including candidates the manifest does not select, because complete custody and live
+reauthentication retain them all.
 
 The result is `performance-publication-input.json` plus `216 + 2R + 5F + 5B` raw custody files,
 excluding optional build profiles, where `R` is the campaign-run count, `F` is every authenticated
