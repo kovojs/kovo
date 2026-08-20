@@ -958,6 +958,12 @@ export async function authenticatePerformancePublicationCampaign(
         `campaign run ${String(run.runId)} saved authority differs from the live response`,
       );
     }
+    const censusRunAuthority = savedRunCensus.find((entry) => entry.runId === run.runId);
+    if (canonicalJson(savedRunAuthority) !== canonicalJson(censusRunAuthority)) {
+      throw new TypeError(
+        `campaign run ${String(run.runId)} authority differs from the workflow-runs census`,
+      );
+    }
     if (run.runCreatedAt !== savedRunAuthority.runCreatedAt) {
       throw new TypeError(`campaign run ${String(run.runId)} created_at differs from authority`);
     }
@@ -974,6 +980,10 @@ export async function authenticatePerformancePublicationCampaign(
         `campaign run ${String(run.runId)} artifact census differs from the live response`,
       );
     }
+    validateCampaignPublicationArtifactFloor(
+      savedArtifacts.publicationArtifacts,
+      savedRunAuthority,
+    );
     for (const artifact of savedArtifacts.publicationArtifacts) {
       if (artifact.kind === 'production-bytes') {
         derivedProductionBytes.push({
@@ -1668,6 +1678,18 @@ function campaignWorkflowRunsAuthorityProjection(listing, { boundary, sourceSha 
   if (ids.some((id) => !Number.isSafeInteger(id) || id < 1) || new Set(ids).size !== ids.length) {
     throw new TypeError('campaign workflow-runs API identities are missing or duplicated');
   }
+  if (
+    listing.workflow_runs.some(
+      (run) =>
+        run?.head_sha !== sourceSha ||
+        run?.name !== 'Perf Realistic Tier' ||
+        run?.path !== PERF_REALISTIC_WORKFLOW_PATH ||
+        !Object.hasOwn(BASELINE_TRIGGER_SCOPES, run?.event) ||
+        !validExactTimestamp(run?.created_at),
+    )
+  ) {
+    throw new TypeError('campaign workflow-runs API contains foreign run identity');
+  }
   const runs = listing.workflow_runs
     .filter((run) => run.id >= boundary.firstRunId && run.id <= boundary.lastRunId)
     .map((run) => {
@@ -1675,6 +1697,7 @@ function campaignWorkflowRunsAuthorityProjection(listing, { boundary, sourceSha 
         run?.head_sha !== sourceSha ||
         run?.name !== 'Perf Realistic Tier' ||
         run?.path !== PERF_REALISTIC_WORKFLOW_PATH ||
+        run?.event !== 'pull_request' ||
         !validExactTimestamp(run?.created_at)
       ) {
         throw new TypeError('campaign workflow-runs API contains foreign run identity');
@@ -1707,6 +1730,7 @@ function campaignRunAuthorityProjection(run, { repository, runId, sourceSha }) {
     run.head_sha !== sourceSha ||
     run.name !== 'Perf Realistic Tier' ||
     run.path !== PERF_REALISTIC_WORKFLOW_PATH ||
+    run.event !== 'pull_request' ||
     run.url !== apiUrl ||
     run.artifacts_url !== `${apiUrl}/artifacts` ||
     !validExactTimestamp(run.created_at)
@@ -1762,6 +1786,26 @@ function campaignArtifactsAuthorityProjection(listing, runId) {
     publicationArtifacts,
     totalCount: listing.total_count,
   };
+}
+
+function validateCampaignPublicationArtifactFloor(publicationArtifacts, runAuthority) {
+  const runId = runAuthority?.runId;
+  if (runAuthority?.event !== 'pull_request') {
+    throw new TypeError(
+      `campaign run ${String(runId)} is not a pull_request publication campaign run`,
+    );
+  }
+  if (publicationArtifacts.length === 0) {
+    throw new TypeError(`campaign run ${String(runId)} has no literal publication artifact`);
+  }
+  const productionBytesCount = publicationArtifacts.filter(
+    (artifact) => artifact.kind === 'production-bytes',
+  ).length;
+  if (productionBytesCount !== 1) {
+    throw new TypeError(
+      `pull_request campaign run ${String(runId)} must expose exactly one literal Production bytes artifact`,
+    );
+  }
 }
 
 function campaignChronologyOrder(left, right) {

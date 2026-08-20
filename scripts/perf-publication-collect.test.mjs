@@ -352,6 +352,95 @@ describe('metrics-blind performance publication collection', () => {
     ).rejects.toThrow('ambiguous baseline-family artifacts');
   });
 
+  it('requires one literal Production bytes artifact for every authenticated pull-request run', async () => {
+    const root = await temporaryRoot();
+    const checkout = await realDirectory(path.join(root, 'checkout'));
+    const campaign = campaignFixture([{ family: 'browser', productionBytes: true, runId: 1001 }]);
+    const fixture = campaign.byRun.get(1001);
+    campaign.endpoints.set(
+      `repos/${REPOSITORY}/actions/runs/1001/artifacts?per_page=100`,
+      jsonBytes({
+        artifacts: [{ id: fixture.artifact.id, name: fixture.artifact.name }],
+        // Only the authenticated workflow-run API event is authoritative.
+        event: 'workflow_dispatch',
+        total_count: 1,
+      }),
+    );
+
+    await expect(
+      collectPerformancePublicationRuns({
+        ...campaignBoundary(campaign),
+        checkoutDirectory: checkout,
+        operations: fixtureOperations(campaign, checkout),
+        outDirectory: path.join(root, 'pull-request-without-bytes'),
+        repository: REPOSITORY,
+        runIds: [1001],
+        sourceSha: SOURCE,
+      }),
+    ).rejects.toThrow(
+      'pull_request workflow run 1001 must expose exactly one literal Production bytes artifact',
+    );
+  });
+
+  it('rejects dispatch and scheduled runs from pull-request publication campaigns', async () => {
+    const root = await temporaryRoot();
+    const checkout = await realDirectory(path.join(root, 'checkout'));
+
+    for (const [index, event] of ['workflow_dispatch', 'schedule'].entries()) {
+      const runId = 1001 + index;
+      const campaign = campaignFixture([
+        { event, family: 'browser', productionBytes: false, runId },
+      ]);
+      await expect(
+        collectPerformancePublicationRuns({
+          ...campaignBoundary(campaign),
+          checkoutDirectory: checkout,
+          operations: fixtureOperations(campaign, checkout),
+          outDirectory: path.join(root, event),
+          repository: REPOSITORY,
+          runIds: [runId],
+          sourceSha: SOURCE,
+        }),
+      ).rejects.toThrow('preregistered campaign boundary contains a non-pull_request workflow run');
+    }
+  });
+
+  it('allows an authenticated dispatch preflight outside the inclusive campaign boundary', async () => {
+    const root = await temporaryRoot();
+    const checkout = await realDirectory(path.join(root, 'checkout'));
+    const campaign = campaignFixture([{ family: 'browser', runId: 1001 }]);
+    const operations = fixtureOperations(campaign, checkout);
+    const fetchApi = operations.fetchApi.bind(operations);
+    operations.fetchApi = async (endpoint, options) => {
+      if (
+        endpoint ===
+        `repos/${REPOSITORY}/actions/workflows/perf-realistic.yml/runs?head_sha=${SOURCE}&per_page=100`
+      ) {
+        const campaignRun = campaign.byRun.get(1001).run;
+        const preflight = {
+          ...structuredClone(campaignRun),
+          created_at: '2026-08-12T23:59:00.000Z',
+          event: 'workflow_dispatch',
+          id: 1000,
+        };
+        return jsonBytes({ total_count: 2, workflow_runs: [preflight, campaignRun] });
+      }
+      return fetchApi(endpoint, options);
+    };
+
+    await expect(
+      collectPerformancePublicationRuns({
+        ...campaignBoundary(campaign),
+        checkoutDirectory: checkout,
+        operations,
+        outDirectory: path.join(root, 'campaign-with-preflight'),
+        repository: REPOSITORY,
+        runIds: [1001],
+        sourceSha: SOURCE,
+      }),
+    ).resolves.toMatchObject({ ledger: { runIds: [1001] } });
+  });
+
   it('rejects expired, wrong-run, wrong-source, wrong-workflow, and wrong-family evidence', () => {
     const cases = [
       ['expired', (fixture) => updateArtifact(fixture, { expired: true })],
@@ -695,7 +784,7 @@ describe('metrics-blind performance publication collection', () => {
       for (let index = 0; index < 7; index += 1) {
         assignments.push({
           family,
-          productionBytes: assignments.length < 2,
+          productionBytes: true,
           runId: runId++,
         });
       }
@@ -750,7 +839,7 @@ describe('metrics-blind performance publication collection', () => {
       await expect(readFile(path.join(publication, relative))).resolves.not.toHaveLength(0);
     }
     expect(result.manifest.campaign.familyCandidates).toHaveLength(49);
-    expect(result.manifest.campaign.productionBytesCandidates).toHaveLength(2);
+    expect(result.manifest.campaign.productionBytesCandidates).toHaveLength(49);
     for (const candidate of [
       ...result.manifest.campaign.familyCandidates,
       ...result.manifest.campaign.productionBytesCandidates,
@@ -1261,9 +1350,10 @@ function campaignFixture(assignments) {
     sourceCommit: SOURCE,
   });
   for (const [index, assignment] of assignments.entries()) {
+    const producesBytes = assignment.productionBytes !== false;
     const fixture = reportFixture({
       artifactId: 20_000 + assignment.runId,
-      event: assignment.productionBytes === true ? 'pull_request' : 'workflow_dispatch',
+      event: assignment.event ?? 'pull_request',
       familyName: assignment.family,
       index,
       locks,
@@ -1271,7 +1361,7 @@ function campaignFixture(assignments) {
       runId: assignment.runId,
     });
     let bytesFixture = null;
-    if (assignment.productionBytes === true) {
+    if (producesBytes) {
       bytesFixture = productionBytesReportFixture({
         artifactId: 120_000 + assignment.runId,
         familyFixture: fixture,

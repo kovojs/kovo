@@ -123,6 +123,83 @@ describe('seven-family performance publication gate', () => {
     }
   });
 
+  it('enforces the pull-request Production bytes floor from authenticated run authority', async () => {
+    const missing = writeCampaignAuthenticationFixture();
+    omitCampaignProductionBytes(missing, 10_007, { listingEvent: 'workflow_dispatch' });
+    await expect(
+      authenticatePerformancePublicationCampaign(
+        missing.campaign,
+        await campaignAuthenticationOptions(missing),
+      ),
+    ).rejects.toThrow(
+      'pull_request campaign run 10007 must expose exactly one literal Production bytes artifact',
+    );
+
+    const duplicate = writeCampaignAuthenticationFixture();
+    rewriteCampaignRunArtifacts(duplicate, 10_007, (listing) => {
+      listing.artifacts.push({ id: 999_999, name: 'kovo-perf-bytes' });
+      listing.total_count = listing.artifacts.length;
+    });
+    await expect(
+      authenticatePerformancePublicationCampaign(
+        duplicate.campaign,
+        await campaignAuthenticationOptions(duplicate),
+      ),
+    ).rejects.toThrow('campaign run 10007 has ambiguous publication artifacts');
+  });
+
+  it('rejects dispatch and scheduled runs from pull-request publication campaigns', async () => {
+    for (const event of ['workflow_dispatch', 'schedule']) {
+      const fixture = writeCampaignAuthenticationFixture();
+      rewriteCampaignRunEvent(fixture, 10_007, event);
+      omitCampaignProductionBytes(fixture, 10_007);
+
+      await expect(
+        authenticatePerformancePublicationCampaign(
+          fixture.campaign,
+          await campaignAuthenticationOptions(fixture),
+        ),
+      ).rejects.toThrow('campaign workflow-runs API contains foreign run identity');
+    }
+  });
+
+  it('allows an authenticated dispatch preflight outside the inclusive campaign boundary', async () => {
+    const fixture = writeCampaignAuthenticationFixture();
+    const reference = fixture.campaign.workflowRunsApiMetadata;
+    const censusFile = path.join(fixture.directory, reference.path);
+    const census = JSON.parse(readFileSync(censusFile, 'utf8'));
+    census.workflow_runs.unshift({
+      ...structuredClone(census.workflow_runs[0]),
+      created_at: '2026-08-12T23:59:00.000Z',
+      event: 'workflow_dispatch',
+      id: 10_000,
+    });
+    census.total_count = census.workflow_runs.length;
+    fixture.liveWorkflowRunsBytes = rewriteCampaignReference(fixture, reference, census);
+
+    await expect(
+      authenticatePerformancePublicationCampaign(
+        fixture.campaign,
+        await campaignAuthenticationOptions(fixture),
+      ),
+    ).resolves.toMatchObject({
+      runs: expect.arrayContaining([expect.objectContaining({ runId: 10_001 })]),
+    });
+  });
+
+  it('rejects an event spoof in the authenticated per-run authority', async () => {
+    const fixture = writeCampaignAuthenticationFixture();
+    rewriteCampaignRunEvent(fixture, 10_007, 'workflow_dispatch', { updateCensus: false });
+    omitCampaignProductionBytes(fixture, 10_007);
+
+    await expect(
+      authenticatePerformancePublicationCampaign(
+        fixture.campaign,
+        await campaignAuthenticationOptions(fixture),
+      ),
+    ).rejects.toThrow('campaign run 10007 authority is malformed');
+  });
+
   it('authenticates every literal candidate and independently derives first-five-plus-sixth selection', async () => {
     const fixture = writeCampaignAuthenticationFixture();
     const result = await authenticatePerformancePublicationCampaign(
@@ -2912,6 +2989,54 @@ async function campaignAuthenticationOptions(fixture) {
     selectedFamilies: fixture.selectedFamilies,
     selectedProductionBytes: fixture.selectedProductionBytes,
   };
+}
+
+function rewriteCampaignReference(fixture, reference, document) {
+  const bytes = Buffer.from(`${JSON.stringify(document, null, 2)}\n`);
+  writeFileSync(path.join(fixture.directory, reference.path), bytes);
+  reference.byteLength = bytes.length;
+  reference.contentDigest = digest(bytes);
+  return bytes;
+}
+
+function rewriteCampaignRunArtifacts(fixture, runId, mutate) {
+  const run = fixture.campaign.runs.find((entry) => entry.runId === runId);
+  const file = path.join(fixture.directory, run.artifactsApiMetadata.path);
+  const listing = JSON.parse(readFileSync(file, 'utf8'));
+  mutate(listing);
+  const bytes = rewriteCampaignReference(fixture, run.artifactsApiMetadata, listing);
+  fixture.liveArtifactsByRun.set(runId, Buffer.from(bytes));
+}
+
+function omitCampaignProductionBytes(fixture, runId, { listingEvent } = {}) {
+  rewriteCampaignRunArtifacts(fixture, runId, (listing) => {
+    listing.artifacts = listing.artifacts.filter(({ name }) => name !== 'kovo-perf-bytes');
+    listing.total_count = listing.artifacts.length;
+    if (listingEvent !== undefined) listing.event = listingEvent;
+  });
+  fixture.campaign.productionBytes = fixture.campaign.productionBytes.filter(
+    (candidate) => candidate.runId !== runId,
+  );
+  fixture.campaign.productionBytesCandidates = fixture.campaign.productionBytesCandidates.filter(
+    (candidate) => candidate.runId !== runId,
+  );
+}
+
+function rewriteCampaignRunEvent(fixture, runId, event, { updateCensus = true } = {}) {
+  const run = fixture.campaign.runs.find((entry) => entry.runId === runId);
+  const runFile = path.join(fixture.directory, run.runApiMetadata.path);
+  const runDocument = JSON.parse(readFileSync(runFile, 'utf8'));
+  runDocument.event = event;
+  const runBytes = rewriteCampaignReference(fixture, run.runApiMetadata, runDocument);
+  fixture.liveRunById.set(runId, Buffer.from(runBytes));
+
+  if (updateCensus) {
+    const reference = fixture.campaign.workflowRunsApiMetadata;
+    const censusFile = path.join(fixture.directory, reference.path);
+    const census = JSON.parse(readFileSync(censusFile, 'utf8'));
+    census.workflow_runs.find((entry) => entry.id === runId).event = event;
+    fixture.liveWorkflowRunsBytes = rewriteCampaignReference(fixture, reference, census);
+  }
 }
 
 function campaignFamilyWorkflowJob(familyName) {

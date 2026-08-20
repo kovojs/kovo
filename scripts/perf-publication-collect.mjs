@@ -57,6 +57,7 @@ const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_REPORT_BYTES = 128 * 1024 * 1024;
 const MAX_RUNS = 10_000;
 const MAX_CAMPAIGN_RUNS = 100;
+const BASELINE_EVENTS = Object.freeze(['pull_request', 'schedule', 'workflow_dispatch']);
 const execFileAsync = promisify(execFile);
 
 const REQUIRED_LOCKS = Object.freeze([
@@ -235,14 +236,16 @@ export async function collectPerformancePublicationRuns({
       ]);
       const runMetadata = parseJsonBytes(runApiBytes, 'workflow run API');
       validateRunMetadata(runMetadata, { repository, runId, sourceSha });
+      validateCampaignRunAuthorityAgreement(
+        runMetadata,
+        workflowRuns.workflow_runs.find((run) => run.id === runId),
+      );
       const jobsMetadata = parseJsonBytes(jobsApiBytes, 'all-attempt jobs API');
       validateJobsCensus(jobsMetadata);
       const artifactListing = parseJsonBytes(artifactsApiBytes, 'run artifacts API');
       campaignArtifactListings.set(runId, artifactListing);
       const publicationArtifacts = enumeratePublicationArtifacts(artifactListing, runId);
-      if (publicationArtifacts.length === 0) {
-        throw new TypeError(`workflow run ${String(runId)} has no literal publication artifact`);
-      }
+      validateRunPublicationArtifactFloor(publicationArtifacts, runMetadata);
       const campaignRoot = path.posix.join('campaign', 'runs', String(runId));
       const [runApiMetadata, artifactsApiMetadata] = await Promise.all([
         writeContentAddressedCustodyFile(
@@ -998,7 +1001,7 @@ function validateRunMetadata(run, { repository, runId, sourceSha }) {
     findings.push('workflow run is not the realistic performance workflow');
   }
   if (run?.status !== 'completed') findings.push('workflow run is not completed');
-  if (!['pull_request', 'schedule', 'workflow_dispatch'].includes(run?.event)) {
+  if (!BASELINE_EVENTS.includes(run?.event)) {
     findings.push('workflow run trigger is not a baseline-capable event');
   }
   if (!Number.isSafeInteger(run?.run_attempt) || run.run_attempt < 1) {
@@ -1063,6 +1066,26 @@ function enumeratePublicationArtifacts(listing, runId) {
       PERF_PUBLICATION_FAMILY_NAMES.indexOf(right.familyName),
   );
   return [...familyArtifacts, ...productionBytes];
+}
+
+function validateRunPublicationArtifactFloor(publicationArtifacts, run) {
+  const runId = run?.id;
+  if (run?.event !== 'pull_request') {
+    throw new TypeError(
+      `workflow run ${String(runId)} is not a pull_request publication campaign run`,
+    );
+  }
+  if (publicationArtifacts.length === 0) {
+    throw new TypeError(`workflow run ${String(runId)} has no literal publication artifact`);
+  }
+  const productionBytesCount = publicationArtifacts.filter(
+    (artifact) => artifact.kind === 'production-bytes',
+  ).length;
+  if (productionBytesCount !== 1) {
+    throw new TypeError(
+      `pull_request workflow run ${String(runId)} must expose exactly one literal Production bytes artifact`,
+    );
+  }
 }
 
 function validateArtifactMetadata(
@@ -1493,15 +1516,19 @@ function validateCampaignRunCensus(listing, { boundary, requestedRunIds, sourceS
         run?.head_sha !== sourceSha ||
         run?.name !== PERF_REALISTIC_WORKFLOW_NAME ||
         run?.path !== PERF_REALISTIC_WORKFLOW_PATH ||
+        !BASELINE_EVENTS.includes(run?.event) ||
         !validTimestamp(run?.created_at),
     )
   ) {
     throw new TypeError('campaign workflow-runs API contains foreign or malformed run identity');
   }
-  const runIds = listing.workflow_runs
-    .filter((run) => run.id >= boundary.firstRunId && run.id <= boundary.lastRunId)
-    .map((run) => run.id)
-    .sort(numericOrder);
+  const campaignRuns = listing.workflow_runs.filter(
+    (run) => run.id >= boundary.firstRunId && run.id <= boundary.lastRunId,
+  );
+  if (campaignRuns.some((run) => run.event !== 'pull_request')) {
+    throw new TypeError('preregistered campaign boundary contains a non-pull_request workflow run');
+  }
+  const runIds = campaignRuns.map((run) => run.id).sort(numericOrder);
   if (
     !runIds.includes(boundary.firstRunId) ||
     !runIds.includes(boundary.lastRunId) ||
@@ -1512,6 +1539,22 @@ function validateCampaignRunCensus(listing, { boundary, requestedRunIds, sourceS
     );
   }
   return runIds;
+}
+
+function validateCampaignRunAuthorityAgreement(run, censusRun) {
+  const projection = (value) => ({
+    conclusion: value?.conclusion ?? null,
+    event: value?.event,
+    runAttempt: value?.run_attempt,
+    runCreatedAt: value?.created_at,
+    runId: value?.id,
+    status: value?.status,
+  });
+  if (canonicalJson(projection(run)) !== canonicalJson(projection(censusRun))) {
+    throw new TypeError(
+      `workflow run ${String(run?.id)} authority differs from the campaign workflow-runs census`,
+    );
+  }
 }
 
 function validateContentAddressedCustodyReference(value, label) {
@@ -1718,11 +1761,16 @@ async function loadCollectedCampaign(
       runId: run.runId,
       sourceSha,
     });
+    validateCampaignRunAuthorityAgreement(
+      runMetadata,
+      listing.workflow_runs.find((entry) => entry.id === run.runId),
+    );
     if (runMetadata.created_at !== run.runCreatedAt) {
       throw new TypeError('campaign run created_at differs from raw run authority');
     }
     const artifactListing = parseJsonBytes(artifactsApi.bytes, 'campaign run artifacts API');
-    enumeratePublicationArtifacts(artifactListing, run.runId);
+    const publicationArtifacts = enumeratePublicationArtifacts(artifactListing, run.runId);
+    validateRunPublicationArtifactFloor(publicationArtifacts, runMetadata);
     artifactListings.set(run.runId, artifactListing);
     runs.push({
       ...run,
