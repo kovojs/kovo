@@ -160,10 +160,23 @@ describe('pinned Lighthouse browser policy', () => {
     ).toBe(true);
   });
 
-  it('gives a full five-repeat Lighthouse phase finite headroom below the workflow job budget', () => {
+  it('leaves explicit workflow headroom after the full three-lane, two-framework matrix', () => {
+    const workflowBudgetMs = 360 * 60_000;
+    const nonLighthouseAllowanceMs = 120 * 60_000;
+    const comparisonLighthouseMaximumMs = 3 * 2 * lighthouseInvocationPhaseMaximumMs(5);
+    const remainingHeadroomMs =
+      workflowBudgetMs - comparisonLighthouseMaximumMs - nonLighthouseAllowanceMs;
+
     expect(LIGHTHOUSE_INVOCATION_TIMEOUT_MS).toBe(105_000);
     expect(lighthouseInvocationPhaseMaximumMs(5)).toBe(2_100_000);
-    expect(lighthouseInvocationPhaseMaximumMs(5)).toBeLessThan(360 * 60_000);
+    // Five repeats are split across the two K,N,N,K occurrences. Across three lanes and both
+    // frameworks that is at most 210 minutes of supervised Lighthouse invocations.
+    expect(comparisonLighthouseMaximumMs).toBe(210 * 60_000);
+    // Reserve two hours for production preparation, Playwright scenarios, bfcache, report writing,
+    // and artifact upload. The six-hour parent still retains another explicit 30-minute margin.
+    expect(nonLighthouseAllowanceMs).toBe(120 * 60_000);
+    expect(remainingHeadroomMs).toBe(30 * 60_000);
+    expect(remainingHeadroomMs).toBeGreaterThan(0);
   });
 });
 

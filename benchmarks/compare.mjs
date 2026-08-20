@@ -88,7 +88,10 @@ const lockFiles = Object.freeze([
   'benchmarks/harness/pnpm-lock.yaml',
 ]);
 
-export async function runComparison(options = {}) {
+export async function runComparison(options = {}, dependencies = {}) {
+  const captureBrowserCell =
+    dependencies.runBrowserComparisonAdapterCell ?? runBrowserComparisonAdapterCell;
+  const prepareBrowser = dependencies.prepareBrowserEntrants ?? prepareBrowserEntrants;
   const execution = performanceExecutionIdentity();
   const executionAuthenticated = executionIdentityFindings(execution).length === 0;
   const cells = options.cells ?? defaultCells;
@@ -229,7 +232,7 @@ export async function runComparison(options = {}) {
 
     if (cells.includes('browser') && !executionError) {
       quietHost.markBenchmarkWork();
-      browserPreparation.push(...(await prepareBrowserEntrants()));
+      browserPreparation.push(...(await prepareBrowser()));
       const incomplete = browserPreparation.filter((report) => report.integrity.complete !== true);
       if (incomplete.length > 0) {
         executionError = incomplete
@@ -253,7 +256,7 @@ export async function runComparison(options = {}) {
           }
           const resultFile = path.join(scratch, `${lane}-${orderIndex}-browser.json`);
           const retainedReference = `raw/${lane}-${String(orderIndex)}-${framework}-browser-failed.json`;
-          const captured = await runBrowserComparisonAdapterCell({
+          const captured = await captureBrowserCell({
             adapter: {
               args: [
                 path.join(benchmarkRoot, 'run-all.mjs'),
@@ -730,7 +733,7 @@ export function pairedAnalysis(cells, { bootstrapIterations = 10_000, seed = 1 }
 function rawMetricSeries(cell) {
   if (cell.cell === 'server' && cell.report?.support?.status === 'unsupported') return [];
   if (cell.cell === 'browser') {
-    const app = cell.report.apps?.[0];
+    const app = cell.report?.apps?.[0];
     const output = [];
     for (const [condition, scenarios] of Object.entries(app?.conditions ?? {})) {
       for (const [scenario, value] of Object.entries(scenarios ?? {})) {
@@ -778,7 +781,7 @@ function rawMetricSeries(cell) {
   if (cell.cell === 'dev') {
     return devMetricSeries(cell.report);
   }
-  const samples = cell.report.samples ?? cell.report.rawSamples ?? [];
+  const samples = cell.report?.samples ?? cell.report?.rawSamples ?? [];
   return prefixedMetricSeries(samples);
 }
 
@@ -2755,7 +2758,7 @@ function workloadLanes(options, cells, corpusSize) {
 }
 
 function browserSamples(cell) {
-  return Object.values(cell.report.apps?.[0]?.conditions ?? {}).flatMap((condition) =>
+  return Object.values(cell.report?.apps?.[0]?.conditions ?? {}).flatMap((condition) =>
     Object.values(condition ?? {}).flatMap((scenario) => scenario?.iterations ?? []),
   );
 }
@@ -2765,7 +2768,7 @@ function cellSampleCount(cell) {
   if (cell.cell === 'dev') {
     return Array.isArray(cell.report?.samples) ? cell.report.samples.length : 0;
   }
-  return (cell.report.samples ?? cell.report.rawSamples ?? []).length;
+  return (cell.report?.samples ?? cell.report?.rawSamples ?? []).length;
 }
 
 function readAliasedIntegerArg(primary, legacy, options) {

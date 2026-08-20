@@ -1345,6 +1345,113 @@ describe('serialized comparison analysis', () => {
       await rm(root, { force: true, recursive: true });
     }
   });
+
+  it.each([
+    {
+      bytes: null,
+      expectedAvailable: false,
+      expectedRetainedPath: null,
+      name: 'missing child result',
+    },
+    {
+      bytes: Buffer.from('{"schema":\n'),
+      expectedAvailable: true,
+      expectedRetainedPath: 'raw/default-0-kovo-browser-failed.json',
+      name: 'invalid child JSON',
+    },
+  ])(
+    'writes an unproven top-level comparison with failed-cell custody for $name',
+    async ({ bytes, expectedAvailable, expectedRetainedPath }) => {
+      const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-compare-browser-custody-'));
+      try {
+        const failure = new Error('browser adapter terminated before producing valid evidence');
+        failure.adapterExit = { signal: 'SIGTERM', status: null };
+        let rejected;
+        try {
+          await runComparison(
+            {
+              allowDirty: true,
+              bfcacheIterations: 2,
+              bootstrapIterations: 10,
+              cells: ['browser'],
+              hostSettleMaxMs: 0,
+              iterations: 2,
+              lanes: ['default'],
+              lighthouseRuns: 2,
+              maxLoadPerCpu: 1_000_000,
+              outDir: root,
+              skipLighthouse: true,
+              warmups: 0,
+            },
+            {
+              prepareBrowserEntrants: async () =>
+                ['kovo', 'nextjs'].map((framework) => ({
+                  framework,
+                  integrity: { complete: true, errors: [] },
+                })),
+              runBrowserComparisonAdapterCell: (options) =>
+                runBrowserComparisonAdapterCell(options, {
+                  runAdapter: async () => {
+                    if (bytes !== null) await writeFile(options.resultFile, bytes);
+                    throw failure;
+                  },
+                }),
+            },
+          );
+        } catch (error) {
+          rejected = error;
+        }
+
+        const comparisonPath = path.join(root, 'comparison.json');
+        const report = JSON.parse(await readFile(comparisonPath, 'utf8'));
+        expect(rejected).toBeInstanceOf(Error);
+        expect(rejected.message).toContain(`Evidence preserved at ${comparisonPath}`);
+        expect(report).toMatchObject({
+          analysis: {},
+          integrity: {
+            comparatorMatched: false,
+            executionError: expect.stringContaining(
+              'browser adapter terminated before producing valid evidence',
+            ),
+          },
+          rawCells: [
+            {
+              adapterFailure: {
+                process: { signal: 'SIGTERM', status: null },
+                rawReport: {
+                  available: expectedAvailable,
+                  retainedPath: expectedRetainedPath,
+                },
+                schema: COMPARE_ADAPTER_FAILURE_SCHEMA,
+              },
+              cell: 'browser',
+              framework: 'kovo',
+              lane: 'default',
+              occurrence: 0,
+              report: null,
+            },
+          ],
+          verdict: { status: 'unproven' },
+        });
+        if (bytes === null) {
+          expect(report.rawCells[0].adapterFailure.rawReport).toMatchObject({
+            parseError: null,
+            reportBytes: null,
+            reportSha256: null,
+          });
+        } else {
+          expect(report.rawCells[0].adapterFailure.rawReport).toMatchObject({
+            parseError: expect.stringContaining('invalid JSON'),
+            reportBytes: bytes.byteLength,
+            reportSha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+          });
+          expect(await readFile(path.join(root, expectedRetainedPath))).toEqual(bytes);
+        }
+      } finally {
+        await rm(root, { force: true, recursive: true });
+      }
+    },
+  );
 });
 
 function completeDevValidationReport({ basePort, readyIterations }) {
