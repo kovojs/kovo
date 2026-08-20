@@ -40,7 +40,7 @@
     {
       "id": "workload",
       "file": "benchmarks/run-all.mjs",
-      "expectedDigest": "sha256:3defbb4a998e97465e6d954180d248da6fbb1eb28dc7aa60a756bbf5d8d1093c",
+      "expectedDigest": "sha256:aadab2af7780f3fa77f5a211a3292c0d3f6f12667a969c2ca7ceebe67d00cbad",
       "evidence": [
         {
           "text": "'matched-l0': { listing: '/matched/l0', scenarios: ['coldLoad', 'navigation'] }",
