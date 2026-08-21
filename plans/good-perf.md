@@ -217,6 +217,10 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     retain every required browser-visible latency, correctness, state, ready, and RSS metric. The
     resulting recovery p95 miss (2,348.68/2,464.17 ms at N=24 and 3,015.42/2,947.49 ms at N=216
     for baseline/holdout) remains literal open performance work.
+- [ ] Reach the syntax-error/recovery first milestone at both N=24 and N=216: syntax p95 at most
+      1 second, recovery p95 at most 2 seconds, zero lost/silent revisions, and no greater than 5%
+      p95 latency or process-tree RSS regression. Accept an implementation only under the plan's
+      serialized paired-confidence rule and re-prove the milestone in the final fixed campaign.
 
 ## Phase 2 — check and production build
 
