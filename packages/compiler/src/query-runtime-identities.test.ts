@@ -542,6 +542,36 @@ describe('compiler-owned query runtime identity project', () => {
     expect(completeQueryIdentityProgramConstructionsForTesting()).toBeGreaterThan(before);
   });
 
+  it('keeps the provider export identity through a renamed direct app-query import', () => {
+    const root = projectRoot();
+    installFrameworkServer(root);
+    const sourceFile = join(root, 'src/components/status-card.tsx');
+    const source = [
+      "import { component } from '@kovojs/core';",
+      "import { status as selectedStatus } from '../providers/status.js';",
+      'export const StatusCard = component({',
+      '  queries: { status: selectedStatus },',
+      '  render: ({ status }) => <article>{status.summary}</article>,',
+      '});',
+      '',
+    ].join('\n');
+    writeFile(
+      root,
+      'src/providers/status.ts',
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        "export const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });",
+        'export const status = app.query({ load: () => ({ summary: "ready" }) });',
+        '',
+      ].join('\n'),
+    );
+    writeFile(root, 'src/components/status-card.tsx', source);
+
+    expect(
+      resolveComponentQueryRuntimeNames({ fileName: sourceFile, rootDirectory: root, source }),
+    ).toEqual({ status: 'providers/status/status' });
+  });
+
   it('falls back to the complete fresh Program across changed app-query barrels', () => {
     const root = projectRoot();
     installFrameworkServer(root);
