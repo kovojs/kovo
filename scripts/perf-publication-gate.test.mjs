@@ -61,6 +61,18 @@ afterEach(() => {
 });
 
 describe('seven-family performance publication gate', () => {
+  it('rejects the sealed pre-policy v7 manifest before opening campaign evidence', async () => {
+    await expect(
+      authenticatePerformancePublicationInput({
+        campaign: campaignManifestStub(),
+        families: {},
+        productionBytes: {},
+        repository: 'kovojs/kovo',
+        schema: 'kovo-performance-publication-input/v7',
+      }),
+    ).rejects.toThrow('manifest must be kovo-performance-publication-input/v8');
+  });
+
   it('live-reauthenticates the complete preregistered campaign and earliest bytes candidate', async () => {
     const fixture = writeCampaignAuthenticationFixture();
     const result = await authenticatePerformancePublicationCampaign(fixture.campaign, {
@@ -803,6 +815,16 @@ describe('seven-family performance publication gate', () => {
       status: 'pass',
     });
     expect(result.publication.productionBytes.metricVerdicts).toHaveLength(5);
+    expect(result.publication.publicationPolicy).toMatchObject({
+      path: 'perf-publication-policy.json',
+      schema: 'kovo-performance-publication-policy/v1',
+    });
+    const policyTamper = structuredClone(result.publication);
+    policyTamper.publicationPolicy.contentDigest = digest('retrospective-policy');
+    resealPublication(policyTamper);
+    expect(performancePublicationFindings(policyTamper)).toContain(
+      'publication prospective policy contentDigest differs from the committed prospective policy',
+    );
     const chronologyTamper = structuredClone(result.publication);
     chronologyTamper.campaign.productionBytes = [];
     resealPublication(chronologyTamper);
@@ -832,17 +854,18 @@ describe('seven-family performance publication gate', () => {
     expect(markdown).toContain('### Matched L1');
     expect(
       markdown.match(
-        /\| Metric \| Kovo median \| Kovo p95 \| Next median \| Next p95 \| Budget policy \|/gu,
+        /\| Metric \| Role \| Kovo median \(MAD; run p95\) \| Kovo sample p95 \(MAD; run p95\) \| Next median \(MAD; run p95\) \| Next sample p95 \(MAD; run p95\) \| Holdout Kovo median \(MAD; p95\) \| Holdout Next median \(MAD; p95\) \| Budget policy \|/gu,
       ),
     ).toHaveLength(3);
     expect(markdown).toContain('median of five independent run medians');
-    expect(markdown).toContain('sixth run is the independent holdout and is not pooled');
+    expect(markdown).toContain('sixth run is an independent holdout and is not pooled');
+    expect(markdown).toContain('Only the fixed 63-metric user-facing census');
     expect(markdown).toContain('Next matched L0 still ships JavaScript');
     expect(markdown).toContain('document-parts response and preserves the document');
     expect(markdown).toContain('is not additive and is not a decode or morph split');
     expect(markdown).toContain('[Derived browser budget](evidence/browser-budget.json)');
     expect(markdown).toContain(
-      '| default/browser//desktop.coldLoad.bytes.js | 10 | 11 | 20 | 21 |',
+      '| default/browser//desktop.coldLoad.bytes.js | completion | 10 (1; 11) | 11 (1; 12) | 20 (1; 21) | 21 (1; 22) | 10 (1; 11) | 20 (1; 21) |',
     );
     for (const metric of Object.keys(result.documents.browser.budget.metrics)) {
       expect(markdown.split(`| ${metric} |`)).toHaveLength(2);
@@ -953,6 +976,14 @@ describe('seven-family performance publication gate', () => {
     expect(() => renderFixturePublication(emptyLane, { authenticated, options })).toThrow(
       /browser budget table lane matched-l1 has no metrics/u,
     );
+
+    const missingHoldoutMetric = derivePerformancePublication(authenticated, options);
+    delete missingHoldoutMetric.documents.browser.evaluation.metrics[
+      'default/browser//desktop.coldLoad.bytes.js'
+    ];
+    expect(() =>
+      renderFixturePublication(missingHoldoutMetric, { authenticated, options }),
+    ).toThrow(/browser holdout metric .* Kovo values are unavailable/u);
   });
 
   it('keeps malformed, unbudgeted, or sourceAfter-drifted byte evidence unproven', () => {
@@ -2449,17 +2480,28 @@ function fixtureBudget(familyName, baseline) {
             metric,
             {
               baseline: {
+                kovoMad: 1,
                 kovoMedian: value,
                 kovoP95: value + 1,
+                kovoP95Mad: 1,
+                kovoP95RunP95: value + 2,
+                kovoRunP95: value + 1,
+                nextMad: 1,
                 nextMedian: value + 10,
                 nextP95: value + 11,
+                nextP95Mad: 1,
+                nextP95RunP95: value + 12,
+                nextRunP95: value + 11,
+                pairedMad: 1,
                 pairedMedian: -10,
+                pairedRunP95: -9,
                 runs: 5,
               },
               direction: 'lower-is-better',
-              kind: 'ratified-regression-ceiling',
+              kind: 'ratified-robust-regression-ceiling',
               medianMaximum: value * 1.05,
               p95Maximum: (value + 1) * 1.05,
+              publicationImpact: 'completion',
             },
           ]),
         ),
@@ -2569,6 +2611,36 @@ function fixtureEvaluation(familyName, budget, candidate) {
     budget: budget.digest,
     candidate: { execution: candidate.execution.digest, sourceCommit: candidate.source.commit },
     checks,
+    ...(familyName === 'browser'
+      ? {
+          metrics: Object.fromEntries(
+            Object.entries(budget.metrics).map(([metric, entry]) => [
+              metric,
+              {
+                kovo: {
+                  mad: 1,
+                  median: entry.baseline.kovoMedian,
+                  p95: entry.baseline.kovoP95,
+                  samples: 30,
+                },
+                nextjs: {
+                  mad: 1,
+                  median: entry.baseline.nextMedian,
+                  p95: entry.baseline.nextP95,
+                  samples: 30,
+                },
+                pairedDifference: {
+                  direction: 'kovo-minus-nextjs',
+                  mad: 1,
+                  median: entry.baseline.pairedMedian,
+                  p95: entry.baseline.pairedRunP95,
+                  samples: 30,
+                },
+              },
+            ]),
+          ),
+        }
+      : {}),
     schema: `fixture-${familyName}-evaluation/v1`,
     verdict: { failures: [], reasons: [], status: 'pass' },
   };

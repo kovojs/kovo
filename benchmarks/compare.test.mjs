@@ -256,6 +256,11 @@ describe('serialized comparison analysis', () => {
             warmupMs: 25,
           },
         },
+        publicationPolicy: {
+          contentDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+          path: 'perf-publication-policy.json',
+          schema: 'kovo-performance-publication-policy/v1',
+        },
       },
     });
     expect(workload.digest).toMatch(/^sha256:[0-9a-f]{64}$/u);

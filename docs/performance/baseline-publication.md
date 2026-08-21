@@ -14,6 +14,21 @@ cohorts. The manual commands below describe the same individual ratification sta
 useful for inspecting a selected family; they are not a substitute for the aggregate collector and
 publication gate.
 
+## Prospective regression-policy boundary
+
+`perf-publication-policy.json` is the reviewable source of the comparison-family publication
+policy. Browser and server workload identities include its exact schema, byte length, and SHA-256,
+so the policy is fixed in the measured source before any campaign payload can be unblinded. The
+policy retains the exact complete analysis-metric census, but separates reported diagnostics from a
+fixed completion-blocking regression census.
+
+This revision is strictly prospective. The already sealed `v7` campaign was measured before this
+policy existed and remains blocked; its outcomes did not select this census or its envelope. Do not
+regenerate a `v8` manifest from that custody pool, relabel its reports, rerun one of its workflow
+runs, or add top-up samples. Publication requires a fresh, disjoint, fixed-count campaign started
+only after the policy file and workload binding are committed. A report without the exact committed
+policy identity is unproven even if every timing value would otherwise pass.
+
 ## Preflight separately; collect a fixed PR-label campaign
 
 Manual dispatch accepts two optional collection controls. `baseline_focus` selects `all`, `check`,
@@ -210,10 +225,31 @@ artifact links by digest, revalidates every raw report, and reproduces the ratif
 writing a budget.
 
 Browser and server use the common comparison derivation. `--markdown-out` creates a clean linked
-Kovo-vs-Next table, derives the 5% regression envelope, records every ratified target with its
-`completion` or `follow-on` role, and preserves the architectural lane/posture warning. A failed
-follow-on row remains `fail`; the role says how the aggregate publication gate uses that result and
-does not rewrite the result itself:
+Kovo-vs-Next table that retains every measured metric and each entrant's cross-run median, MAD, and
+p95 summaries. A metric outside the committed completion census is still rendered as
+`reported-diagnostic` or `informational`; it is not silently discarded and it cannot become a
+completion failure after unblinding.
+
+For a lower-is-better completion metric, the holdout median ceiling is the greater of the ratified
+median plus 5% and the cross-run p95 plus three cross-run MADs. The within-run p95 ceiling applies
+the same formula to the five run-level p95 values. For a higher-is-better metric, the floor is the
+nonnegative lesser of the 5% relative floor and the cross-run median minus three MADs; its p95 floor
+is derived the same way. These are fixed tolerance envelopes for an independent same-source
+holdout, not evidence that a candidate improved. Implementation spikes still need the plan's
+serialized paired confidence interval and correctness acceptance rules.
+
+The exact comparison-family completion census is:
+
+- Browser: 63 user-facing metrics — for every default/L0/L1 lane and desktop/mobile form factor,
+  cold FCP, cold LCP, JavaScript bytes, total bytes, navigation-to-paint, and session bytes through
+  destination paint; Lighthouse FCP/LCP for both routes; and each lane's bfcache-restored rate.
+- Server: 108 representation-matched identity metrics — throughput, p50/p95/p99 latency, server
+  CPU, and peak process-tree RSS for every HIT/304/dynamic, listing/detail, and c={1,8,32} cell.
+
+Exact availability rows, raw correctness, response/representation integrity, source and custody
+identity, and first milestones remain fail-closed independently of that regression census. Every
+ratified target keeps its `completion` or `follow-on` role. A failed follow-on row remains `fail`;
+the role says how the aggregate gate uses it and does not rewrite the result itself:
 
 ```sh
 vp exec node scripts/perf-comparison-budget.mjs derive \
@@ -296,12 +332,12 @@ unzip -p "$kovo_perf_custody/run-1/browser.zip" comparison.json \
   > "$kovo_perf_custody/run-1/comparison.json"
 ```
 
-The input manifest is `kovo-performance-publication-input/v7`. This abridged, non-runnable example
+The input manifest is `kovo-performance-publication-input/v8`. This abridged, non-runnable example
 shows one family's shape:
 
 ```json
 {
-  "schema": "kovo-performance-publication-input/v7",
+  "schema": "kovo-performance-publication-input/v8",
   "repository": "kovojs/kovo",
   "campaign": {
     "boundary": { "firstRunId": 1001, "lastRunId": 1024 },
@@ -471,9 +507,9 @@ in-repository output is therefore created only after the whole measured checkout
 clean-source check; using the external directory above avoids coupling collection and publication
 to repository state.
 
-The output schema is `kovo-performance-publication/v9`. Browser/server budget and holdout documents
-use `kovo-comparison-performance-budget/v2` and
-`kovo-comparison-performance-evaluation/v2`. The output root contains exactly 23 regular files:
+The output schema is `kovo-performance-publication/v10`. Browser/server budget and holdout documents
+use `kovo-comparison-performance-budget/v3` and
+`kovo-comparison-performance-evaluation/v3`. The output root contains exactly 23 regular files:
 `performance-publication.json`, `performance-publication.md`, and exactly 21 JSON files under
 `evidence/` (baseline, budget, and independent holdout evaluation for each of seven families).
 There is no Production-bytes family document; the authenticated sidecar remains in the aggregate.
@@ -503,10 +539,11 @@ never emits a partial family inventory.
 
 The browser section is not a curated headline subset. It deterministically partitions every metric
 in `evidence/browser-budget.json` into Default/as shipped, Matched L0, or Matched L1 and renders each
-lane sorted with `Metric | Kovo median | Kovo p95 | Next median | Next p95 | Budget policy`.
-The median is the median of the five run medians; p95 is the median of the five within-run p95s. The
-sixth run is the independent holdout and is not pooled. The section links the derived budget, all
-five baseline artifacts, the holdout, the exact measured source, and the exact fixture sources.
+lane sorted with the metric's role and budget policy plus Kovo and Next median/sample-p95 summaries.
+Each baseline summary includes the cross-run MAD and p95, and the same row reports the independent
+holdout's median, MAD, and p95 for both entrants. The sixth run is not pooled. The section links the
+derived budget, all five baseline artifacts, the holdout, the exact measured source, the exact
+publication-policy digest, and the exact fixture sources.
 It keeps the required caveats beside the tables: default compares Kovo's native L0 with Next's
 hydrated mutable cart; zero JavaScript applies only to Kovo L0 and Next matched L0 still ships
 JavaScript; matched L1 equalizes capability while Kovo preserves the document and Next replaces it;
@@ -525,8 +562,8 @@ targets are retained as separately reported follow-on checks:
 - Browser matched-L1 mobile navigation at no more than 2x Next is completion-blocking. Matched-L1
   session bytes at no more than 50% of Next is follow-on.
 - Server identity HIT at least 0.9x Next and forced-dynamic throughput at least 0.8x Next are
-  follow-on. The full authenticated matrix, holdout correctness, and ratified regression envelope
-  still prevent publication when unproven or failing.
+  follow-on. The full authenticated matrix, holdout correctness, and fixed 108-metric robust
+  regression census still prevent publication when unproven or failing.
 - Dev ready at no more than 2x Next, leaf edit at no more than 2x, and entry edit at no more than 3x
   are follow-on. Syntax-error p95 at most 1 second, recovery p95 at most 2 seconds, all regression
   checks, and correctness remain completion-blocking.
@@ -598,10 +635,12 @@ document plus a recomputed aggregate self-hash therefore cannot produce exit sta
 `perf-budgets.json` from a clean checkout whose `HEAD` equals the measured source, requires disk
 bytes to equal `git show HEAD:perf-budgets.json`, evaluates exactly the five deterministic byte
 metrics, and canonically reproduces the sidecar assessment during result and readback validation.
-Every check remains an explicit `pass` or `fail`. A completion/regression/milestone failure blocks
-publication; a competitive follow-on failure stays visible in JSON and Markdown but does not by
-itself block the first-milestone publication. Any missing, unbudgeted, malformed, unclassified, or
-otherwise undecidable failure is treated as blocking or unproven, never as follow-on by default. The
+Every completion-census, availability, target, and milestone check remains an explicit `pass` or
+`fail`; reported diagnostics retain their measurements without manufacturing pass/fail votes. A
+completion/regression/milestone failure blocks publication; a competitive follow-on failure stays
+visible in JSON and Markdown but does not by itself block the first-milestone publication. Any
+missing metric, malformed census, unbudgeted completion metric, unclassified failure, or otherwise
+undecidable result is treated as blocking or unproven, never as follow-on by default. The
 same result gate
 re-derives the foreground-build assessment from the exact N=24/N=216 budgets and authenticated
 profiles. For each optional mode it reads every mode-prefixed original `.cpuprofile` directly from

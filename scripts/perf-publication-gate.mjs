@@ -20,6 +20,10 @@ import {
 } from './lib/perf-artifact-custody.mjs';
 import { executionIdentityFindings } from './lib/perf-execution.mjs';
 import {
+  PERF_PUBLICATION_POLICY_IDENTITY,
+  performancePublicationPolicyIdentityFindings,
+} from './lib/perf-publication-policy.mjs';
+import {
   buildProfileConfigStaticTrustRequired,
   deriveBuildProfileSetAnalysis,
   PERF_BUILD_PROFILE_REQUIRED_ROLES,
@@ -73,8 +77,8 @@ import {
   performanceGateWorkloadIdentity,
 } from './perf-gate.mjs';
 
-export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v7';
-export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v9';
+export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v8';
+export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v10';
 export const PERF_PUBLICATION_REPOSITORY = 'kovojs/kovo';
 
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
@@ -2927,6 +2931,7 @@ export function derivePerformancePublication(
     fixtureSources: fixtureSources(sourceCommit),
     generatedAt,
     identity: { locks, sourceCommit },
+    publicationPolicy: PERF_PUBLICATION_POLICY_IDENTITY,
     productionBytes,
     repository: authenticated?.repository ?? null,
     schema: PERF_PUBLICATION_SCHEMA,
@@ -2962,7 +2967,10 @@ export function performancePublicationResultFindings(
     ...performancePublicationFindings(publication),
     ...authenticatedInputFindings(authenticated),
     ...exactPublicationIdentityFindings(familyEntries(authenticated)),
-    ...browserPublicationTableFindings(result?.documents?.browser?.budget),
+    ...browserPublicationTableFindings(
+      result?.documents?.browser?.budget,
+      result?.documents?.browser?.evaluation,
+    ),
   ];
   const profileEntries = buildProfileEntries ?? authenticated?.buildProfiles ?? [];
   let reproduced;
@@ -3055,6 +3063,12 @@ export function performancePublicationFindings(publication) {
   if (publication.repository !== PERF_PUBLICATION_REPOSITORY) {
     findings.push('publication repository is not the canonical Kovo repository');
   }
+  findings.push(
+    ...performancePublicationPolicyIdentityFindings(
+      publication.publicationPolicy,
+      'publication prospective policy',
+    ),
+  );
   findings.push(...campaignPublicationFindings(publication.campaign, publication));
   if (!COMMIT_PATTERN.test(publication.identity?.sourceCommit ?? '')) {
     findings.push('publication source commit is unavailable');
@@ -3246,6 +3260,8 @@ export function renderPerformancePublicationMarkdown(result, validation = {}) {
     '',
     `Verdict: **${publication.verdict.status}**. Source: \`${publication.identity.sourceCommit}\`.`,
     '',
+    `Prospective regression policy: [\`${publication.publicationPolicy.contentDigest}\`](https://github.com/${PERF_PUBLICATION_REPOSITORY}/blob/${publication.identity.sourceCommit}/${publication.publicationPolicy.path}).`,
+    '',
     'A Kovo-vs-Next first-milestone publication is eligible only when all seven family gates pass. The check row is deliberately Kovo-only and does not manufacture a Next.js comparison. Competitive follow-on misses remain reported as failures, but do not masquerade as completion failures or block this first-milestone gate.',
     '',
     '| Family | Posture | Host | Workload | Baseline completion | Baseline follow-on | Holdout completion | Holdout follow-on | Publication gate |',
@@ -3364,7 +3380,7 @@ export function renderPerformancePublicationMarkdown(result, validation = {}) {
   return lines.join('\n');
 }
 
-function browserPublicationTableFindings(budget) {
+function browserPublicationTableFindings(budget, evaluation) {
   if (!ownRecord(budget?.metrics) || Object.keys(budget.metrics).length === 0) {
     return ['browser budget table metrics are unavailable'];
   }
@@ -3379,14 +3395,37 @@ function browserPublicationTableFindings(budget) {
     }
     if (
       !ownRecord(entry?.baseline) ||
-      !['kovoMedian', 'kovoP95', 'nextMedian', 'nextP95'].every((field) =>
-        Number.isFinite(entry.baseline[field]),
-      )
+      [
+        'kovoMad',
+        'kovoMedian',
+        'kovoP95',
+        'kovoP95Mad',
+        'kovoP95RunP95',
+        'kovoRunP95',
+        'nextMad',
+        'nextMedian',
+        'nextP95',
+        'nextP95Mad',
+        'nextP95RunP95',
+        'nextRunP95',
+      ].some((field) => !Number.isFinite(entry.baseline[field]))
     ) {
       findings.push(`browser budget metric ${metric} absolute baseline values are unavailable`);
     }
     if (!nonEmptyString(browserBudgetPolicy(entry))) {
       findings.push(`browser budget metric ${metric} policy is unavailable`);
+    }
+    for (const [subject, label] of [
+      ['kovo', 'Kovo'],
+      ['nextjs', 'Next'],
+    ]) {
+      const summary = evaluation?.metrics?.[metric]?.[subject];
+      if (
+        !ownRecord(summary) ||
+        ['mad', 'median', 'p95'].some((field) => !Number.isFinite(summary[field]))
+      ) {
+        findings.push(`browser holdout metric ${metric} ${label} values are unavailable`);
+      }
     }
   }
   for (const [lane, count] of laneCounts) {
@@ -3399,13 +3438,14 @@ function renderBrowserComparisonMarkdownLines(result) {
   const publication = result.publication;
   const family = publication.families.browser;
   const budget = result.documents.browser.budget;
+  const evaluation = result.documents.browser.evaluation;
   const lines = [
     '',
     '## Browser comparison: explicit lanes',
     '',
     family.architecture,
     '',
-    'Each median is the median of five independent run medians. Each p95 is the median of the five within-run p95 values. The sixth run is the independent holdout and is not pooled into either baseline statistic.',
+    'Every measured browser metric is retained. Each median is the median of five independent run medians, with its cross-run MAD and p95. Each sample p95 is summarized the same way across runs. The sixth run is an independent holdout and is not pooled. Only the fixed 63-metric user-facing census is completion-regression blocking; other directional metrics remain reported diagnostics.',
     '',
     'The default/as-shipped lane is intentionally capability-mismatched: Kovo uses its native L0 cart while Next uses a hydrated mutable cart. Zero JavaScript applies only to Kovo L0; Next matched L0 still ships JavaScript. Matched L1 equalizes cart capability, but Kovo uses an observed document-parts response and preserves the document while Next uses an observed `text/html` document navigation and replaces it. `responseProcessingDomApply` overlaps transfer, parser, style, and layout; it is not additive and is not a decode or morph split.',
     '',
@@ -3436,12 +3476,13 @@ function renderBrowserComparisonMarkdownLines(result) {
       '',
       `### ${laneTitles[lane]}`,
       '',
-      '| Metric | Kovo median | Kovo p95 | Next median | Next p95 | Budget policy |',
-      '| --- | ---: | ---: | ---: | ---: | --- |',
+      '| Metric | Role | Kovo median (MAD; run p95) | Kovo sample p95 (MAD; run p95) | Next median (MAD; run p95) | Next sample p95 (MAD; run p95) | Holdout Kovo median (MAD; p95) | Holdout Next median (MAD; p95) | Budget policy |',
+      '| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
     );
     for (const [metric, entry] of rows) {
+      const holdout = evaluation.metrics[metric];
       lines.push(
-        `| ${metric.replaceAll('|', '\\|')} | ${formatNumber(entry.baseline.kovoMedian)} | ${formatNumber(entry.baseline.kovoP95)} | ${formatNumber(entry.baseline.nextMedian)} | ${formatNumber(entry.baseline.nextP95)} | ${browserBudgetPolicy(entry)} |`,
+        `| ${metric.replaceAll('|', '\\|')} | ${entry.publicationImpact} | ${formatBudgetRunSummary(entry.baseline, 'kovo', 'median')} | ${formatBudgetRunSummary(entry.baseline, 'kovo', 'p95')} | ${formatBudgetRunSummary(entry.baseline, 'next', 'median')} | ${formatBudgetRunSummary(entry.baseline, 'next', 'p95')} | ${formatHoldoutSummary(holdout.kovo)} | ${formatHoldoutSummary(holdout.nextjs)} | ${browserBudgetPolicy(entry)} |`,
       );
     }
   }
@@ -3464,24 +3505,35 @@ function renderBrowserComparisonMarkdownLines(result) {
 
 function browserBudgetPolicy(entry) {
   if (entry?.kind === 'informational') return 'informational';
+  if (entry?.kind === 'reported-diagnostic') return 'reported diagnostic; non-blocking';
   if (entry?.kind === 'exact-availability-floor' && Number.isFinite(entry.minimum)) {
     return `minimum ${formatNumber(entry.minimum)}`;
   }
   if (
-    entry?.kind === 'ratified-regression-ceiling' &&
+    entry?.kind === 'ratified-robust-regression-ceiling' &&
     Number.isFinite(entry.medianMaximum) &&
     Number.isFinite(entry.p95Maximum)
   ) {
     return `median <= ${formatNumber(entry.medianMaximum)}; p95 <= ${formatNumber(entry.p95Maximum)}`;
   }
   if (
-    entry?.kind === 'ratified-regression-floor' &&
+    entry?.kind === 'ratified-robust-regression-floor' &&
     Number.isFinite(entry.medianMinimum) &&
     Number.isFinite(entry.p95Minimum)
   ) {
     return `median >= ${formatNumber(entry.medianMinimum)}; p95 >= ${formatNumber(entry.p95Minimum)}`;
   }
   return '';
+}
+
+function formatBudgetRunSummary(baseline, subject, statistic) {
+  const prefix = `${subject}${statistic === 'median' ? '' : 'P95'}`;
+  const value = baseline[statistic === 'median' ? `${subject}Median` : `${subject}P95`];
+  return `${formatNumber(value)} (${formatNumber(baseline[`${prefix}Mad`])}; ${formatNumber(baseline[`${prefix}RunP95`])})`;
+}
+
+function formatHoldoutSummary(summary) {
+  return `${formatNumber(summary.median)} (${formatNumber(summary.mad)}; ${formatNumber(summary.p95)})`;
 }
 
 export async function writePerformancePublicationOutputs(
@@ -3984,6 +4036,18 @@ function holdoutEvaluationIntegrityFindings(evaluation, budget, candidate) {
     evaluation.candidate?.sourceCommit !== candidate?.source?.commit
   ) {
     findings.push('holdout evaluation candidate identity differs');
+  }
+  if (['browser', 'server'].includes(budget?.subject?.kind)) {
+    if (
+      !ownRecord(evaluation.metrics) ||
+      canonicalJson(Object.keys(evaluation.metrics).sort()) !==
+        canonicalJson(Object.keys(candidate?.analysis ?? {}).sort()) ||
+      canonicalJson(evaluation.metrics) !== canonicalJson(candidate?.analysis)
+    ) {
+      findings.push(
+        'comparison holdout evaluation does not retain the exact analysis metric census',
+      );
+    }
   }
   const checks = Array.isArray(evaluation.checks) ? evaluation.checks : [];
   if (!Array.isArray(evaluation.checks)) {

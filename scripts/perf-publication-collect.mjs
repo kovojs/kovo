@@ -28,7 +28,7 @@ import { performanceGateWorkloadIdentity } from './perf-gate.mjs';
 import { workloadIdentityFindings } from './perf-regression-check.mjs';
 
 export const PERF_PUBLICATION_COLLECTION_SCHEMA = 'kovo-performance-publication-collection/v5';
-export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v7';
+export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v8';
 export const PERF_PUBLICATION_REPOSITORY = 'kovojs/kovo';
 
 /** Raw regular files emitted beside the manifest: selected evidence + campaign authority/candidates. */

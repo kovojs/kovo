@@ -92,9 +92,14 @@ as the intersection of the complete artifact listing and exact admitted producer
 that inventory before opening any family descriptor payload. Removing an eligible family candidate,
 inventing one from an ineligible producer, altering an exclusion, or omitting a run, listing, or
 Production-bytes candidate is rejected. The manifest is
-`kovo-performance-publication-input/v7`; it carries the declared fixed pulse count, complete raw
+`kovo-performance-publication-input/v8`; it carries the declared fixed pulse count, complete raw
 listings, admitted candidates, deterministic cohort winners, and explicit exclusions without
 copying excluded payloads.
+
+Version 8 is prospective: its browser/server reports must bind the exact committed
+`perf-publication-policy.json` identity in their workload digest. A pre-policy collection cannot be
+re-manifested or schema-relabeled; start a fresh disjoint fixed-count campaign after the policy is
+committed.
 
 Every literal `kovo-perf-bytes` artifact remains required and is outside the family-exclusion rule.
 A Production-bytes candidate must be the PR-only `bytes` / `Production bytes` producer, a one-member

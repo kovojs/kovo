@@ -6,6 +6,12 @@ import { pathToFileURL } from 'node:url';
 
 import { navigationAttributionFindings } from '../benchmarks/harness/scenarios.mjs';
 import { executionIdentityFindings } from './lib/perf-execution.mjs';
+import {
+  PERF_PUBLICATION_HOLDOUT_REGRESSION,
+  PERF_PUBLICATION_POLICY_IDENTITY,
+  performancePublicationCompletionMetrics,
+  performancePublicationPolicyIdentityFindings,
+} from './lib/perf-publication-policy.mjs';
 import { ratifyPerformanceBaseline } from './perf-baseline-ratify.mjs';
 import {
   canonicalJson,
@@ -15,8 +21,8 @@ import {
   workloadIdentityFindings,
 } from './perf-regression-check.mjs';
 
-export const PERF_COMPARISON_BUDGET_SCHEMA = 'kovo-comparison-performance-budget/v2';
-export const PERF_COMPARISON_EVALUATION_SCHEMA = 'kovo-comparison-performance-evaluation/v2';
+export const PERF_COMPARISON_BUDGET_SCHEMA = 'kovo-comparison-performance-budget/v3';
+export const PERF_COMPARISON_EVALUATION_SCHEMA = 'kovo-comparison-performance-evaluation/v3';
 
 const BASELINE_SCHEMA = 'kovo-performance-baseline/v1';
 const COMPARISON_SCHEMA = 'kovo-next-performance-comparison/v1';
@@ -53,11 +59,7 @@ const BROWSER_NAVIGATION_ATTRIBUTION_PHASES = Object.freeze([
   'layout',
   'paint',
 ]);
-const BROWSER_DEFAULT_NAVIGATION_ATTRIBUTION_PHASES = Object.freeze([
-  'style',
-  'layout',
-  'paint',
-]);
+const BROWSER_DEFAULT_NAVIGATION_ATTRIBUTION_PHASES = Object.freeze(['style', 'layout', 'paint']);
 const BROWSER_SESSION_BYTE_PHASES = Object.freeze([
   'initial',
   'automaticPrefetch',
@@ -93,56 +95,84 @@ export function comparisonTargetCheckSpecifications(subject) {
 
 /** Derive browser/server regression budgets and a reviewable Kovo-vs-Next summary. */
 export function deriveComparisonPerformanceBudget(baseline, options = {}) {
-  const maxRegressionPct = finitePercentage(options.maxRegressionPct, 5, 'maxRegressionPct');
+  const maxRegressionPct = finitePercentage(
+    options.maxRegressionPct,
+    PERF_PUBLICATION_HOLDOUT_REGRESSION.maxRegressionPct,
+    'maxRegressionPct',
+  );
+  const madMultiplier = finitePercentage(
+    options.madMultiplier,
+    PERF_PUBLICATION_HOLDOUT_REGRESSION.madMultiplier,
+    'madMultiplier',
+  );
+  if (
+    maxRegressionPct !== PERF_PUBLICATION_HOLDOUT_REGRESSION.maxRegressionPct ||
+    madMultiplier !== PERF_PUBLICATION_HOLDOUT_REGRESSION.madMultiplier
+  ) {
+    throw new TypeError('comparison publication regression policy is fixed by the measured source');
+  }
   const findings = comparisonBudgetBaselineFindings(baseline, options.baselineEntries);
   if (findings.length > 0) {
     throw new TypeError(`Comparison performance baseline is unproven:\n${findings.join('\n')}`);
   }
   const subject = baseline.subject.workloadIdentity.identity.cells[0];
+  const completionRegressionMetrics = performancePublicationCompletionMetrics(subject);
+  const completionRegressionCensus = new Set(completionRegressionMetrics);
   const metrics = {};
   for (const [key, evidence] of Object.entries(baseline.metrics)) {
     const direction = performanceMetricDirection(key);
-    const informational = key.endsWith('/bfcache.applicable');
-    if (direction === null && !informational) continue;
     const exactAvailability = /(?:Available|StateSurvived|evidenceComplete)$/u.test(key);
     const common = {
-      baseline: {
-        kovoMedian: evidence.kovo.median,
-        kovoP95: evidence.kovo.sampleP95.median,
-        nextMedian: evidence.nextjs.median,
-        nextP95: evidence.nextjs.sampleP95.median,
-        pairedMedian: evidence.pairedDifference.median,
-        runs: evidence.kovo.runs,
-      },
+      baseline: comparisonBudgetBaselineEvidence(evidence),
       direction,
     };
-    if (informational) {
-      metrics[key] = { ...common, kind: 'informational' };
-    } else if (exactAvailability) {
-      metrics[key] = { ...common, kind: 'exact-availability-floor', minimum: 1 };
+    if (exactAvailability) {
+      metrics[key] = {
+        ...common,
+        kind: 'exact-availability-floor',
+        minimum: 1,
+        publicationImpact: 'completion',
+      };
+    } else if (!completionRegressionCensus.has(key)) {
+      metrics[key] = {
+        ...common,
+        kind: direction === null ? 'informational' : 'reported-diagnostic',
+        publicationImpact: 'reported',
+      };
     } else if (direction === 'lower-is-better') {
       metrics[key] = {
         ...common,
-        kind: 'ratified-regression-ceiling',
-        medianMaximum: regressUpper(evidence.kovo.median, maxRegressionPct),
-        p95Maximum: regressUpper(evidence.kovo.sampleP95.median, maxRegressionPct),
+        kind: 'ratified-robust-regression-ceiling',
+        medianMaximum: robustUpperEnvelope(evidence.kovo, maxRegressionPct, madMultiplier),
+        p95Maximum: robustUpperEnvelope(evidence.kovo.sampleP95, maxRegressionPct, madMultiplier),
+        publicationImpact: 'completion',
       };
-    } else {
+    } else if (direction === 'higher-is-better') {
       metrics[key] = {
         ...common,
-        kind: 'ratified-regression-floor',
-        medianMinimum: regressLower(evidence.kovo.median, maxRegressionPct),
-        p95Minimum: regressLower(evidence.kovo.sampleP95.median, maxRegressionPct),
+        kind: 'ratified-robust-regression-floor',
+        medianMinimum: robustLowerEnvelope(evidence.kovo, maxRegressionPct, madMultiplier),
+        p95Minimum: robustLowerEnvelope(evidence.kovo.sampleP95, maxRegressionPct, madMultiplier),
+        publicationImpact: 'completion',
       };
+    } else {
+      throw new TypeError(`completion regression metric ${key} has no declared direction`);
     }
   }
-  if (Object.keys(metrics).length === 0) {
-    throw new TypeError('Comparison performance baseline has no directional metrics');
+  const missingCompletionMetrics = completionRegressionMetrics.filter(
+    (metric) => !Object.hasOwn(metrics, metric),
+  );
+  if (missingCompletionMetrics.length > 0) {
+    throw new TypeError(
+      `Comparison performance baseline omits completion regression metrics:\n${missingCompletionMetrics.join('\n')}`,
+    );
   }
 
   const policy = {
+    completionRegressionMetrics,
+    holdoutRegression: { ...PERF_PUBLICATION_HOLDOUT_REGRESSION },
     maxLoadPerCpu: baseline.policy.maxLoadPerCpu,
-    maxRegressionPct,
+    publicationPolicy: PERF_PUBLICATION_POLICY_IDENTITY,
     ...(subject === 'server' ? { representations: { ...SERVER_REPRESENTATION_POLICY } } : {}),
     targets: {
       ...(subject === 'browser' ? BROWSER_TARGETS : SERVER_TARGETS),
@@ -213,25 +243,25 @@ export function evaluateComparisonPerformanceBudget(budget, candidate) {
   ) {
     reasons.push('candidate reuses a baseline execution identity');
   }
-  for (const metric of Object.keys(budget?.metrics ?? {})) {
-    if (!ownRecord(candidate?.analysis?.[metric])) {
-      reasons.push(
-        `candidate required ${String(budget?.subject?.kind)} metric ${metric} is unavailable`,
-      );
-    }
+  const budgetMetricCensus = Object.keys(budget?.metrics ?? {}).sort();
+  const candidateMetricCensus = Object.keys(candidate?.analysis ?? {}).sort();
+  if (canonicalJson(budgetMetricCensus) !== canonicalJson(candidateMetricCensus)) {
+    reasons.push(
+      `candidate ${String(budget?.subject?.kind)} metric census differs from the ratified baseline`,
+    );
   }
 
   const checks = [];
   if (reasons.length === 0) {
     for (const [metric, entry] of Object.entries(budget.metrics)) {
-      if (entry.kind === 'informational') continue;
+      if (['informational', 'reported-diagnostic'].includes(entry.kind)) continue;
       const observed = candidate.analysis[metric].kovo;
-      if (entry.kind === 'ratified-regression-ceiling') {
+      if (entry.kind === 'ratified-robust-regression-ceiling') {
         checks.push(
           upperCheck(`${metric}.median`, observed.median, entry.medianMaximum, 'regression'),
           upperCheck(`${metric}.p95`, observed.p95, entry.p95Maximum, 'regression'),
         );
-      } else if (entry.kind === 'ratified-regression-floor') {
+      } else if (entry.kind === 'ratified-robust-regression-floor') {
         checks.push(
           lowerCheck(`${metric}.median`, observed.median, entry.medianMinimum, 'regression'),
           lowerCheck(`${metric}.p95`, observed.p95, entry.p95Minimum, 'regression'),
@@ -255,6 +285,7 @@ export function evaluateComparisonPerformanceBudget(budget, candidate) {
       sourceCommit: candidate?.source?.commit ?? null,
     },
     checks,
+    metrics: ownRecord(candidate?.analysis) ? structuredClone(candidate.analysis) : {},
     schema: PERF_COMPARISON_EVALUATION_SCHEMA,
     verdict: {
       failures,
@@ -375,9 +406,24 @@ export function comparisonBudgetFindings(budget) {
       findings.push(`budget ${lock} digest is unavailable`);
     }
   }
-  const regressionPct = budget.policy?.maxRegressionPct;
-  if (!Number.isFinite(regressionPct) || regressionPct < 0 || regressionPct > 100) {
-    findings.push('budget regression percentage is unavailable');
+  const regressionPolicy = budget.policy?.holdoutRegression;
+  if (canonicalJson(regressionPolicy) !== canonicalJson(PERF_PUBLICATION_HOLDOUT_REGRESSION)) {
+    findings.push('budget holdout regression envelope differs from the prospective policy');
+  }
+  findings.push(
+    ...performancePublicationPolicyIdentityFindings(
+      budget.policy?.publicationPolicy,
+      'budget publication policy',
+    ),
+  );
+  const completionRegressionMetrics = SUPPORTED_SUBJECTS.includes(budget.subject?.kind)
+    ? performancePublicationCompletionMetrics(budget.subject.kind)
+    : [];
+  if (
+    canonicalJson(budget.policy?.completionRegressionMetrics) !==
+    canonicalJson(completionRegressionMetrics)
+  ) {
+    findings.push('budget completion regression census differs from the prospective policy');
   }
   if (!ownRecord(budget.metrics) || Object.keys(budget.metrics).length === 0) {
     findings.push('budget metrics are empty');
@@ -402,34 +448,57 @@ export function comparisonBudgetFindings(budget) {
   ) {
     findings.push('budget server representation policy is unavailable');
   }
+  const completionRegressionCensus = new Set(completionRegressionMetrics);
+  for (const metric of completionRegressionMetrics) {
+    if (!ownRecord(budget.metrics?.[metric])) {
+      findings.push(`budget completion regression metric ${metric} is unavailable`);
+    }
+  }
   for (const [metric, entry] of Object.entries(budget.metrics ?? {})) {
     if (!ratifiedBudgetBaseline(entry?.baseline)) {
       findings.push(`budget ${metric} baseline evidence is unavailable`);
       continue;
     }
-    if (entry.direction !== performanceMetricDirection(metric)) {
+    const direction = performanceMetricDirection(metric);
+    const exactAvailability = /(?:Available|StateSurvived|evidenceComplete)$/u.test(metric);
+    if (entry.direction !== direction) {
       findings.push(`budget ${metric} direction is not derived from the metric`);
     }
-    if (entry.kind === 'informational') {
-      if (metric.endsWith('/bfcache.applicable') !== true || entry.direction !== null) {
-        findings.push(`budget ${metric} informational policy is unavailable`);
-      }
-    } else if (entry.kind === 'ratified-regression-ceiling') {
+    if (exactAvailability) {
       if (
-        entry.medianMaximum !== regressUpper(entry.baseline.kovoMedian, regressionPct) ||
-        entry.p95Maximum !== regressUpper(entry.baseline.kovoP95, regressionPct)
+        entry.kind !== 'exact-availability-floor' ||
+        entry.minimum !== 1 ||
+        entry.publicationImpact !== 'completion'
+      ) {
+        findings.push(`budget ${metric} exact availability policy is unavailable`);
+      }
+    } else if (!completionRegressionCensus.has(metric)) {
+      const expectedKind = direction === null ? 'informational' : 'reported-diagnostic';
+      if (entry.kind !== expectedKind || entry.publicationImpact !== 'reported') {
+        findings.push(`budget ${metric} reported-only policy is unavailable`);
+      }
+    } else if (direction === 'lower-is-better') {
+      if (
+        entry.kind !== 'ratified-robust-regression-ceiling' ||
+        entry.publicationImpact !== 'completion' ||
+        entry.medianMaximum !==
+          robustUpperBudgetEnvelope(entry.baseline, 'median', regressionPolicy) ||
+        entry.p95Maximum !== robustUpperBudgetEnvelope(entry.baseline, 'p95', regressionPolicy)
       ) {
         findings.push(`budget ${metric} ceiling is not derived from ratified evidence`);
       }
-    } else if (entry.kind === 'ratified-regression-floor') {
+    } else if (direction === 'higher-is-better') {
       if (
-        entry.medianMinimum !== regressLower(entry.baseline.kovoMedian, regressionPct) ||
-        entry.p95Minimum !== regressLower(entry.baseline.kovoP95, regressionPct)
+        entry.kind !== 'ratified-robust-regression-floor' ||
+        entry.publicationImpact !== 'completion' ||
+        entry.medianMinimum !==
+          robustLowerBudgetEnvelope(entry.baseline, 'median', regressionPolicy) ||
+        entry.p95Minimum !== robustLowerBudgetEnvelope(entry.baseline, 'p95', regressionPolicy)
       ) {
         findings.push(`budget ${metric} floor is not derived from ratified evidence`);
       }
-    } else if (entry.kind !== 'exact-availability-floor' || entry.minimum !== 1) {
-      findings.push(`budget ${metric} policy is unavailable`);
+    } else {
+      findings.push(`budget completion regression metric ${metric} has no declared direction`);
     }
   }
   if (
@@ -520,6 +589,12 @@ function publicationComparisonWorkloadFindings(identity, label) {
   const subject = Array.isArray(cells) && cells.length === 1 ? cells[0] : null;
   const policies = identity?.policies;
   if (!SUPPORTED_SUBJECTS.includes(subject)) return findings;
+  findings.push(
+    ...performancePublicationPolicyIdentityFindings(
+      identity?.publicationPolicy,
+      `${label} workload publication policy`,
+    ),
+  );
   if (subject === 'browser') {
     if (canonicalJson(identity?.lanes) !== canonicalJson(BROWSER_LANES)) {
       findings.push(`${label} browser workload does not include the exact default/L0/L1 lanes`);
@@ -840,9 +915,9 @@ function exactBrowserResponseUrl(value, expectedPath) {
 
 function serverPublicationMetricFindings(metrics, label) {
   const findings = [];
-  for (const { metric } of targetCheckSpecifications('server', SERVER_TARGETS)) {
+  for (const metric of performancePublicationCompletionMetrics('server')) {
     if (!ownRecord(metrics?.[metric])) {
-      findings.push(`${label} required server target metric ${metric} is unavailable`);
+      findings.push(`${label} required server completion metric ${metric} is unavailable`);
     }
   }
   for (const metric of Object.keys(metrics ?? {})) {
@@ -987,10 +1062,11 @@ export function renderComparisonBudgetMarkdown(budget) {
   const rows = Object.entries(budget.metrics).map(([metric, entry]) =>
     [
       metric.replaceAll('|', '\\|'),
-      formatNumber(entry.baseline.kovoMedian),
-      formatNumber(entry.baseline.kovoP95),
-      formatNumber(entry.baseline.nextMedian),
-      formatNumber(entry.baseline.nextP95),
+      entry.publicationImpact,
+      formatRunSummary(entry.baseline, 'kovo', 'median'),
+      formatRunSummary(entry.baseline, 'kovo', 'p95'),
+      formatRunSummary(entry.baseline, 'next', 'median'),
+      formatRunSummary(entry.baseline, 'next', 'p95'),
       entry.kind,
     ].join(' | '),
   );
@@ -1020,8 +1096,8 @@ export function renderComparisonBudgetMarkdown(budget) {
     '',
     ...budget.baseline.reports.map((report) => `- [${report.execution}](${report.location})`),
     '',
-    '| Metric | Kovo median | Kovo p95 | Next median | Next p95 | Budget policy |',
-    '| --- | ---: | ---: | ---: | ---: | --- |',
+    '| Metric | Role | Kovo median (MAD; run p95) | Kovo sample p95 (MAD; run p95) | Next median (MAD; run p95) | Next sample p95 (MAD; run p95) | Budget policy |',
+    '| --- | --- | ---: | ---: | ---: | ---: | --- |',
     ...rows,
     '',
   ].join('\n');
@@ -1140,6 +1216,8 @@ function ratifiedEvidence(value, requireSampleP95) {
     (!requireSampleP95 ||
       (ownRecord(value.sampleP95) &&
         Number.isFinite(value.sampleP95.median) &&
+        Number.isFinite(value.sampleP95.mad) &&
+        Number.isFinite(value.sampleP95.p95) &&
         value.sampleP95.runs === value.runs))
   );
 }
@@ -1147,12 +1225,47 @@ function ratifiedEvidence(value, requireSampleP95) {
 function ratifiedBudgetBaseline(value) {
   return (
     ownRecord(value) &&
-    ['kovoMedian', 'kovoP95', 'nextMedian', 'nextP95', 'pairedMedian'].every((field) =>
-      Number.isFinite(value[field]),
-    ) &&
+    [
+      'kovoMad',
+      'kovoMedian',
+      'kovoP95',
+      'kovoP95Mad',
+      'kovoP95RunP95',
+      'kovoRunP95',
+      'nextMad',
+      'nextMedian',
+      'nextP95',
+      'nextP95Mad',
+      'nextP95RunP95',
+      'nextRunP95',
+      'pairedMad',
+      'pairedMedian',
+      'pairedRunP95',
+    ].every((field) => Number.isFinite(value[field])) &&
     Number.isSafeInteger(value.runs) &&
     value.runs >= 5
   );
+}
+
+function comparisonBudgetBaselineEvidence(evidence) {
+  return {
+    kovoMad: evidence.kovo.mad,
+    kovoMedian: evidence.kovo.median,
+    kovoP95: evidence.kovo.sampleP95.median,
+    kovoP95Mad: evidence.kovo.sampleP95.mad,
+    kovoP95RunP95: evidence.kovo.sampleP95.p95,
+    kovoRunP95: evidence.kovo.p95,
+    nextMad: evidence.nextjs.mad,
+    nextMedian: evidence.nextjs.median,
+    nextP95: evidence.nextjs.sampleP95.median,
+    nextP95Mad: evidence.nextjs.sampleP95.mad,
+    nextP95RunP95: evidence.nextjs.sampleP95.p95,
+    nextRunP95: evidence.nextjs.p95,
+    pairedMad: evidence.pairedDifference.mad,
+    pairedMedian: evidence.pairedDifference.median,
+    pairedRunP95: evidence.pairedDifference.p95,
+    runs: evidence.kovo.runs,
+  };
 }
 
 function upperCheck(id, observed, maximum, kind) {
@@ -1205,6 +1318,48 @@ function regressLower(value, percentage) {
   return value * (1 - percentage / 100);
 }
 
+function robustUpperEnvelope(evidence, percentage, madMultiplier) {
+  return Math.max(
+    regressUpper(evidence.median, percentage),
+    evidence.p95 + madMultiplier * evidence.mad,
+  );
+}
+
+function robustLowerEnvelope(evidence, percentage, madMultiplier) {
+  return Math.max(
+    0,
+    Math.min(
+      regressLower(evidence.median, percentage),
+      evidence.median - madMultiplier * evidence.mad,
+    ),
+  );
+}
+
+function robustUpperBudgetEnvelope(baseline, statistic, policy) {
+  if (!ownRecord(policy)) return Number.NaN;
+  const prefix = statistic === 'median' ? 'kovo' : 'kovoP95';
+  return Math.max(
+    regressUpper(
+      baseline[statistic === 'median' ? 'kovoMedian' : 'kovoP95'],
+      policy.maxRegressionPct,
+    ),
+    baseline[`${prefix}RunP95`] + policy.madMultiplier * baseline[`${prefix}Mad`],
+  );
+}
+
+function robustLowerBudgetEnvelope(baseline, statistic, policy) {
+  if (!ownRecord(policy)) return Number.NaN;
+  const prefix = statistic === 'median' ? 'kovo' : 'kovoP95';
+  const median = baseline[statistic === 'median' ? 'kovoMedian' : 'kovoP95'];
+  return Math.max(
+    0,
+    Math.min(
+      regressLower(median, policy.maxRegressionPct),
+      median - policy.madMultiplier * baseline[`${prefix}Mad`],
+    ),
+  );
+}
+
 function sha256Canonical(value) {
   return `sha256:${createHash('sha256').update(canonicalJson(value)).digest('hex')}`;
 }
@@ -1227,6 +1382,11 @@ function nonEmptyString(value) {
 
 function formatNumber(value) {
   return Number.isInteger(value) ? String(value) : Number(value).toFixed(3);
+}
+
+function formatRunSummary(baseline, subject, statistic) {
+  const prefix = `${subject}${statistic === 'median' ? '' : 'P95'}`;
+  return `${formatNumber(baseline[`${prefix}${statistic === 'median' ? 'Median' : ''}`] ?? baseline[`${subject}P95`])} (${formatNumber(baseline[`${prefix}Mad`])}; ${formatNumber(baseline[`${prefix}RunP95`])})`;
 }
 
 function parseOptions(args, repeated = new Set()) {
@@ -1283,20 +1443,13 @@ async function main(args) {
   const command = args[0];
   const options = parseOptions(args.slice(1), new Set(['--report']));
   if (command === 'derive') {
-    assertKnownOptions(options, [
-      '--baseline',
-      '--markdown-out',
-      '--max-regression-pct',
-      '--out',
-      '--report',
-    ]);
+    assertKnownOptions(options, ['--baseline', '--markdown-out', '--out', '--report']);
     const baseline = JSON.parse(
       await readFile(path.resolve(requiredOption(options, '--baseline')), 'utf8'),
     );
     const entries = await loadRawEntries(baseline, repeatedOption(options, '--report'));
     const budget = deriveComparisonPerformanceBudget(baseline, {
       baselineEntries: entries,
-      maxRegressionPct: Number(options.get('--max-regression-pct')?.[0] ?? '5'),
     });
     await writeFile(
       path.resolve(requiredOption(options, '--out')),

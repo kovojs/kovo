@@ -62,6 +62,7 @@ import {
   executionIdentityFindings,
   performanceExecutionIdentity,
 } from '../scripts/lib/perf-execution.mjs';
+import { PERF_PUBLICATION_POLICY_IDENTITY } from '../scripts/lib/perf-publication-policy.mjs';
 import {
   SERVER_BENCHMARK_SCHEMA,
   SERVER_CONCURRENCIES,
@@ -2742,6 +2743,9 @@ export async function performanceWorkloadIdentity(
     corpus,
     fixture,
     lanes: workloadLanes(options, cells, corpusSize),
+    ...(cells.includes('browser') || cells.includes('server')
+      ? { publicationPolicy: PERF_PUBLICATION_POLICY_IDENTITY }
+      : {}),
     ...(cells.includes('dev') || cells.includes('build')
       ? { productArtifactPolicy: PACKED_KOVO_PRODUCT_WORKLOAD_POLICY }
       : {}),

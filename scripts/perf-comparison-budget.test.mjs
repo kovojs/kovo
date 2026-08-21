@@ -8,6 +8,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { analyzeNavigationAttribution } from '../benchmarks/harness/scenarios.mjs';
+import {
+  PERF_PUBLICATION_POLICY_IDENTITY,
+  performancePublicationCompletionMetrics,
+} from './lib/perf-publication-policy.mjs';
 import { ratifyPerformanceBaseline } from './perf-baseline-ratify.mjs';
 import {
   PERF_COMPARISON_BUDGET_SCHEMA,
@@ -43,13 +47,15 @@ describe('browser/server comparison budgets', () => {
     ]);
     expect(budget.metrics['matched-l1/browser//mobile.navigation.navToPaintMs']).toMatchObject({
       direction: 'lower-is-better',
-      kind: 'ratified-regression-ceiling',
+      kind: 'ratified-robust-regression-ceiling',
+      publicationImpact: 'completion',
     });
     expect(
       budget.metrics['matched-l1/browser//lighthouse.mobile.listing.performanceScore'],
     ).toMatchObject({
       direction: 'higher-is-better',
-      kind: 'ratified-regression-floor',
+      kind: 'reported-diagnostic',
+      publicationImpact: 'reported',
     });
     expect(budget.metrics['matched-l1/browser//bfcache.evidenceComplete']).toMatchObject({
       kind: 'exact-availability-floor',
@@ -57,7 +63,8 @@ describe('browser/server comparison budgets', () => {
     });
     expect(budget.metrics['matched-l1/browser//bfcache.restored']).toMatchObject({
       direction: 'higher-is-better',
-      kind: 'ratified-regression-floor',
+      kind: 'ratified-robust-regression-floor',
+      publicationImpact: 'completion',
     });
     expect(budget.metrics['matched-l1/browser//bfcache.applicable']).toMatchObject({
       direction: null,
@@ -69,6 +76,7 @@ describe('browser/server comparison budgets', () => {
     expect(markdown).toContain('capability-matched');
     expect(markdown).toContain('same-document navigation');
     expect(markdown).toContain('bfcache.applicable');
+    expect(markdown).toContain('Kovo median (MAD; run p95)');
     expect(markdown).toContain('| Target | Role | Observed | Operator | Limit | Verdict |');
     expect(markdown).toContain('| follow-on |');
   });
@@ -99,6 +107,118 @@ describe('browser/server comparison budgets', () => {
     });
   });
 
+  it('retains every metric while only the preregistered user-facing census blocks regressions', () => {
+    const entries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    const baseline = ratifyPerformanceBaseline(entries);
+    const budget = deriveComparisonPerformanceBudget(baseline, { baselineEntries: entries });
+
+    expect(Object.keys(budget.metrics).sort()).toEqual(Object.keys(baseline.metrics).sort());
+    expect(budget.policy.completionRegressionMetrics).toEqual(
+      performancePublicationCompletionMetrics('browser'),
+    );
+    expect(budget.policy.completionRegressionMetrics).toHaveLength(63);
+    expect(
+      budget.policy.completionRegressionMetrics.includes(
+        'matched-l1/browser//mobile.navigation.navToPaintMs',
+      ),
+    ).toBe(true);
+    expect(
+      budget.policy.completionRegressionMetrics.includes(
+        'matched-l1/browser//mobile.navigation.navAttribution.phases.paint.durationMs',
+      ),
+    ).toBe(false);
+
+    const candidate = reportEntry(5, 'browser').report;
+    candidate.analysis[
+      'matched-l1/browser//mobile.navigation.navAttribution.phases.paint.durationMs'
+    ].kovo.median = 10_000;
+    const evaluation = evaluateComparisonPerformanceBudget(budget, candidate);
+    expect(evaluation.verdict).toMatchObject({ failures: [], status: 'pass' });
+    expect(Object.keys(evaluation.metrics).sort()).toEqual(Object.keys(candidate.analysis).sort());
+    expect(
+      evaluation.metrics[
+        'matched-l1/browser//mobile.navigation.navAttribution.phases.paint.durationMs'
+      ].kovo.median,
+    ).toBe(10_000);
+  });
+
+  it('uses the preregistered cross-run median, MAD, and p95 envelope for the holdout', () => {
+    const metricName = 'matched-l1/browser//desktop.navigation.navToPaintMs';
+    const entries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    for (const [index, entry] of entries.entries()) {
+      const observed = 100 + index * 10;
+      entry.report.analysis[metricName] = metric(observed, 120, 30);
+      refreshEntry(entry);
+    }
+    const baseline = ratifyPerformanceBaseline(entries);
+    const budget = deriveComparisonPerformanceBudget(baseline, { baselineEntries: entries });
+    const regression = budget.metrics[metricName];
+    expect(regression.baseline).toMatchObject({
+      kovoMad: 10,
+      kovoMedian: 120,
+      kovoP95: 121,
+      kovoP95Mad: 10,
+      kovoP95RunP95: 141,
+      kovoRunP95: 140,
+    });
+    expect(regression.medianMaximum).toBe(170);
+    expect(regression.p95Maximum).toBe(171);
+
+    const candidate = reportEntry(5, 'browser').report;
+    candidate.analysis[metricName] = metric(165, 120, 30);
+    expect(evaluateComparisonPerformanceBudget(budget, candidate).verdict.status).toBe('pass');
+    candidate.analysis[metricName] = metric(171, 120, 30);
+    expect(evaluateComparisonPerformanceBudget(budget, candidate).verdict.failures).toContain(
+      `${metricName}.median`,
+    );
+
+    const throughputMetric = 'matched-runtime/server/dynamic-listing-identity-c1/requestsPerSecond';
+    const serverEntries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'server'));
+    for (const [index, entry] of serverEntries.entries()) {
+      entry.report.analysis[throughputMetric] = metric(100 + index * 10, 120, 7);
+      refreshEntry(entry);
+    }
+    const serverBaseline = ratifyPerformanceBaseline(serverEntries);
+    const serverBudget = deriveComparisonPerformanceBudget(serverBaseline, {
+      baselineEntries: serverEntries,
+    });
+    expect(serverBudget.metrics[throughputMetric]).toMatchObject({
+      medianMinimum: 90,
+      p95Minimum: 91,
+    });
+
+    const serverCandidate = reportEntry(5, 'server').report;
+    serverCandidate.analysis[throughputMetric] = metric(95, 110, 7);
+    expect(evaluateComparisonPerformanceBudget(serverBudget, serverCandidate).verdict.status).toBe(
+      'pass',
+    );
+    serverCandidate.analysis[throughputMetric] = metric(89, 110, 7);
+    expect(
+      evaluateComparisonPerformanceBudget(serverBudget, serverCandidate).verdict.failures,
+    ).toContain(`${throughputMetric}.median`);
+  });
+
+  it('rejects legacy pre-policy evidence and refuses a caller-authored regression envelope', () => {
+    const entries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    for (const entry of entries) {
+      delete entry.report.workloadIdentity.identity.publicationPolicy;
+      refreshEntry(entry);
+    }
+    const legacyBaseline = ratifyPerformanceBaseline(entries);
+    expect(() =>
+      deriveComparisonPerformanceBudget(legacyBaseline, { baselineEntries: entries }),
+    ).toThrow(/workload publication policy identity is unavailable/u);
+
+    const freshEntries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    const freshBaseline = ratifyPerformanceBaseline(freshEntries);
+    expect(() =>
+      deriveComparisonPerformanceBudget(freshBaseline, {
+        baselineEntries: freshEntries,
+        maxRegressionPct: 6,
+      }),
+    ).toThrow(/regression policy is fixed by the measured source/u);
+  });
+
   it('derives and enforces server throughput targets separately by posture', () => {
     const entries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'server'));
     const baseline = ratifyPerformanceBaseline(entries);
@@ -122,6 +242,7 @@ describe('browser/server comparison budgets', () => {
       kovoBrotliPosture: 'required-raw-measurement-not-a-paired-next-target',
       nextBrotliPosture: 'unsupported',
     });
+    expect(budget.policy.completionRegressionMetrics).toHaveLength(108);
     expect(evaluateComparisonPerformanceBudget(budget, candidate).verdict.status).toBe('pass');
     candidate.analysis[
       'matched-runtime/server/dynamic-listing-identity-c1/requestsPerSecond'
@@ -550,7 +671,7 @@ describe('browser/server comparison budgets', () => {
       deriveComparisonPerformanceBudget(missingIdentityBaseline, {
         baselineEntries: missingIdentity,
       }),
-    ).toThrow(/required server target metric .*hit-detail-identity-c32/u);
+    ).toThrow(/required server completion metric .*hit-detail-identity-c32/u);
 
     const fabricatedBrotli = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'server'));
     for (const entry of fabricatedBrotli) {
@@ -724,6 +845,7 @@ function reportEntry(index, subject) {
     corpus: {},
     lanes: subject === 'browser' ? ['default', 'matched-l0', 'matched-l1'] : ['matched-runtime'],
     policies,
+    publicationPolicy: PERF_PUBLICATION_POLICY_IDENTITY,
   };
   const github = {
     eventSha: 'd'.repeat(40),
@@ -1048,12 +1170,14 @@ function browserTraceResponse({
 
 function serverAnalysis(index) {
   const analysis = {};
-  for (const mode of ['dynamic', 'hit']) {
+  for (const mode of ['hit', '304', 'dynamic']) {
     for (const route of ['listing', 'detail']) {
       for (const concurrency of [1, 8, 32]) {
         const prefix = `matched-runtime/server/${mode}-${route}-identity-c${String(concurrency)}`;
+        for (const name of ['p50Ms', 'p95Ms', 'p99Ms', 'peakRssBytes', 'serverCpuPercent']) {
+          analysis[`${prefix}/${name}`] = metric(10 + index / 10, 12, 7);
+        }
         analysis[`${prefix}/requestsPerSecond`] = metric(95 + index, 100, 7);
-        analysis[`${prefix}/p95Ms`] = metric(10 + index / 10, 12, 7);
       }
     }
   }
