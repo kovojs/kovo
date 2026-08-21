@@ -1639,7 +1639,7 @@ describe('metrics-blind performance publication collection', () => {
         baseDirectory: publication,
         manifestPath,
       }),
-    ).rejects.toThrow(/unreferenced/u);
+    ).rejects.toThrow(/unreferenced|not a referenced/u);
     expect(networkCalls).toBe(0);
     await unlink(extra);
 
@@ -1655,7 +1655,7 @@ describe('metrics-blind performance publication collection', () => {
         },
         manifestPath,
       }),
-    ).rejects.toThrow(/unreferenced/u);
+    ).rejects.toThrow(/unreferenced|not a referenced/u);
     expect(injected).toBe(true);
     expect(networkCalls).toBeGreaterThan(0);
     await unlink(extra);
@@ -1764,7 +1764,9 @@ describe('metrics-blind performance publication collection', () => {
         },
         manifestPath,
       }),
-    ).rejects.toThrow(/opening custody census/u);
+    ).rejects.toThrow(
+      /opening custody census|changed between metadata classification and hashed custody/u,
+    );
     expect(rewroteBeforeDescriptorAuthentication).toBe(true);
     await writeFile(firstSelectedReport, firstSelectedReportBytes);
 

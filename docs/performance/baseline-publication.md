@@ -1,7 +1,7 @@
 # Realistic performance baseline publication
 
 The `perf-measure-baselines` label runs seven independently hosted baseline jobs. A publication
-campaign is exactly 13 predeclared, all-family label pulses against one frozen pull-request head.
+campaign is exactly 24 predeclared, all-family label pulses against one frozen pull-request head.
 Each subject needs one admitted six-report cohort with the same source commit, dependency locks,
 workload digest, and normalized host digest: the first five reports ratify the baseline and the
 sixth is its independent holdout. Jobs from one workflow run can land on different machines;
@@ -48,12 +48,12 @@ missing or invalid bytes artifact invalidates the campaign. The only CPU alias i
 predeclare outside the measured checkout:
 
 - the exact source SHA and pull request;
-- exactly 13 all-family pulses, with every `perf-baseline-focus-*` label absent;
+- exactly 24 all-family pulses, with every `perf-baseline-focus-*` label absent;
 - the frozen non-trigger label census, including either the one CPU alias or no CPU alias;
 - the identity-only cohort rule: for multiple qualifying cohorts choose the largest admitted
   report count, breaking a tie by the lexicographically smallest cohort digest.
 
-Before launch, require the current exact-source workflow census plus the 13 pulses and any planned
+Before launch, require the current exact-source workflow census plus the 24 pulses and any planned
 pre-boundary CPU-label run to total at most 100. The collector rejects a census that cannot fit in
 one complete API page.
 
@@ -62,7 +62,7 @@ its timing remains a procedural trust boundary. Freeze the PR head and all non-t
 activity through the live publication gate. Do not synchronize or reopen the PR, dispatch the exact
 source, or permit another exact-source performance run inside the boundary. Apply the CPU alias, if
 predeclared, before the first pulse; wait for that ordinary PR run to register and finish outside
-the boundary. Ensure the trigger's absence is visible, then perform exactly 13 add/remove pairs
+the boundary. Ensure the trigger's absence is visible, then perform exactly 24 add/remove pairs
 without changing any other label:
 
 ```sh
@@ -70,23 +70,23 @@ without changing any other label:
 gh pr edit <pr-number> --add-label perf-baseline-cpu-amd-7763
 # Wait for this pre-boundary run to become terminal.
 
-# Repeat this pair exactly 13 times; do not choose the count from observed outcomes.
+# Repeat this pair exactly 24 times; do not choose the count from observed outcomes.
 gh pr edit <pr-number> --add-label perf-measure-baselines
 # Record exactly one new run ID, without opening its status or outcome.
 gh pr edit <pr-number> --remove-label perf-measure-baselines
 # Confirm that removal is visible before the next add.
 ```
 
-Each add event runs the full seven-family matrix. The 13 workflow runs may overlap because they use
+Each add event runs the full seven-family matrix. The 24 workflow runs may overlap because they use
 distinct hosted runners. That is not campaign-wide serialization: only the measurements within one
 report share the harness's one serialized process tree. Pull-request jobs receive empty dispatch
 inputs, and the frozen CPU alias, if present, is enforced by the env-only admission step.
 
-After the thirteenth trigger label is removed, wait only for GitHub to register the 13 run
+After the twenty-fourth trigger label is removed, wait only for GitHub to register the 24 run
 identities; do not look at status or conclusions. Then fetch the complete exact-source workflow
 census, identify the first and last pulse IDs, and include every exact-source run between those
 inclusive endpoints. Preregister the complete census's ordered immutable tuple projection
-`{id, run_attempt, created_at, event, head_sha, name, path}` outside the checkout, marking the 13-run
+`{id, run_attempt, created_at, event, head_sha, name, path}` outside the checkout, marking the 24-run
 boundary slice. Every boundary tuple must use the frozen source SHA, the `pull_request` event, the
 name `Perf Realistic Tier`, and the path `.github/workflows/perf-realistic.yml`. An unexpected
 exact-source run invalidates the campaign; never repair the boundary by dropping it.
@@ -104,12 +104,12 @@ metrics-blind collector and authoritative gate. Do not add metric-dependent puls
 run, or replace a failed sample. A genuine metric failure is the campaign's result, not retry
 permission.
 
-Wait for all 13 pulses to become terminal. Fetch the complete exact-source census again immediately
+Wait for all 24 pulses to become terminal. Fetch the complete exact-source census again immediately
 before collection, re-require `total_count` to equal the complete returned census, project the same
 seven immutable fields, and compare the ordered tuples and boundary membership byte-for-byte. The
 raw API response is not compared byte-for-byte because status, conclusion, and update fields may
 change. A changed attempt, an added or missing run, a dispatch/schedule tuple, or any other identity
-drift invalidates the campaign; start a fresh disjoint 13-pulse campaign.
+drift invalidates the campaign; start a fresh disjoint fixed-count campaign.
 
 If the build-persistence decision requires the optional N=216 build profile, dispatch
 `measurement_scope=decisions` outside the baseline campaign boundary with
@@ -134,13 +134,15 @@ not another six-report family. It is emitted only by the PR-only `bytes` / `Prod
 The metrics-blind collector retains every such artifact in the selected runs and chooses the
 earliest authenticated candidate by immutable run chronology for the final manifest.
 
-A recognized family artifact name is only a listing identity. The collector and live gate admit it
-as a candidate only after authenticating the exact current-attempt family producer as successful.
-If a terminal non-success producer still uploads a named artifact, the complete raw listing and an
-explicit `{runId,family,artifactId,producerJobId,conclusion}` exclusion remain in custody, but the
-artifact ZIP and report are never opened or counted. A successful producer's missing or malformed
-artifact still invalidates the campaign. This classification uses only job authority, never report
-metrics or budget outcomes, and does not permit replacement or top-up samples.
+A recognized family artifact name is only a listing identity. The collector and live gate first
+authenticate the exact first-attempt producer. Browser, dev, build, and server require producer
+success. Check also admits an exact budget-only failure when measurement succeeded, evaluation is
+the sole failed step, and the later pinned upload succeeded. This preserves a genuine numeric
+regression as evidence. Any other terminal producer's named artifact remains in the complete raw
+listing and an explicit `{runId,family,artifactId,producerJobId,conclusion}` exclusion, but its API,
+ZIP, and report payloads are never opened or counted. A successful or authorized budget-failure
+producer's missing or malformed artifact invalidates the campaign. Classification uses only exact
+job/step authority, never report metrics, and does not permit replacement or top-up samples.
 
 Use the canonical artifact page URL, not a signed download URL, for every `--location`:
 
@@ -193,7 +195,7 @@ vp exec node scripts/perf-baseline-ratify.mjs \
 Do not combine N=24 with N=216 or browser with server: each is a different authenticated workload
 digest. For ad hoc ratification, fewer than five matching reports is unproven. For the fixed
 publication campaign, any family without one six-report cohort invalidates the campaign and
-requires a fresh disjoint 13-pulse campaign; never top up or relax the identity check.
+requires a fresh disjoint fixed-count campaign; never top up or relax the identity check.
 
 Publication derivation additionally requires the exact declared subject profile: isolated dev or
 build cells, the full browser default/L0/L1 matrix (30/5/10 plus three warmups), the full server
@@ -294,23 +296,23 @@ unzip -p "$kovo_perf_custody/run-1/browser.zip" comparison.json \
   > "$kovo_perf_custody/run-1/comparison.json"
 ```
 
-The input manifest is `kovo-performance-publication-input/v6`. This abridged, non-runnable example
+The input manifest is `kovo-performance-publication-input/v7`. This abridged, non-runnable example
 shows one family's shape:
 
 ```json
 {
-  "schema": "kovo-performance-publication-input/v6",
+  "schema": "kovo-performance-publication-input/v7",
   "repository": "kovojs/kovo",
   "campaign": {
-    "boundary": { "firstRunId": 1001, "lastRunId": 1013 },
+    "boundary": { "firstRunId": 1001, "lastRunId": 1024 },
     "workflowRunsApiMetadata": {
       "path": "campaign/workflow-runs.api.json",
       "byteLength": 1234,
       "contentDigest": "sha256:<64-lowercase-hex>"
     },
-    "cohortSelections": {},
-    "runs": ["13 content-addressed run API and artifact-list API pairs"],
-    "familyCandidates": ["every exact successful-producer family candidate and descriptor"],
+    "cohortSelections": { "browser": "sha256:<derived-winner>", "...": "all seven" },
+    "runs": ["24 content-addressed run API and artifact-list API pairs"],
+    "familyCandidates": ["every exact admitted-producer family candidate and descriptor"],
     "excludedFamilyArtifacts": [
       {
         "runId": 1002,
@@ -467,7 +469,7 @@ in-repository output is therefore created only after the whole measured checkout
 clean-source check; using the external directory above avoids coupling collection and publication
 to repository state.
 
-The output schema is `kovo-performance-publication/v8`. Browser/server budget and holdout documents
+The output schema is `kovo-performance-publication/v9`. Browser/server budget and holdout documents
 use `kovo-comparison-performance-budget/v2` and
 `kovo-comparison-performance-evaluation/v2`. The output root contains exactly 23 regular files:
 `performance-publication.json`, `performance-publication.md`, and exactly 21 JSON files under
