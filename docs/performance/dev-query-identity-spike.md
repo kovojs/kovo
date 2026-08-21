@@ -13,7 +13,7 @@ candidate replaced a complete TypeScript `Program` for the common direct-import/
 with fresh, fail-closed analysis. It does not retain query identities across generations.
 
 The exact clean baseline is `01b2c759468f41a3fc4739225eb13c8f5aa11406` (tree
-`dc738e259fe265fe3be0ad6264b7253aada68585`). The local durable ref
+`dc738e259fe265fe3be0ad6264b7253aada68585`). The pushed durable ref
 `refs/heads/perf-spike/dev-query-mode-safe-20260821` identifies this exact linear series:
 
 1. `e52ddaf846b8729abcc2d9887ff648429407f86c`, tree
