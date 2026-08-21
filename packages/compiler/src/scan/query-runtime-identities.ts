@@ -11,15 +11,23 @@ import {
 import { createCompilerOwnedAppContractProject } from '../app-contract-project.js';
 import { compilerOwnedAppContractFactoryEquals } from '../app-contract-resolver.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
+import { createCompilerSourceFileSystem } from '../source-filesystem.js';
 import { typescriptRuntime as ts } from '../ts-api.js';
 import {
   allComponentOptionObjectEntries,
   parseComponentModule,
+  parseDiagnosticsForSourceFile,
   type CallExpressionModel,
   type ObjectLiteralEntry,
 } from './parse.js';
 
 const KOVO_QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
+let completeQueryIdentityProgramConstructions = 0;
+
+/** @internal Test-only observation of conservative full-Program fallbacks. */
+export function completeQueryIdentityProgramConstructionsForTesting(): number {
+  return completeQueryIdentityProgramConstructions;
+}
 
 export interface QueryRuntimeIdentityProjectOptions {
   readonly fileName: string;
@@ -51,7 +59,20 @@ export function resolveComponentQueryRuntimeNames(
   if (source.length === 0) return Object.freeze(Object.create(null) as Record<string, string>);
 
   const compilerOptions = queryIdentityCompilerOptions(options.rootDirectory, fileName);
+  const model = parseComponentModule(fileName, source);
+  const entries = allComponentOptionObjectEntries(model, 'queries');
+  const direct = resolveFreshDirectQueryRuntimeNames({
+    compilerOptions,
+    entries,
+    fileName,
+    ...(options.knownNames === undefined ? {} : { knownNames: options.knownNames }),
+    model,
+    rootDirectory: options.rootDirectory,
+  });
+  if (direct !== undefined) return direct;
+
   const host = exactEntryCompilerHost(compilerOptions, fileName, source);
+  completeQueryIdentityProgramConstructions += 1;
   const program = ts.createProgram({ host, options: compilerOptions, rootNames: [fileName] });
   const sourceFile = exactProgramSourceFile(program, fileName);
   if (sourceFile.text !== source) {
@@ -61,17 +82,7 @@ export function resolveComponentQueryRuntimeNames(
   }
 
   const checker = program.getTypeChecker();
-  const model = parseComponentModule(fileName, source);
-  const entries = allComponentOptionObjectEntries(model, 'queries');
-  const result = Object.create(null) as Record<string, string>;
-  for (const [alias, runtimeName] of Object.entries(options.knownNames ?? {})) {
-    Object.defineProperty(result, alias, {
-      configurable: false,
-      enumerable: true,
-      value: runtimeName,
-      writable: false,
-    });
-  }
+  const result = initialQueryRuntimeNames(options.knownNames);
   const models = new Map<string, ReturnType<typeof parseComponentModule>>([[fileName, model]]);
   const context: QueryRuntimeIdentityResolutionContext = {
     appContractProjects: new Map(),
@@ -99,6 +110,263 @@ export function resolveComponentQueryRuntimeNames(
     });
   }
   return Object.freeze(result);
+}
+
+interface FreshDirectQueryRuntimeNameOptions {
+  readonly compilerOptions: TS.CompilerOptions;
+  readonly entries: readonly ObjectLiteralEntry[];
+  readonly fileName: string;
+  readonly knownNames?: Readonly<Record<string, string>>;
+  readonly model: ReturnType<typeof parseComponentModule>;
+  readonly rootDirectory: string;
+}
+
+/**
+ * Resolve the common direct-import/app.query shape without constructing a second whole-project
+ * Program. This is fresh analysis, not a query-result cache: every call reparses the component,
+ * reruns TypeScript module resolution under the current tsconfig, descriptor-reads the resolved
+ * provider, and asks the byte-revalidated compiler-owned app-contract project for the exact query
+ * declaration fact. A barrel, alias chain, outside-root module, or ambiguous declaration returns
+ * undefined and executes the complete Program resolver below (SPEC §4.1, §5.2, §11.4).
+ */
+function resolveFreshDirectQueryRuntimeNames(
+  options: FreshDirectQueryRuntimeNameOptions,
+): Readonly<Record<string, string>> | undefined {
+  if (
+    parseDiagnosticsForSourceFile(options.model.sourceFile, options.model.sourceFile.text).length
+  ) {
+    return undefined;
+  }
+  const fileSystem = createCompilerSourceFileSystem(options.rootDirectory);
+  if (fileSystem === null) return undefined;
+  const result = initialQueryRuntimeNames(options.knownNames);
+  const projects = new Map<string, ReturnType<typeof createCompilerOwnedAppContractProject>>();
+  for (let index = 0; index < options.entries.length; index += 1) {
+    const entry = options.entries[index]!;
+    if (Object.getOwnPropertyDescriptor(result, entry.key) !== undefined) continue;
+    if (entry.queryBinding?.queryKeyExpression === undefined) {
+      defineQueryRuntimeName(result, entry.key, entry.key);
+      continue;
+    }
+    const runtimeName = freshDirectImportedQueryRuntimeName(entry, options, fileSystem, projects);
+    if (runtimeName === undefined) return undefined;
+    defineQueryRuntimeName(result, entry.key, runtimeName);
+  }
+  return Object.freeze(result);
+}
+
+function freshDirectImportedQueryRuntimeName(
+  entry: ObjectLiteralEntry,
+  options: FreshDirectQueryRuntimeNameOptions,
+  fileSystem: NonNullable<ReturnType<typeof createCompilerSourceFileSystem>>,
+  projects: Map<string, ReturnType<typeof createCompilerOwnedAppContractProject>>,
+): string | undefined {
+  const binding = entry.queryBinding;
+  const span = binding?.queryKeySpan;
+  const queryExpression = binding?.queryKeyExpression;
+  if (span === undefined || queryExpression === undefined) return undefined;
+  const node = exactNodeAtSpan(options.model.sourceFile, span.start, span.end);
+  if (node === undefined || !ts.isIdentifier(unwrapExpression(node))) return undefined;
+  const imported = options.model.namedImports.filter(
+    (candidate) => candidate.localName === queryExpression,
+  );
+  if (imported.length !== 1) return undefined;
+  const resolvedModule = modeInvariantResolvedModule(
+    imported[0]!.moduleSpecifier,
+    options.fileName,
+    options.compilerOptions,
+  );
+  if (resolvedModule === undefined) return undefined;
+  const providerFileName = resolve(resolvedModule.resolvedFileName);
+  if (!withinDirectory(resolve(options.rootDirectory), providerFileName)) return undefined;
+  if (!/\.[cm]?[jt]sx?$/iu.test(providerFileName) || /\.d\.[cm]?ts$/iu.test(providerFileName)) {
+    return undefined;
+  }
+  const providerSource = fileSystem.readFile(providerFileName);
+  if (providerSource === null) return undefined;
+  const providerModel = parseComponentModule(providerFileName, providerSource);
+  if (parseDiagnosticsForSourceFile(providerModel.sourceFile, providerSource).length > 0) {
+    return undefined;
+  }
+  const providerCalls = providerModel.calls.filter(
+    (call) => call.exportedConstName === imported[0]!.importedName,
+  );
+  if (providerCalls.length !== 1) return undefined;
+  const providerCall = providerCalls[0]!;
+  const providerCallNode = callExpressionAtSpan(
+    ts as FrameworkIdentityTypeScript,
+    providerModel.sourceFile,
+    providerCall,
+  );
+  // Free `query(...)`, wrappers, and every non-direct declaration keep the complete Program path.
+  // Only the exact syntactic app-member candidate opens the narrower compiler-owned proof project.
+  if (providerCallNode === undefined || !isDirectQueryMemberCall(providerCallNode))
+    return undefined;
+
+  let project = projects.get(providerFileName);
+  if (project === undefined) {
+    try {
+      project = createCompilerOwnedAppContractProject({
+        rootDirectory: options.rootDirectory,
+        rootNames: [providerFileName],
+      });
+    } catch {
+      return undefined;
+    }
+    projects.set(providerFileName, project);
+  }
+  let facts: ReturnType<typeof project.staticFacts>;
+  try {
+    facts = project.staticFacts([{ fileName: providerFileName, source: providerSource }]);
+  } catch {
+    return undefined;
+  }
+  const expectedName = deriveRegistryIdentity(providerFileName, imported[0]!.importedName).key;
+  const declarations = facts.filter(
+    (fact) =>
+      fact.memberName === 'query' &&
+      fact.declaration?.kind === 'query' &&
+      fact.declaration.name === expectedName,
+  );
+  if (declarations.length !== 1) return undefined;
+  const declaration = declarations[0]!.declaration!;
+  return providerCall.start === declaration.start && providerCall.end === declaration.end
+    ? expectedName
+    : undefined;
+}
+
+/**
+ * A standalone parser does not own the Program's import-site resolution mode. Prove that mode is
+ * irrelevant instead: resolve from fresh filesystem state under the current/default, explicit
+ * import, and explicit require postures, and admit the narrow path only when every complete
+ * module-resolution identity is byte-for-byte equal (including TypeScript's runtime-only path,
+ * package-peer, and alternate-result fields). Conditional exports, package-format changes, and
+ * any missing/ambiguous branch therefore execute the full Program resolver (SPEC §5.2 / §11.4).
+ */
+function modeInvariantResolvedModule(
+  moduleSpecifier: string,
+  containingFile: string,
+  compilerOptions: TS.CompilerOptions,
+): TS.ResolvedModuleFull | undefined {
+  const current = ts.resolveModuleName(moduleSpecifier, containingFile, compilerOptions, ts.sys);
+  const imported = ts.resolveModuleName(
+    moduleSpecifier,
+    containingFile,
+    compilerOptions,
+    ts.sys,
+    undefined,
+    undefined,
+    ts.ModuleKind.ESNext,
+  );
+  const required = ts.resolveModuleName(
+    moduleSpecifier,
+    containingFile,
+    compilerOptions,
+    ts.sys,
+    undefined,
+    undefined,
+    ts.ModuleKind.CommonJS,
+  );
+  if (
+    current.resolvedModule === undefined ||
+    imported.resolvedModule === undefined ||
+    required.resolvedModule === undefined
+  ) {
+    return undefined;
+  }
+  return sameResolvedModuleResolution(current, imported) &&
+    sameResolvedModuleResolution(current, required)
+    ? current.resolvedModule
+    : undefined;
+}
+
+function sameResolvedModuleResolution(
+  left: TS.ResolvedModuleWithFailedLookupLocations,
+  right: TS.ResolvedModuleWithFailedLookupLocations,
+): boolean {
+  if (left.resolvedModule === undefined || right.resolvedModule === undefined) return false;
+  const leftAlternate = optionalOwnString(left, 'alternateResult');
+  const rightAlternate = optionalOwnString(right, 'alternateResult');
+  return (
+    leftAlternate.valid &&
+    rightAlternate.valid &&
+    leftAlternate.value === rightAlternate.value &&
+    sameResolvedModuleIdentity(left.resolvedModule, right.resolvedModule)
+  );
+}
+
+function sameResolvedModuleIdentity(
+  left: TS.ResolvedModuleFull,
+  right: TS.ResolvedModuleFull,
+): boolean {
+  const leftOriginalPath = optionalOwnString(left, 'originalPath');
+  const rightOriginalPath = optionalOwnString(right, 'originalPath');
+  return (
+    leftOriginalPath.valid &&
+    rightOriginalPath.valid &&
+    leftOriginalPath.value === rightOriginalPath.value &&
+    left.resolvedFileName === right.resolvedFileName &&
+    left.extension === right.extension &&
+    left.isExternalLibraryImport === right.isExternalLibraryImport &&
+    left.resolvedUsingTsExtension === right.resolvedUsingTsExtension &&
+    samePackageIdentity(left.packageId, right.packageId)
+  );
+}
+
+function samePackageIdentity(
+  left: TS.PackageId | undefined,
+  right: TS.PackageId | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  const leftPeerDependencies = optionalOwnString(left, 'peerDependencies');
+  const rightPeerDependencies = optionalOwnString(right, 'peerDependencies');
+  return (
+    leftPeerDependencies.valid &&
+    rightPeerDependencies.valid &&
+    leftPeerDependencies.value === rightPeerDependencies.value &&
+    left.name === right.name &&
+    left.subModuleName === right.subModuleName &&
+    left.version === right.version
+  );
+}
+
+type OptionalOwnString =
+  | { readonly valid: false }
+  | { readonly valid: true; readonly value: string | undefined };
+
+function optionalOwnString(value: object, property: string): OptionalOwnString {
+  const descriptor = Object.getOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined) {
+    return property in value ? { valid: false } : { valid: true, value: undefined };
+  }
+  if (!Object.hasOwn(descriptor, 'value')) return { valid: false };
+  const ownValue: unknown = descriptor.value;
+  return ownValue === undefined || typeof ownValue === 'string'
+    ? { valid: true, value: ownValue }
+    : { valid: false };
+}
+
+function initialQueryRuntimeNames(
+  knownNames: Readonly<Record<string, string>> | undefined,
+): Record<string, string> {
+  const result = Object.create(null) as Record<string, string>;
+  for (const [alias, runtimeName] of Object.entries(knownNames ?? {})) {
+    defineQueryRuntimeName(result, alias, runtimeName);
+  }
+  return result;
+}
+
+function defineQueryRuntimeName(
+  result: Record<string, string>,
+  alias: string,
+  runtimeName: string,
+): void {
+  Object.defineProperty(result, alias, {
+    configurable: false,
+    enumerable: true,
+    value: runtimeName,
+    writable: false,
+  });
 }
 
 function runtimeNameForQueryEntry(
@@ -360,7 +628,7 @@ function queryIdentityCompilerOptions(rootDirectory: string, fileName: string): 
   const configFile = boundedTsConfig(rootDirectory, dirname(fileName));
   let configured: TS.CompilerOptions = {};
   if (configFile !== undefined) {
-    const read = ts.readConfigFile(configFile, ts.sys.readFile);
+    const read = ts.readConfigFile(configFile, (configFileName) => ts.sys.readFile(configFileName));
     if (read.error) {
       throw new TypeError(`Kovo query identity project could not read ${configFile}.`);
     }
