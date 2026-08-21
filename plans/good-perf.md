@@ -360,10 +360,15 @@ packages/server/src/node.test.ts --reporter=dot` passed 88/88 and covers private
     holdout for each of seven families and generated all 21 schema-valid evidence documents. The
     blocked aggregate's references, byte digests, semantic digests, and canonical digest were
     independently reproduced; no current-campaign failure is reinterpreted.
-- [ ] Commit a prospective robust holdout policy before new measurements, retaining the complete
+- [x] Commit a prospective robust holdout policy before new measurements, retaining the complete
       browser/server metric census while separating exact correctness/availability/integrity and
       milestone gates from noise-aware regression envelopes. Bind the policy into workload identity
       and do not apply it retroactively to the blocked v9 derivation.
+  - Evidence: `perf-publication-policy.json` (`sha256:edda620b53cba28191a9ab8d193804e7632331f3815c63b36fb6a45cb3115d79`)
+    fixes 63 browser and 108 server completion-regression metrics plus median/MAD/cross-run-p95
+    envelopes. Commits `97038280b` and `f08297a81` bind it into browser/server workload identity and
+    reject missing/tampered pre-policy evidence during metrics-blind collection; the focused
+    collector/compare/budget/gate suite passed 162/162 and import checks passed.
 - [ ] Run a fresh, disjoint, fixed, nonadaptive publication campaign after accepted performance
       changes and evaluate it only under the prospectively committed policy.
 - [x] Add a regression comparator that requires matching source/lock/workload identities and reports
