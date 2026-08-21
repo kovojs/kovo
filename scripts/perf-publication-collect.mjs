@@ -27,8 +27,8 @@ import { canonicalJson, performanceHostFingerprintFindings } from './lib/perf-ho
 import { performanceGateWorkloadIdentity } from './perf-gate.mjs';
 import { workloadIdentityFindings } from './perf-regression-check.mjs';
 
-export const PERF_PUBLICATION_COLLECTION_SCHEMA = 'kovo-performance-publication-collection/v4';
-export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v6';
+export const PERF_PUBLICATION_COLLECTION_SCHEMA = 'kovo-performance-publication-collection/v5';
+export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v7';
 export const PERF_PUBLICATION_REPOSITORY = 'kovojs/kovo';
 
 /** Raw regular files emitted beside the manifest: selected evidence + campaign authority/candidates. */
@@ -57,6 +57,7 @@ const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_REPORT_BYTES = 128 * 1024 * 1024;
 const MAX_RUNS = 10_000;
 const MAX_CAMPAIGN_RUNS = 100;
+const MIN_CAMPAIGN_PULSES = 6;
 const BASELINE_EVENTS = Object.freeze(['pull_request', 'schedule', 'workflow_dispatch']);
 const TERMINAL_JOB_CONCLUSIONS = Object.freeze([
   'action_required',
@@ -96,6 +97,14 @@ export const PERF_PUBLICATION_PRODUCTION_BYTES = Object.freeze({
   reportSchema: CHECK_REPORT_SCHEMA,
   workflowJobKey: 'bytes',
   workflowJobName: 'Production bytes',
+});
+
+const PERF_PUBLICATION_CHECK_SCALING_BUDGET_FAILURE = Object.freeze({
+  budgetFailureStep: 'Evaluate against perf-budgets.json',
+  budgetFailureSuccessSteps: Object.freeze([
+    'Run the kovo check component-count ladder',
+    'Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+  ]),
 });
 
 export const PERF_PUBLICATION_FAMILY_NAMES = Object.freeze([
@@ -161,6 +170,7 @@ export const PERF_PUBLICATION_FAMILIES = Object.freeze({
   }),
   check: familyPolicy({
     artifactName: 'kovo-perf-check-scaling',
+    ...PERF_PUBLICATION_CHECK_SCALING_BUDGET_FAILURE,
     cell: 'check-scaling',
     reportMember: 'check-scaling.json',
     reportSchema: CHECK_REPORT_SCHEMA,
@@ -191,6 +201,7 @@ const EVIDENCE_KEYS = Object.freeze([
 export async function collectPerformancePublicationRuns({
   campaignFirstRunId,
   campaignLastRunId,
+  campaignPulseCount,
   checkoutDirectory,
   operations = defaultCollectionOperations(),
   outDirectory,
@@ -204,6 +215,7 @@ export async function collectPerformancePublicationRuns({
     firstRunId: campaignFirstRunId,
     lastRunId: campaignLastRunId,
   });
+  const pulseCount = validateCampaignPulseCount(campaignPulseCount);
   requireOperation(operations, 'inspectCheckout');
   const boundary = await externalOutputBoundary({
     checkoutDirectory,
@@ -224,6 +236,7 @@ export async function collectPerformancePublicationRuns({
     const workflowRuns = parseJsonBytes(workflowRunsApiBytes, 'campaign workflow-runs API');
     const campaignRunIds = validateCampaignRunCensus(workflowRuns, {
       boundary: campaignBoundary,
+      pulseCount,
       requestedRunIds: normalizedRunIds,
       sourceSha,
     });
@@ -361,6 +374,7 @@ export async function collectPerformancePublicationRuns({
     excludedFamilyArtifacts.sort(excludedFamilyArtifactOrder);
     const campaign = {
       boundary: campaignBoundary,
+      pulseCount,
       runs: campaignRuns.sort(campaignRunOrder),
       workflowRunsApiMetadata,
     };
@@ -401,7 +415,7 @@ export async function collectPerformancePublicationRuns({
  */
 export async function createPerformancePublicationManifest({
   checkoutDirectory,
-  cohortSelections = new Map(),
+  cohortSelections,
   collectionDirectories,
   operations = defaultCollectionOperations(),
   outDirectory,
@@ -409,6 +423,7 @@ export async function createPerformancePublicationManifest({
   sourceSha,
 }) {
   validateCommonOptions({ checkoutDirectory, outDirectory, repository, sourceSha });
+  rejectCohortSelections(cohortSelections);
   requireOperation(operations, 'inspectCheckout');
   const boundary = await externalOutputBoundary({
     checkoutDirectory,
@@ -416,7 +431,6 @@ export async function createPerformancePublicationManifest({
     outDirectory,
     sourceSha,
   });
-  const selections = validateCohortSelections(cohortSelections);
   const inventory = await loadPerformancePublicationCollections({
     checkoutRoot: boundary.checkoutRoot,
     collectionDirectories,
@@ -424,9 +438,13 @@ export async function createPerformancePublicationManifest({
     repository,
     sourceSha,
   });
-  const selected = selectPerformancePublicationCohorts(inventory.candidates, {
-    cohortSelections: selections,
-  });
+  const selected = selectPerformancePublicationCohorts(inventory.candidates);
+  const selectedCohorts = new Map(
+    PERF_PUBLICATION_FAMILY_NAMES.map((familyName) => [
+      familyName,
+      selected[familyName][0].cohortDigest,
+    ]),
+  );
   const productionBytes = selectPerformancePublicationProductionBytes(inventory.productionBytes);
   validateSelectedPublicationIdentity(selected, productionBytes, sourceSha);
 
@@ -454,7 +472,7 @@ export async function createPerformancePublicationManifest({
     );
     const campaign = await copyCampaignCustody(stagingDirectory, inventory.campaign, {
       candidates: inventory.candidates,
-      cohortSelections: selections,
+      cohortSelections: selectedCohorts,
       excludedFamilyArtifacts: inventory.excludedFamilyArtifacts,
       productionBytesCandidates: inventory.productionBytes,
       selectedProductionBytes: productionBytes,
@@ -511,12 +529,9 @@ export function performancePublicationCohortDigest(report, familyName) {
 }
 
 /** Select first five baselines and the sixth holdout by immutable run chronology. */
-export function selectPerformancePublicationCohorts(
-  candidates,
-  { cohortSelections = new Map() } = {},
-) {
+export function selectPerformancePublicationCohorts(candidates, { cohortSelections } = {}) {
   if (!Array.isArray(candidates)) throw new TypeError('collection candidates must be an array');
-  const selections = validateCohortSelections(cohortSelections);
+  rejectCohortSelections(cohortSelections);
   validateCandidateDistinctness(candidates, { allowSharedRunAcrossFamilies: true });
   const result = {};
   for (const familyName of PERF_PUBLICATION_FAMILY_NAMES) {
@@ -535,34 +550,15 @@ export function selectPerformancePublicationCohorts(
     const qualifying = [...groups.entries()]
       .map(([digest, members]) => [digest, [...members].sort(candidateChronologyOrder)])
       .filter(([, members]) => members.length >= 6)
-      .sort(([left], [right]) => left.localeCompare(right));
+      .sort(
+        ([leftDigest, leftMembers], [rightDigest, rightMembers]) =>
+          numericOrder(rightMembers.length, leftMembers.length) ||
+          leftDigest.localeCompare(rightDigest),
+      );
     if (qualifying.length === 0) {
       throw new TypeError(`${familyName} has no exact identity cohort with six independent runs`);
     }
-    const requested = selections.get(familyName);
-    let eligible = qualifying;
-    if (requested !== undefined) {
-      if (qualifying.length === 1) {
-        throw new TypeError(
-          `${familyName} cohort selector is unnecessary for one qualifying cohort`,
-        );
-      }
-      eligible = qualifying.filter(
-        ([digest, members]) => digest === requested || members[0]?.hostDigest === requested,
-      );
-      if (eligible.length !== 1) {
-        throw new TypeError(
-          `${familyName} selector ${requested} does not identify one exact qualifying cohort`,
-        );
-      }
-    } else if (qualifying.length !== 1) {
-      throw new TypeError(
-        `${familyName} has multiple qualifying cohorts: ${qualifying
-          .map(([digest]) => digest)
-          .join(', ')}`,
-      );
-    }
-    const chosen = eligible[0][1].slice(0, 6);
+    const chosen = qualifying[0][1].slice(0, 6);
     requireSixDistinct(chosen, familyName);
     result[familyName] = chosen;
   }
@@ -625,7 +621,14 @@ export function validateCollectedCandidateBytes({
     runId,
     sourceSha,
   });
-  validateExpectedJob(jobs, { policy, repository, run, runId, sourceSha });
+  validateExpectedJob(jobs, {
+    ...familyJobValidationOptions(policy),
+    policy,
+    repository,
+    run,
+    runId,
+    sourceSha,
+  });
   const archiveReport = readOnlyZipMember(boundedArchive, policy.reportMember);
   if (!archiveReport.equals(boundedReport)) {
     throw new TypeError(`saved report bytes differ from ZIP member ${policy.reportMember}`);
@@ -791,6 +794,23 @@ export async function loadPerformancePublicationCollections({
       canonicalJobsBytesByRun.set(loaded.candidate.runId, loaded.jobsApiBytes);
       productionBytes.push(loaded.candidate);
     }
+
+    // Authenticate the exact artifact disposition from the raw per-run listing and the one
+    // Production-bytes jobs authority before resolving, statting, or reading any family descriptor.
+    // Ledger paths belonging to a failed producer therefore never become filesystem authorities.
+    validateCampaignCandidateInventory(
+      campaign.runs,
+      ledger.candidates,
+      productionBytes,
+      declaredExcludedFamilyArtifacts,
+      {
+        artifactListings: campaign.artifactListings,
+        jobsMetadataByRun,
+        repository,
+        runAuthorities: campaign.runAuthorities,
+        sourceSha,
+      },
+    );
     for (const entry of ledger.candidates) {
       const loaded = await loadCollectedCandidate(root, entry, {
         repository,
@@ -838,6 +858,8 @@ export async function loadPerformancePublicationCollections({
 
 function familyPolicy({
   artifactName,
+  budgetFailureStep = null,
+  budgetFailureSuccessSteps = [],
   cell,
   corpusSize = null,
   packedProduct = false,
@@ -848,6 +870,8 @@ function familyPolicy({
 }) {
   return Object.freeze({
     artifactName,
+    budgetFailureStep,
+    budgetFailureSuccessSteps: Object.freeze([...budgetFailureSuccessSteps]),
     cell,
     corpusSize,
     packedProduct,
@@ -901,15 +925,13 @@ function validateRunIds(runIds) {
   return normalized;
 }
 
-function validateCohortSelections(value) {
-  const selections = value instanceof Map ? new Map(value) : new Map(Object.entries(value ?? {}));
-  for (const [familyName, digest] of selections) {
-    requiredFamilyPolicy(familyName);
-    if (!DIGEST_PATTERN.test(digest ?? '')) {
-      throw new TypeError(`${familyName} cohort selector must be an exact sha256 digest`);
-    }
+function rejectCohortSelections(value) {
+  const selections = value instanceof Map ? [...value] : Object.entries(value ?? {});
+  if (selections.length > 0) {
+    throw new TypeError(
+      'manual cohort selectors are forbidden; selection is count-maximal then digest-lexical',
+    );
   }
-  return selections;
 }
 
 function validNow(value) {
@@ -1074,8 +1096,8 @@ function validateRunMetadata(run, { repository, runId, sourceSha }) {
   if (!BASELINE_EVENTS.includes(run?.event)) {
     findings.push('workflow run trigger is not a baseline-capable event');
   }
-  if (!Number.isSafeInteger(run?.run_attempt) || run.run_attempt < 1) {
-    findings.push('workflow run attempt is unavailable');
+  if (run?.run_attempt !== 1) {
+    findings.push('workflow run is not its first attempt');
   }
   if (!validTimestamp(run?.created_at)) findings.push('workflow run created_at is unavailable');
   if (findings.length > 0) throw new TypeError(findings.join('\n'));
@@ -1163,10 +1185,13 @@ function classifyPublicationArtifacts(
       runId,
       sourceSha,
     });
-    if (producer.conclusion === 'success') {
+    const authorizedBudgetFailure =
+      producer.conclusion === 'failure' &&
+      familyProducerHasAuthorizedBudgetFailure(producer, policy);
+    if (producer.conclusion === 'success' || authorizedBudgetFailure) {
       if (artifact === undefined) {
         throw new TypeError(
-          `successful ${policy.workflowJobName} producer has no literal ${policy.artifactName} artifact`,
+          `${authorizedBudgetFailure ? 'authorized budget-failing' : 'successful'} ${policy.workflowJobName} producer has no literal ${policy.artifactName} artifact`,
         );
       }
       admittedArtifacts.push(artifact);
@@ -1295,6 +1320,38 @@ function validateExpectedJob(
     runId,
     sourceSha,
   });
+  const authorizedFailure = hasAuthorizedBudgetFailureSteps(job, {
+    allowedFailureStep,
+    requiredSuccessSteps,
+  });
+  if (
+    !allowedConclusions.includes(job?.conclusion) ||
+    (job?.conclusion === 'failure' && !authorizedFailure)
+  ) {
+    throw new TypeError('expected artifact producer is not one exact authorized workflow job');
+  }
+}
+
+function familyJobValidationOptions(policy) {
+  if (policy.budgetFailureStep === null) return {};
+  return {
+    allowedConclusions: ['failure', 'success'],
+    allowedFailureStep: policy.budgetFailureStep,
+    requiredSuccessSteps: policy.budgetFailureSuccessSteps,
+  };
+}
+
+function familyProducerHasAuthorizedBudgetFailure(job, policy) {
+  return (
+    policy.budgetFailureStep !== null &&
+    hasAuthorizedBudgetFailureSteps(job, {
+      allowedFailureStep: policy.budgetFailureStep,
+      requiredSuccessSteps: policy.budgetFailureSuccessSteps,
+    })
+  );
+}
+
+function hasAuthorizedBudgetFailureSteps(job, { allowedFailureStep, requiredSuccessSteps }) {
   const steps = Array.isArray(job?.steps) ? job.steps : [];
   const failedSteps = steps.filter((step) => step?.conclusion === 'failure');
   const failureStepMatches = steps.filter((step) => step?.name === allowedFailureStep);
@@ -1303,7 +1360,7 @@ function validateExpectedJob(
   );
   const failureStep = failureStepMatches[0];
   const matchedSuccessSteps = requiredSuccessStepMatches.map(([step]) => step);
-  const authorizedFailure =
+  return (
     job?.conclusion === 'failure' &&
     requiredSuccessSteps.length === 2 &&
     failedSteps.length === 1 &&
@@ -1321,13 +1378,8 @@ function validateExpectedJob(
         matches[0].number > 0,
     ) &&
     matchedSuccessSteps[0].number < failureStep.number &&
-    failureStep.number < matchedSuccessSteps[1].number;
-  if (
-    !allowedConclusions.includes(job?.conclusion) ||
-    (job?.conclusion === 'failure' && !authorizedFailure)
-  ) {
-    throw new TypeError('expected artifact producer is not one exact authorized workflow job');
-  }
+    failureStep.number < matchedSuccessSteps[1].number
+  );
 }
 
 function validateExpectedJobAuthority(jobsMetadata, { policy, repository, run, runId, sourceSha }) {
@@ -1632,6 +1684,24 @@ function validateCampaignBoundary(boundary) {
   return { firstRunId, lastRunId };
 }
 
+function validateCampaignPulseCount(value) {
+  const text = String(value ?? '');
+  if (!/^[1-9][0-9]*$/u.test(text)) {
+    throw new TypeError('campaign pulse count is unavailable');
+  }
+  const pulseCount = Number(text);
+  if (
+    !Number.isSafeInteger(pulseCount) ||
+    pulseCount < MIN_CAMPAIGN_PULSES ||
+    pulseCount > MAX_CAMPAIGN_RUNS
+  ) {
+    throw new TypeError(
+      `campaign pulse count must be ${String(MIN_CAMPAIGN_PULSES)}..${String(MAX_CAMPAIGN_RUNS)}`,
+    );
+  }
+  return pulseCount;
+}
+
 function campaignBoundaryRunId(value, label) {
   const text = String(value ?? '');
   if (!/^[1-9][0-9]*$/u.test(text)) throw new TypeError(`${label} is unavailable`);
@@ -1640,7 +1710,8 @@ function campaignBoundaryRunId(value, label) {
   return runId;
 }
 
-function validateCampaignRunCensus(listing, { boundary, requestedRunIds, sourceSha }) {
+function validateCampaignRunCensus(listing, { boundary, pulseCount, requestedRunIds, sourceSha }) {
+  const expectedPulseCount = validateCampaignPulseCount(pulseCount);
   if (
     !ownRecord(listing) ||
     !Number.isSafeInteger(listing.total_count) ||
@@ -1669,6 +1740,14 @@ function validateCampaignRunCensus(listing, { boundary, requestedRunIds, sourceS
   const campaignRuns = listing.workflow_runs.filter(
     (run) => run.id >= boundary.firstRunId && run.id <= boundary.lastRunId,
   );
+  if (campaignRuns.length !== expectedPulseCount || requestedRunIds.length !== expectedPulseCount) {
+    throw new TypeError(
+      'campaign pulse count differs from the exact preregistered boundary/run census',
+    );
+  }
+  if (campaignRuns.some((run) => run.run_attempt !== 1)) {
+    throw new TypeError('preregistered campaign boundary contains a rerun attempt');
+  }
   if (campaignRuns.some((run) => run.event !== 'pull_request')) {
     throw new TypeError('preregistered campaign boundary contains a non-pull_request workflow run');
   }
@@ -1719,11 +1798,15 @@ function validateCampaignLedger(campaign, runIds) {
   if (
     !ownRecord(campaign) ||
     canonicalJson(Object.keys(campaign).sort()) !==
-      canonicalJson(['boundary', 'runs', 'workflowRunsApiMetadata'])
+      canonicalJson(['boundary', 'pulseCount', 'runs', 'workflowRunsApiMetadata'])
   ) {
     throw new TypeError('collection campaign field census differs');
   }
   const boundary = validateCampaignBoundary(campaign.boundary);
+  const pulseCount = validateCampaignPulseCount(campaign.pulseCount);
+  if (!Number.isSafeInteger(campaign.pulseCount) || pulseCount !== runIds.length) {
+    throw new TypeError('collection campaign pulse count differs from its run census');
+  }
   if (boundary.firstRunId !== Math.min(...runIds) || boundary.lastRunId !== Math.max(...runIds)) {
     throw new TypeError('collection run census differs from its preregistered campaign boundary');
   }
@@ -1924,6 +2007,7 @@ async function loadCollectedCampaign(
   const expectedRunIds = campaign.runs.map((run) => run.runId).sort(numericOrder);
   const authenticatedRunIds = validateCampaignRunCensus(listing, {
     boundary: campaign.boundary,
+    pulseCount: campaign.pulseCount,
     requestedRunIds: expectedRunIds,
     sourceSha,
   });
@@ -1974,6 +2058,7 @@ async function loadCollectedCampaign(
   }
   return {
     boundary: campaign.boundary,
+    pulseCount: campaign.pulseCount,
     artifactListings,
     runs,
     runAuthorities,
@@ -2429,6 +2514,20 @@ async function copyCampaignCustody(
   if (!Array.isArray(excludedFamilyArtifacts)) {
     throw new TypeError('excluded family artifact custody is unavailable');
   }
+  const automaticSelection = selectPerformancePublicationCohorts(candidates);
+  const exactCohortSelections = new Map(
+    PERF_PUBLICATION_FAMILY_NAMES.map((familyName) => [
+      familyName,
+      automaticSelection[familyName][0].cohortDigest,
+    ]),
+  );
+  if (
+    !(cohortSelections instanceof Map) ||
+    canonicalJson(Object.fromEntries(cohortSelections)) !==
+      canonicalJson(Object.fromEntries(exactCohortSelections))
+  ) {
+    throw new TypeError('campaign cohort winners differ from automatic selection');
+  }
   const workflowRunsApiMetadata = await copyContentAddressedCustodyFile(
     stagingDirectory,
     'campaign/workflow-runs.api.json',
@@ -2539,12 +2638,13 @@ async function copyCampaignCustody(
   return {
     boundary: campaign.boundary,
     cohortSelections: Object.fromEntries(
-      [...cohortSelections].sort(([left], [right]) => left.localeCompare(right)),
+      [...exactCohortSelections].sort(([left], [right]) => left.localeCompare(right)),
     ),
     excludedFamilyArtifacts: structuredClone(excludedFamilyArtifacts),
     familyCandidates,
     productionBytes,
     productionBytesCandidates: productionBytesCandidateCustody,
+    pulseCount: campaign.pulseCount,
     runs,
     selectedProductionBytes: selected,
     workflowRunsApiMetadata,
@@ -2761,7 +2861,6 @@ function parseCli(args) {
   }
   const values = new Map();
   const repeated = new Map([
-    ['--cohort', []],
     ['--collection', []],
     ['--run', []],
   ]);
@@ -2777,6 +2876,7 @@ function parseCli(args) {
       [
         '--campaign-first-run',
         '--campaign-last-run',
+        '--campaign-pulses',
         '--checkout',
         '--out',
         '--repository',
@@ -2796,13 +2896,14 @@ function parseCli(args) {
     sourceSha: requiredCliValue(values, '--source'),
   };
   if (mode === 'collect') {
-    if (repeated.get('--collection').length > 0 || repeated.get('--cohort').length > 0) {
-      throw new TypeError('collect mode accepts --run, not --collection or --cohort');
+    if (repeated.get('--collection').length > 0) {
+      throw new TypeError('collect mode accepts --run, not --collection');
     }
     return {
       ...common,
       campaignFirstRunId: requiredCliValue(values, '--campaign-first-run'),
       campaignLastRunId: requiredCliValue(values, '--campaign-last-run'),
+      campaignPulseCount: requiredCliValue(values, '--campaign-pulses'),
       mode,
       runIds: repeated.get('--run'),
     };
@@ -2810,21 +2911,15 @@ function parseCli(args) {
   if (repeated.get('--run').length > 0) {
     throw new TypeError('manifest mode accepts --collection, not --run');
   }
-  if (values.has('--campaign-first-run') || values.has('--campaign-last-run')) {
+  if (
+    values.has('--campaign-first-run') ||
+    values.has('--campaign-last-run') ||
+    values.has('--campaign-pulses')
+  ) {
     throw new TypeError('campaign boundaries are preregistered in collect mode, not manifest mode');
-  }
-  const cohortSelections = new Map();
-  for (const selection of repeated.get('--cohort')) {
-    const selectionText = String(selection);
-    const match = /^([a-z0-9-]+)=(sha256:[0-9a-f]{64})$/u.exec(selectionText);
-    if (match === null || cohortSelections.has(match[1])) {
-      throw new TypeError(`invalid or duplicate --cohort ${selectionText}`);
-    }
-    cohortSelections.set(match[1], match[2]);
   }
   return {
     ...common,
-    cohortSelections,
     collectionDirectories: repeated.get('--collection'),
     mode,
   };
