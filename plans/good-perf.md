@@ -1,6 +1,6 @@
 # Competitive performance: Kovo vs Next.js
 
-Updated 2026-08-18. Owner: performance. This is the single active performance ledger. Framework
+Updated 2026-08-21. Owner: performance. This is the single active performance ledger. Framework
 behaviour remains governed by `SPEC.md`; especially §1.1 goal 3, §4.4, §5.2, §8, §9.5, and §11.4.
 The full 2026-08-07/08 investigation remains in git history through `f6e2256af` and its calibrated
 Kovo-only baseline remains in `reports/perf-baseline-2026-08-08.json`.
@@ -125,11 +125,22 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
   - Evidence: `a6fba38df`; the harness gate covers phase totals and authenticated pre-click bytes.
 - [ ] Produce the first clean publishable default and matched baselines with 30 browser samples,
       5 Lighthouse runs per cell, and 10 bfcache traversals.
+  - Current evidence is complete but blocked, not publishable. The fixed 24-pulse campaign produced
+    five ratification reports plus one disjoint holdout for every family at exact source
+    `01b2c7594`; browser reports contain the required 30/5/10 samples. The original all-metric
+    holdout policy and substantive dev/build target misses block the authenticated v9 derivation;
+    custody and the reviewed 23-file output are in
+    `docs/performance/baseline-publication-custody-2026-08-21.md` and
+    `reports/performance-publication-2026-08-21/`.
 
 ## Phase 1 — developer loop
 
-- [ ] Ratify current-head dev ready/edit/error/recovery/RSS baselines against matched Next at N=24
+- [x] Ratify current-head dev ready/edit/error/recovery/RSS baselines against matched Next at N=24
       and N=216; use 15 fresh starts and 30 measured edits after three warmups per edit class.
+  - Evidence: the ratified `dev-n24-baseline.json` and `dev-n216-baseline.json` in
+    `reports/performance-publication-2026-08-21/evidence/` each bind five clean reports with 15
+    ready samples, 30 edits per class/lane, three warmups, matched source/lock/workload identities,
+    correctness, and process-tree RSS; their independent holdouts remain separate.
 - [x] Run repaired fresh-generation candidate `7a20bf666` (the correctness-complete descendant of
       the exploratory `04a976394` idea) in alternating quiet-host cycles.
   - Evidence: [run `31794370562`, N=24 artifact
@@ -200,13 +211,21 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     `9201780300`](https://github.com/kovojs/kovo/actions/runs/31753246698/artifacts/9201780300):
     15 samples/lane plus three warmups, packed median/p95 46.57/58.40 ms versus source
     114.20/124.26 ms; packed p95 passed the preregistered 1,000 ms product ceiling.
-- [ ] Add browser-visible dev budgets for leaf/entry edit-to-paint, diagnostic, recovery, miss rate,
+- [x] Add browser-visible dev budgets for leaf/entry edit-to-paint, diagnostic, recovery, miss rate,
       state preservation, ready time, and process-tree RSS at both workload sizes.
+  - Evidence: `dev-n24-budget.json` and `dev-n216-budget.json` in the reviewed publication evidence
+    retain every required browser-visible latency, correctness, state, ready, and RSS metric. The
+    resulting recovery p95 miss (2,348.68/2,464.17 ms at N=24 and 3,015.42/2,947.49 ms at N=216
+    for baseline/holdout) remains literal open performance work.
 
 ## Phase 2 — check and production build
 
-- [ ] Establish 10-sample clean, unchanged, and one-line-edit build baselines on equal-shape N=24
+- [x] Establish 10-sample clean, unchanged, and one-line-edit build baselines on equal-shape N=24
       and N=216 corpora, with phase census, artifact bytes, and peak process-tree RSS.
+  - Evidence: the ratified `build-n24-baseline.json` and `build-n216-baseline.json` in
+    `reports/performance-publication-2026-08-21/evidence/` bind five independent clean reports,
+    each with 10 samples for all three modes, exact corpus identities, phase census, artifact bytes,
+    exit status, wall time, and peak process-tree RSS; sixth-run evaluations remain disjoint.
 - [x] Carry the complete source-check phase census into paired build reports and account for the
       currently unattributed CLI/startup tail before changing implementation.
   - Evidence: `f73738975`; `scripts/perf-build-benchmark.mjs` validates the exact source/worker
@@ -226,8 +245,11 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     improved 23.797% with paired 95% CI `[61,552.30, 68,376.15]` ms; N=24 improved 0.963% and all
     p95/RSS guardrails passed. Integrated commit `135645d71` has sealed stable patch ID `c8be354…`;
     full custody and hashes are in `docs/performance/build-source-trust-spike.md`.
-- [ ] Design a persistent foreground build/watch session if warm cross-invocation reuse is still
+- [x] Design a persistent foreground build/watch session if warm cross-invocation reuse is still
       required. Do not reintroduce the retired unauthenticated on-disk compiler cache.
+  - Decision: not warranted. The authenticated assessment in
+    `reports/performance-publication-2026-08-21/performance-publication.md` bounds the N=216
+    unchanged/edit residual upper shares at 2.06%/2.13%, both below the preregistered 10% threshold.
 - [ ] Gate build wall, p95, RSS, and artifact size on the realistic corpus; reach the first milestone
       before attempting the competitive target.
 
@@ -248,13 +270,15 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     +29.08% median throughput with paired 95% CI `[+26.07%, +30.23%]`, improved p95 in every cell,
     byte-identical bodies, and loader profile share of 14.89%/21.57% to 0.02%. Criterion A accepted
     the production memo.
-- [ ] Freeze and run the current matched L0/L1 browser matrix before any further navigation or
+- [x] Freeze and run the current matched L0/L1 browser matrix before any further navigation or
       runtime-emission change. Preserve inert documents at zero JS; the deterministic spike found
       the ordinary deferred runtime at 49,236 B Brotli and the enhanced-navigation closure alone at
       22,642 B Brotli.
-  - Evidence: `node benchmarks/matched-fixture-gate.mjs` passed before runtime candidates were
-    integrated and proved the matched L0 document carries zero script/action capability.
-- [ ] Profile matched L1 mobile navigation from click through destination paint. Attribute server,
+  - Evidence: `browser-baseline.json` and `browser-evaluation.json` in the reviewed publication
+    evidence retain all default, matched L0, and matched L1 desktop/mobile cells from five baseline
+    reports plus a disjoint holdout; `node benchmarks/matched-fixture-gate.mjs` separately proved
+    the matched L0 document carries zero script/action capability.
+- [x] Profile matched L1 mobile navigation from click through destination paint. Attribute server,
       transfer, the trace-observable combined response-processing/DOM-apply envelope,
       style/layout, and paint; keep JS-internal decode/build and morph boundaries explicitly
       unsupported unless both entrants gain equivalent instrumentation.
@@ -306,21 +330,38 @@ packages/server/src/node.test.ts --reporter=dot` passed 88/88 and covers private
       matched dev edits, browser cells, builds, and throughput on a quiet pinned nightly runner.
   - Evidence: `faf00c5de`; `pnpm exec vitest --run scripts/perf-ci-policy.test.mjs
 --reporter=dot` passed and proves PR smoke plus labeled/scheduled realistic matrices.
-- [ ] Authenticate one exact-final-source `Production bytes` job and its one-member
+- [x] Authenticate one exact-final-source `Production bytes` job and its one-member
       `kovo-perf-bytes` artifact as a required publication sidecar. Re-evaluate the exact five
       deterministic metrics against the measured commit's `perf-budgets.json`; publication must
       block on any failed byte budget and remain unproven on missing, malformed, dirty,
       source-unstable, wrong-lock, wrong-workload, or wrong-producer evidence. This is not an eighth
       statistically ratified family.
-- [ ] Store raw reports as CI artifacts and commit only a clean reviewed baseline summary. A dirty,
+  - Evidence: run `32446745655`, one-member artifact `9434348014`, passed all five exact budgets at
+    measured source `01b2c7594`; the v9 gate authenticated source/workflow/job/artifact/report and
+    committed-budget identities before admitting it.
+- [x] Store raw reports as CI artifacts and commit only a clean reviewed baseline summary. A dirty,
       null, load-shed, wrong-posture, or integrity-failed run cannot update budgets.
-- [ ] Select at least six independent reports in one exact normalized per-family
+  - Evidence: all raw reports and archives remain immutable CI/external artifacts; only the
+    independently read-back 23-file blocked derivation and concise custody record are committed in
+    `reports/performance-publication-2026-08-21/` and
+    `docs/performance/baseline-publication-custody-2026-08-21.md`.
+- [x] Select at least six independent reports in one exact normalized per-family
       hosted-runner/workload cohort; ratify budgets from the first five and evaluate the sixth as an
       independent holdout using median, MAD, p95, and the acceptance rules above. Replace the
       rationale-only arrays for the realistic seven-family tier with the 21 linked derived baseline,
       budget, and holdout-evaluation documents. The separate deterministic `perf-budgets.json` tier
       remains authoritative for the five exact production-byte gates and is linked through the
       required publication sidecar above.
+  - Evidence: the fixed campaign selected exactly five baseline reports plus one independent
+    holdout for each of seven families and generated all 21 schema-valid evidence documents. The
+    blocked aggregate's references, byte digests, semantic digests, and canonical digest were
+    independently reproduced; no current-campaign failure is reinterpreted.
+- [ ] Commit a prospective robust holdout policy before new measurements, retaining the complete
+      browser/server metric census while separating exact correctness/availability/integrity and
+      milestone gates from noise-aware regression envelopes. Bind the policy into workload identity
+      and do not apply it retroactively to the blocked v9 derivation.
+- [ ] Run a fresh, disjoint, fixed, nonadaptive publication campaign after accepted performance
+      changes and evaluate it only under the prospectively committed policy.
 - [x] Add a regression comparator that requires matching source/lock/workload identities and reports
       `unproven` rather than pass when load, sample count, or identity is outside policy.
   - Evidence: `faf00c5de`, `49f83a2a9`, `3aabc77ae`; comparator/ratifier tests passed 26/26 and

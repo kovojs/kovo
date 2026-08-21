@@ -1,0 +1,281 @@
+{
+  "budget": "sha256:d5b7ec1a01cc8692a9fbac4c6a5b45104890a70403ae2dae6cfe115e168ec161",
+  "candidate": {
+    "execution": "sha256:ce926468d56258acfe21f464b72a45dfe984bafaa7c1e11985c0fdf7c2c49dab",
+    "sourceCommit": "01b2c759468f41a3fc4739225eb13c8f5aa11406"
+  },
+  "checks": [
+    {
+      "id": "corpus-n24/dev//edit.leafMs.median",
+      "kind": "regression",
+      "limit": 4389.8858199000215,
+      "status": "pass",
+      "value": 4330.518280999968
+    },
+    {
+      "id": "corpus-n24/dev//edit.leafMs.p95",
+      "kind": "regression",
+      "limit": 4558.749490050009,
+      "status": "fail",
+      "value": 4596.082790000015
+    },
+    {
+      "id": "corpus-n24/dev//edit.entryMs.median",
+      "kind": "regression",
+      "limit": 4366.786525499955,
+      "status": "pass",
+      "value": 4214.1446679999935
+    },
+    {
+      "id": "corpus-n24/dev//edit.entryMs.p95",
+      "kind": "regression",
+      "limit": 4441.835044500005,
+      "status": "fail",
+      "value": 4446.824255999993
+    },
+    {
+      "id": "corpus-n24/dev//edit.dataMs.median",
+      "kind": "regression",
+      "limit": 4372.292049300007,
+      "status": "pass",
+      "value": 4247.534262000001
+    },
+    {
+      "id": "corpus-n24/dev//edit.dataMs.p95",
+      "kind": "regression",
+      "limit": 4442.447444400058,
+      "status": "pass",
+      "value": 4380.161916000012
+    },
+    {
+      "id": "corpus-n24/dev//edit.syntaxErrorMs.median",
+      "kind": "regression",
+      "limit": 115.5319598999864,
+      "status": "pass",
+      "value": 108.677982000052
+    },
+    {
+      "id": "corpus-n24/dev//edit.syntaxErrorMs.p95",
+      "kind": "regression",
+      "limit": 151.44804254998743,
+      "status": "pass",
+      "value": 139.44004799996037
+    },
+    {
+      "id": "corpus-n24/dev//edit.recoveryMs.median",
+      "kind": "regression",
+      "limit": 2298.8420678999655,
+      "status": "pass",
+      "value": 2248.9422090000007
+    },
+    {
+      "id": "corpus-n24/dev//edit.recoveryMs.p95",
+      "kind": "regression",
+      "limit": 2466.116378250011,
+      "status": "pass",
+      "value": 2464.1744369999506
+    },
+    {
+      "id": "corpus-n24/dev//edit.peakRssBytes.median",
+      "kind": "regression",
+      "limit": 3138147532.8,
+      "status": "pass",
+      "value": 2778546176
+    },
+    {
+      "id": "corpus-n24/dev//edit.peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 3153294950.4,
+      "status": "pass",
+      "value": 3022086144
+    },
+    {
+      "id": "corpus-n24/dev//ready.durationMs.median",
+      "kind": "regression",
+      "limit": 28294.612956750025,
+      "status": "pass",
+      "value": 27919.227400999996
+    },
+    {
+      "id": "corpus-n24/dev//ready.durationMs.p95",
+      "kind": "regression",
+      "limit": 28608.49575885,
+      "status": "pass",
+      "value": 28326.63723
+    },
+    {
+      "id": "corpus-n24/dev//ready.peakRssBytes.median",
+      "kind": "regression",
+      "limit": 2855116185.6,
+      "status": "pass",
+      "value": 2719997952
+    },
+    {
+      "id": "corpus-n24/dev//ready.peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 2893565337.6,
+      "status": "pass",
+      "value": 2768322560
+    },
+    {
+      "id": "corpus-n24/dev//edit.leafStateSurvived.median",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//edit.leafStateSurvived.p95",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//edit.entryStateSurvived.median",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//edit.entryStateSurvived.p95",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//edit.dataStateSurvived.median",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//edit.dataStateSurvived.p95",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//edit.syntaxErrorStateSurvived.median",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//edit.syntaxErrorStateSurvived.p95",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//edit.recoveryStateSurvived.median",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//edit.recoveryStateSurvived.p95",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//edit.sampleAvailable.median",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//edit.sampleAvailable.p95",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//edit.syntaxErrorDiagnosticAvailable.median",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//edit.syntaxErrorDiagnosticAvailable.p95",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//ready.successAvailable.median",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//ready.successAvailable.p95",
+      "kind": "availability",
+      "limit": 1,
+      "status": "pass",
+      "value": 1
+    },
+    {
+      "id": "corpus-n24/dev//ready.durationMs.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 2,
+      "status": "fail",
+      "value": 8.830568889732136
+    },
+    {
+      "id": "corpus-n24/dev//edit.leafMs.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 2,
+      "status": "fail",
+      "value": 53.905049006522155
+    },
+    {
+      "id": "corpus-n24/dev//edit.entryMs.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 3,
+      "status": "fail",
+      "value": 52.631511697353886
+    },
+    {
+      "id": "corpus-n24/dev//edit.syntaxErrorMs.p95-target",
+      "kind": "target",
+      "limit": 1000,
+      "status": "pass",
+      "value": 139.44004799996037
+    },
+    {
+      "id": "corpus-n24/dev//edit.recoveryMs.p95-target",
+      "kind": "target",
+      "limit": 2000,
+      "status": "fail",
+      "value": 2464.1744369999506
+    }
+  ],
+  "schema": "kovo-dev-performance-evaluation/v1",
+  "verdict": {
+    "failures": [
+      "corpus-n24/dev//edit.leafMs.p95",
+      "corpus-n24/dev//edit.entryMs.p95",
+      "corpus-n24/dev//ready.durationMs.median-vs-next",
+      "corpus-n24/dev//edit.leafMs.median-vs-next",
+      "corpus-n24/dev//edit.entryMs.median-vs-next",
+      "corpus-n24/dev//edit.recoveryMs.p95-target"
+    ],
+    "reasons": [],
+    "status": "regression"
+  }
+}

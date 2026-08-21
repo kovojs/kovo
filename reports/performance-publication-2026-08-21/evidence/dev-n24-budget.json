@@ -1,0 +1,884 @@
+{
+  "baseline": {
+    "digest": "sha256:3a67c1866c2f4acdae57dac66a9ec0fa001618225bfa6eec063ed4155059d4d8",
+    "reports": [
+      {
+        "contentDigest": "sha256:26e4f50d3d71c57afef871033612c87de6eaefe3f6bb87ed4b21b4f17f8b65ac",
+        "execution": "sha256:43a36485c1a8b710f472499cee962bb0463030f7f55f164095ca49fd7314efb5",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32446851107/artifacts/9435013825",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446851107"
+      },
+      {
+        "contentDigest": "sha256:771ed52cd329e74aa71297d3b98ec1fce0b8a79144116babe81f7b302eff82cd",
+        "execution": "sha256:1c650f382ec1e66ced9b6b43d50ec35835a6c186b189ae6b7d7d5bbbb9248728",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32446881033/artifacts/9435618275",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446881033"
+      },
+      {
+        "contentDigest": "sha256:9097d67f5bb0ef087d38a6f5bcb58a0f4b2672b2ba6f89c60cce2e988b14fee7",
+        "execution": "sha256:ab57b5fad242d6c140dd1c57c430507f7df3e2b2ba6627f0ec87450efe1754af",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32446907225/artifacts/9435852868",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446907225"
+      },
+      {
+        "contentDigest": "sha256:f81a618ae7080e1985fbb8606d71dc2e4ccde05cd6308f2d64c46fe3940cc098",
+        "execution": "sha256:205100e83f3baf9f1849e0e2f0cc37b0b600343ad5909494918578430973283d",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32446922209/artifacts/9436709535",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446922209"
+      },
+      {
+        "contentDigest": "sha256:661eeccf3bc900baec2503e0eb0d9ec43cab705fc1e09e27378128e0fe47892b",
+        "execution": "sha256:49ee4e14adaa77d6cf8faa59eb8576d5736955a826b1c35d8874336eef37a602",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32446940258/artifacts/9436991789",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446940258"
+      }
+    ],
+    "sourceCommit": "01b2c759468f41a3fc4739225eb13c8f5aa11406"
+  },
+  "generatedFrom": "2026-08-21T21:45:53.443Z",
+  "metrics": {
+    "corpus-n24/dev//edit.leafMs": {
+      "baseline": {
+        "median": 4180.84363800002,
+        "nextMedian": 80.57222200000251,
+        "nextP95": 97.19512699999905,
+        "pairedMedian": 4100.364260999988,
+        "p95": 4341.666181000008,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 4389.8858199000215,
+      "p95Maximum": 4558.749490050009
+    },
+    "corpus-n24/dev//edit.entryMs": {
+      "baseline": {
+        "median": 4158.844309999957,
+        "nextMedian": 80.66283499999554,
+        "nextP95": 96.23356200000126,
+        "pairedMedian": 4069.7663210000064,
+        "p95": 4230.3190900000045,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 4366.786525499955,
+      "p95Maximum": 4441.835044500005
+    },
+    "corpus-n24/dev//edit.dataMs": {
+      "baseline": {
+        "median": 4164.087666000007,
+        "nextMedian": 80.63389599999937,
+        "nextP95": 97.18187900000339,
+        "pairedMedian": 4084.0707230000044,
+        "p95": 4230.902328000055,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 4372.292049300007,
+      "p95Maximum": 4442.447444400058
+    },
+    "corpus-n24/dev//edit.syntaxErrorMs": {
+      "baseline": {
+        "median": 110.03043799998704,
+        "nextMedian": 107.15363799999614,
+        "nextP95": 135.37476000000606,
+        "pairedMedian": -8.079640999960247,
+        "p95": 144.23623099998804,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 115.5319598999864,
+      "p95Maximum": 151.44804254998743
+    },
+    "corpus-n24/dev//edit.recoveryMs": {
+      "baseline": {
+        "median": 2189.373397999967,
+        "nextMedian": 55.148747999999614,
+        "nextP95": 89.00412499999948,
+        "pairedMedian": 2133.1370599999645,
+        "p95": 2348.6822650000104,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 2298.8420678999655,
+      "p95Maximum": 2466.116378250011
+    },
+    "corpus-n24/dev//edit.peakRssBytes": {
+      "baseline": {
+        "median": 2988711936,
+        "nextMedian": 860901376,
+        "nextP95": 878665728,
+        "pairedMedian": 2112835584,
+        "p95": 3003138048,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 3138147532.8,
+      "p95Maximum": 3153294950.4
+    },
+    "corpus-n24/dev//ready.durationMs": {
+      "baseline": {
+        "median": 26947.250435000024,
+        "nextMedian": 3060.751746,
+        "nextP95": 3148.945495,
+        "pairedMedian": 23867.808579000026,
+        "p95": 27246.186437,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 28294.612956750025,
+      "p95Maximum": 28608.49575885
+    },
+    "corpus-n24/dev//ready.peakRssBytes": {
+      "baseline": {
+        "median": 2719158272,
+        "nextMedian": 716746752,
+        "nextP95": 726437888,
+        "pairedMedian": 1998286848,
+        "p95": 2755776512,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 2855116185.6,
+      "p95Maximum": 2893565337.6
+    },
+    "corpus-n24/dev//edit.leafStateSurvived": {
+      "baseline": {
+        "median": 1,
+        "nextMedian": 1,
+        "nextP95": 1,
+        "pairedMedian": 0,
+        "p95": 1,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "exact-availability-floor",
+      "minimum": 1
+    },
+    "corpus-n24/dev//edit.entryStateSurvived": {
+      "baseline": {
+        "median": 1,
+        "nextMedian": 1,
+        "nextP95": 1,
+        "pairedMedian": 0,
+        "p95": 1,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "exact-availability-floor",
+      "minimum": 1
+    },
+    "corpus-n24/dev//edit.dataStateSurvived": {
+      "baseline": {
+        "median": 1,
+        "nextMedian": 1,
+        "nextP95": 1,
+        "pairedMedian": 0,
+        "p95": 1,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "exact-availability-floor",
+      "minimum": 1
+    },
+    "corpus-n24/dev//edit.syntaxErrorStateSurvived": {
+      "baseline": {
+        "median": 1,
+        "nextMedian": 1,
+        "nextP95": 1,
+        "pairedMedian": 0,
+        "p95": 1,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "exact-availability-floor",
+      "minimum": 1
+    },
+    "corpus-n24/dev//edit.recoveryStateSurvived": {
+      "baseline": {
+        "median": 1,
+        "nextMedian": 1,
+        "nextP95": 1,
+        "pairedMedian": 0,
+        "p95": 1,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "exact-availability-floor",
+      "minimum": 1
+    },
+    "corpus-n24/dev//edit.sampleAvailable": {
+      "baseline": {
+        "median": 1,
+        "nextMedian": 1,
+        "nextP95": 1,
+        "pairedMedian": 0,
+        "p95": 1,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "exact-availability-floor",
+      "minimum": 1
+    },
+    "corpus-n24/dev//edit.syntaxErrorDiagnosticAvailable": {
+      "baseline": {
+        "median": 1,
+        "nextMedian": 1,
+        "nextP95": 1,
+        "pairedMedian": 0,
+        "p95": 1,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "exact-availability-floor",
+      "minimum": 1
+    },
+    "corpus-n24/dev//ready.successAvailable": {
+      "baseline": {
+        "median": 1,
+        "nextMedian": 1,
+        "nextP95": 1,
+        "pairedMedian": 0,
+        "p95": 1,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "exact-availability-floor",
+      "minimum": 1
+    }
+  },
+  "policy": {
+    "availabilityMinimum": 1,
+    "maxLoadPerCpu": 1,
+    "maxRegressionPct": 5,
+    "targets": {
+      "entryMedianVsNextMaximumRatio": 3,
+      "leafMedianVsNextMaximumRatio": 2,
+      "readyMedianVsNextMaximumRatio": 2,
+      "recoveryP95MaximumMs": 2000,
+      "syntaxErrorP95MaximumMs": 1000
+    }
+  },
+  "schema": "kovo-dev-performance-budget/v1",
+  "subject": {
+    "corpusSize": 24,
+    "host": {
+      "arch": "x64",
+      "browsers": [
+        "148.0.7778.96"
+      ],
+      "cpu": {
+        "count": 4,
+        "model": "AMD EPYC 7763 64-Core Processor"
+      },
+      "memoryCapacityClassBytes": 17179869184,
+      "node": "v24.18.0",
+      "platform": "linux",
+      "release": "6.17.0-1022-azure",
+      "runnerImage": "github-actions/ubuntu-24.04 ImageOS=ubuntu24 ImageVersionDigest=sha256:daee8837c48a1f6d9e42a0303242b2433b2761aceff583672f517f05fda8e796",
+      "digest": "sha256:8d205d64a3d0bccd5a1615987eae0fded94694c4003ab8b57ad148f0d3ac6af7",
+      "schema": "kovo-performance-host/v2",
+      "totalMemoryBytes": 16766414848
+    },
+    "locks": {
+      "pnpm-lock.yaml": "sha256:b44051d7c24ac90744743140c794ccee83991dd07d2e15d2e893fcc3d2b6d0a4",
+      "benchmarks/nextjs/pnpm-lock.yaml": "sha256:a9e68be4a032b6e2cc40a5f5392f942d14eae0277b6fc93408446b61d565086b",
+      "benchmarks/harness/pnpm-lock.yaml": "sha256:bfbf3b2e8725c5ef8a844f62c0907a154a1d5f68af4ff6ec26a91658d1227663"
+    },
+    "productArtifact": {
+      "digest": "sha256:cca56d8e4d0384e98adbd01d0f53efbcb29a0cb4bb9ecf3ac4844fb55dc24ca4",
+      "identity": {
+        "artifacts": [
+          {
+            "files": 83,
+            "manifestSha256": "sha256:437aeebfc96968adbe54a23a9ad74087f2ed9a9246619c0e41a866914f8474be",
+            "name": "@kovojs/browser",
+            "packageContentSha256": "sha256:ac94bba7b4fa6f1a9cbcba33faf4e90258be71ee16719d3be9572f8209df46e8",
+            "tarballBytes": 1270347,
+            "tarballFile": "kovojs-browser-0.3.0.tgz",
+            "tarballSha256": "sha256:92c6b9d0833f0c20c62dc7d8b09463f6f4626f22a75e6cc4736d94886afee6a5",
+            "unpackedBytes": 5684247,
+            "version": "0.3.0"
+          },
+          {
+            "files": 67,
+            "manifestSha256": "sha256:4aea5572e6ab467799a5d23a45218e7a10bbaf384d664e6facfbdaf811112295",
+            "name": "@kovojs/cli",
+            "packageContentSha256": "sha256:fd20726174c3c0b9cd0af6e7ffe8733949e069a49f021290250b195be3978768",
+            "tarballBytes": 2672778,
+            "tarballFile": "kovojs-cli-0.3.0.tgz",
+            "tarballSha256": "sha256:82a1a5ec7a9636fc30d9b3c7baada13ba7b21ba877e73380b7beb15cd6843bec",
+            "unpackedBytes": 8867715,
+            "version": "0.3.0"
+          },
+          {
+            "files": 53,
+            "manifestSha256": "sha256:3ca7218646b0a68f227ad81c6ec61812a8a75b72f4667d6bb8243114006dd925",
+            "name": "@kovojs/compiler",
+            "packageContentSha256": "sha256:ceb43d828ca4e8da980d5006242219fe63ca10a3d9eaf46e0fac8b7aa8476b8d",
+            "tarballBytes": 2989976,
+            "tarballFile": "kovojs-compiler-0.3.0.tgz",
+            "tarballSha256": "sha256:f0af891fb4a88a7f039c400f2cf9f39770a46f1d65ee832686134b260b28628f",
+            "unpackedBytes": 16197071,
+            "version": "0.3.0"
+          },
+          {
+            "files": 204,
+            "manifestSha256": "sha256:a14e8f749b2f237297623ccfc5695723388a88b0b737df95c8f8654ff224ce2c",
+            "name": "@kovojs/core",
+            "packageContentSha256": "sha256:772b13a643351d66917fcb74722f8af7e02e9bda6fdbf410cf61f8158c8df53e",
+            "tarballBytes": 639242,
+            "tarballFile": "kovojs-core-0.3.0.tgz",
+            "tarballSha256": "sha256:de6601835fbd86a8e455caa476993fb2ed9b6716a9331a1cdc7feba6fde037cb",
+            "unpackedBytes": 3105214,
+            "version": "0.3.0"
+          },
+          {
+            "files": 28,
+            "manifestSha256": "sha256:b814e95edd045cb78331c86ae7fd5095d024be15473a240c52dcb154745f0608",
+            "name": "@kovojs/drizzle",
+            "packageContentSha256": "sha256:9cf5380f7de83ee22bb927a76c0d2c52a248beb60d163dc9a3831f8831a8322e",
+            "tarballBytes": 1176251,
+            "tarballFile": "kovojs-drizzle-0.3.0.tgz",
+            "tarballSha256": "sha256:fb872f2f510f4da45e58b6f64f5a0108e698a2ddb9ff4c53490f71228abdd648",
+            "unpackedBytes": 6581792,
+            "version": "0.3.0"
+          },
+          {
+            "files": 231,
+            "manifestSha256": "sha256:3def2243903bd38fa41c8928524c0d99df4a00c2071764f5c091cabd9c140d13",
+            "name": "@kovojs/headless-ui",
+            "packageContentSha256": "sha256:f3dfbcc3a031e27c314fe772c4fc983d47ad2df129e6c2052ac0bf82cb1d2c3d",
+            "tarballBytes": 280856,
+            "tarballFile": "kovojs-headless-ui-0.3.0.tgz",
+            "tarballSha256": "sha256:736581146a561c797e7eca43d97d057f3dfded6a9b0535f671d70478b372c729",
+            "unpackedBytes": 1985640,
+            "version": "0.3.0"
+          },
+          {
+            "files": 6957,
+            "manifestSha256": "sha256:65de5a370da26c97a4b1a312c1ab2dbbb461574fab8cdcfc2856939bb8dfa145",
+            "name": "@kovojs/icons",
+            "packageContentSha256": "sha256:820cca4d291e62b882b47709d2f3ecf298da6d2840a17398f2c647ccf1d5aab0",
+            "tarballBytes": 523762,
+            "tarballFile": "kovojs-icons-0.3.0.tgz",
+            "tarballSha256": "sha256:567f3e6336011b9f1f2501d283fbe30686188dc37d95c466f3e58ac26bc5a513",
+            "unpackedBytes": 5159010,
+            "version": "0.3.0"
+          },
+          {
+            "files": 888,
+            "manifestSha256": "sha256:913804ebb3c294791529012281910fb9a325fc623c30a5bfa6a3189f0ffc77e9",
+            "name": "@kovojs/server",
+            "packageContentSha256": "sha256:7d7a1c356c3fb1489a2c790eeb3e26a582f9aa3954406aee680251161162adb8",
+            "tarballBytes": 2525511,
+            "tarballFile": "kovojs-server-0.3.0.tgz",
+            "tarballSha256": "sha256:7c5edaf26aa40aa164a739f69d88d6098d893ab3627f3f2105ee0ce769c0d7af",
+            "unpackedBytes": 11902831,
+            "version": "0.3.0"
+          },
+          {
+            "files": 11,
+            "manifestSha256": "sha256:ae118055e883ae9a576ec04340e2b832a67c9318c3e0c92caab73756b0cede9b",
+            "name": "@kovojs/style",
+            "packageContentSha256": "sha256:50f4dfc49bf8eb4a0873ef2950019aede8cf4d6b3a82c45fe304510b125b2f6f",
+            "tarballBytes": 68218,
+            "tarballFile": "kovojs-style-0.3.0.tgz",
+            "tarballSha256": "sha256:73ee4daf0d66ef1ee0af5e7478887bb453c95549238932dd4a21ccd02354d133",
+            "unpackedBytes": 312783,
+            "version": "0.3.0"
+          },
+          {
+            "files": 233,
+            "manifestSha256": "sha256:86230a6849ad8208be3de820d9a0b780fbff0aa72234f50c5638464581e6859e",
+            "name": "@kovojs/ui",
+            "packageContentSha256": "sha256:3c44d910785b7df1b950e014a60a61a9d595bf0d908208f0a0051e98b87582d2",
+            "tarballBytes": 261770,
+            "tarballFile": "kovojs-ui-0.3.0.tgz",
+            "tarballSha256": "sha256:c83d6e16c03d748f62ceaee87fc0cbb844efec8f407f3465f17c332bbc7f18ec",
+            "unpackedBytes": 1867377,
+            "version": "0.3.0"
+          },
+          {
+            "files": 18,
+            "manifestSha256": "sha256:4322dd3fa53568398cc57703e590a984708a413c950fc5750612f7a1eb9076e8",
+            "name": "@kovojs/verify",
+            "packageContentSha256": "sha256:6b4297a8a79ba786cc767ab312b2bda0c0b8014e536f7efc397358ae18a1070a",
+            "tarballBytes": 232501,
+            "tarballFile": "kovojs-verify-0.3.0.tgz",
+            "tarballSha256": "sha256:2e13e81b979bb21f292da50f32b422b2b271f174d4ea2ef2f62a53ffd64cd36a",
+            "unpackedBytes": 1053693,
+            "version": "0.3.0"
+          }
+        ],
+        "build": {
+          "commands": [
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/core",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/core"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/browser",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/browser"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/style",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/style"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/verify",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/verify"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/compiler",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/compiler"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/drizzle",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/drizzle"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/server",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/server"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/icons",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/icons"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/headless-ui",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/headless-ui"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/ui",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/ui"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/cli",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/cli"
+            }
+          ],
+          "packages": [
+            "@kovojs/core",
+            "@kovojs/browser",
+            "@kovojs/style",
+            "@kovojs/verify",
+            "@kovojs/compiler",
+            "@kovojs/drizzle",
+            "@kovojs/server",
+            "@kovojs/icons",
+            "@kovojs/headless-ui",
+            "@kovojs/ui",
+            "@kovojs/cli"
+          ],
+          "rootFrozenInstall": {
+            "argv": [
+              "pnpm",
+              "install",
+              "--offline",
+              "--frozen-lockfile",
+              "--ignore-scripts"
+            ]
+          }
+        },
+        "consumer": {
+          "frozenInstall": {
+            "argv": [
+              "pnpm",
+              "install",
+              "--prod",
+              "--ignore-scripts",
+              "--ignore-workspace",
+              "--offline",
+              "--frozen-lockfile",
+              "--strict-peer-dependencies",
+              "--store-dir",
+              "<isolated-store>"
+            ],
+            "lockSha256": "sha256:569625613c0348d5ae18c038e4feb081a926acde9f3ad91b3c8e4d4416e09224"
+          },
+          "lockResolution": {
+            "argv": [
+              "pnpm",
+              "install",
+              "--prod",
+              "--ignore-scripts",
+              "--ignore-workspace",
+              "--no-frozen-lockfile",
+              "--strict-peer-dependencies",
+              "--store-dir",
+              "<isolated-store>"
+            ]
+          },
+          "manifestSha256": "sha256:17cbba8082bcaad448057c101df79fdcc96303a022308cc3e6aa6029a9081207",
+          "packageCensusMatched": 11,
+          "packageFilesMatched": 8773,
+          "packageManager": "pnpm@10.12.1",
+          "pnpmVersion": "10.12.1",
+          "root": "<isolated-consumer>"
+        },
+        "integrity": {
+          "artifactAuthenticated": true,
+          "consumerFrozen": true,
+          "firstInstallMatchesFrozen": true,
+          "installedBytesMatchTarballs": true,
+          "packedResolutionConfined": true,
+          "workspaceSourceLoaded": false
+        },
+        "pack": {
+          "commands": [
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/core"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/browser"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/style"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/verify"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/compiler"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/drizzle"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/server"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/icons"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/headless-ui"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/ui"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/cli"
+            }
+          ]
+        },
+        "primaryCli": {
+          "installedBin": "node_modules/@kovojs/cli/dist/bin.mjs",
+          "installedBinSha256": "sha256:03d9f89412a8cab3b41a97b287c2b38a988ae7a73a3e25dd0fd9f6f2a083a22c",
+          "name": "@kovojs/cli",
+          "packageContentSha256": "sha256:fd20726174c3c0b9cd0af6e7ffe8733949e069a49f021290250b195be3978768",
+          "tarballSha256": "sha256:82a1a5ec7a9636fc30d9b3c7baada13ba7b21ba877e73380b7beb15cd6843bec",
+          "version": "0.3.0"
+        },
+        "resolutionProof": {
+          "confined": true,
+          "loadedFileCount": 1,
+          "loadedFiles": [
+            ".pnpm/@kovojs+cli@file+..+tarballs+kovojs-cli-0.3.0.tgz_@electric-sql+pglite@0.5.1_@kovojs+st_6440dd70593a3842ea9e8d3889936fa2/node_modules/@kovojs/cli/dist/bin.mjs"
+          ],
+          "normalizedTraceSha256": "sha256:9daa935535a628365ab5c27cf4ac5b9c3474bcfc63c89151f140efb5039d2035",
+          "schema": "kovo-packed-cli-resolution-proof/v1",
+          "workspaceSourceLoaded": false
+        },
+        "schema": "kovo-packed-product-identity/v1",
+        "source": {
+          "commit": "01b2c759468f41a3fc4739225eb13c8f5aa11406",
+          "locks": {
+            "pnpm-lock.yaml": "sha256:b44051d7c24ac90744743140c794ccee83991dd07d2e15d2e893fcc3d2b6d0a4",
+            "benchmarks/nextjs/pnpm-lock.yaml": "sha256:a9e68be4a032b6e2cc40a5f5392f942d14eae0277b6fc93408446b61d565086b",
+            "benchmarks/harness/pnpm-lock.yaml": "sha256:bfbf3b2e8725c5ef8a844f62c0907a154a1d5f68af4ff6ec26a91658d1227663"
+          }
+        },
+        "typescript": {
+          "bytes": 24346827,
+          "contentSha256": "sha256:2ac1785d46a36443572ac468d19fc4f8d57b3b09655b362d908ce97f55586c6b",
+          "files": 140,
+          "name": "typescript",
+          "version": "6.0.3"
+        }
+      },
+      "schema": "kovo-packed-product-identity/v1"
+    },
+    "workloadIdentity": {
+      "complete": true,
+      "digest": "sha256:6e74fcae39b3917ec54bb84b2420ef6c513031d5b6673fa5c45966b75ed012b7",
+      "identity": {
+        "adapters": {
+          "browser": "kovo-browser-benchmark/v1",
+          "browserPrepare": "kovo-browser-benchmark-prepare/v1",
+          "build": "kovo-build-benchmark/v1",
+          "compare": "kovo-next-performance-comparison/v1",
+          "dev": "kovo-dev-loop-report/v1",
+          "server": "kovo-server-benchmark/v1",
+          "serverPrepare": "kovo-server-benchmark-prepare/v1"
+        },
+        "cells": [
+          "dev"
+        ],
+        "corpus": {
+          "kovo": {
+            "manifestDigest": "sha256:50dde0bafa140b07fcfa7a65fc927a1cb0d10e3722696166eea0f29d5d7ffc1b",
+            "shapeDigest": "sha256:698809eae1c9e21680f079f7380398227c4c5b72bf0de5bf658edb9c3cb38c65",
+            "sourceDigest": "sha256:b4bf33728cb2fd2c665ddbfc14098ec34ffaaf5480e7c9dbbe3143ca245d4ed4"
+          },
+          "nextjs": {
+            "manifestDigest": "sha256:1c79ff77ba27f66fde54786699ce87d54ee6b6b5a61ba8fbe6f8e008fc2733f1",
+            "shapeDigest": "sha256:698809eae1c9e21680f079f7380398227c4c5b72bf0de5bf658edb9c3cb38c65",
+            "sourceDigest": "sha256:9835f8812668cf14310db50c4cdb50bc75dc9deffe4b8fd29a052c32b2c50950"
+          }
+        },
+        "fixture": null,
+        "lanes": [
+          "corpus-n24"
+        ],
+        "productArtifactPolicy": {
+          "concreteIdentity": "report-bound",
+          "corpusIsolation": "external-root-without-ancestor-node-modules",
+          "kovo": "required",
+          "nextjs": "forbidden",
+          "preparationTiming": "before-quiet-host-admission-and-outside-samples",
+          "schema": "kovo-packed-product-workload-policy/v1"
+        },
+        "policies": {
+          "bfcacheIterations": 10,
+          "browserSamples": 30,
+          "buildSamples": 30,
+          "buildModes": [
+            "clean",
+            "unchanged",
+            "edit"
+          ],
+          "corpusSize": 24,
+          "devEditSamples": 30,
+          "devEditSessionSamples": 2,
+          "devOccurrenceSchedule": [
+            {
+              "editSamples": 15,
+              "framework": "kovo",
+              "occurrence": 0,
+              "readySamples": 8,
+              "scheduleIndex": 0,
+              "warmups": 2
+            },
+            {
+              "editSamples": 15,
+              "framework": "nextjs",
+              "occurrence": 0,
+              "readySamples": 8,
+              "scheduleIndex": 1,
+              "warmups": 2
+            },
+            {
+              "editSamples": 15,
+              "framework": "nextjs",
+              "occurrence": 1,
+              "readySamples": 7,
+              "scheduleIndex": 2,
+              "warmups": 1
+            },
+            {
+              "editSamples": 15,
+              "framework": "kovo",
+              "occurrence": 1,
+              "readySamples": 7,
+              "scheduleIndex": 3,
+              "warmups": 1
+            }
+          ],
+          "devPortAllocationPosture": "unique-exact-port-outside-host-ephemeral/v2",
+          "devPortBase": 20000,
+          "devPortStride": 128,
+          "devReadySamples": 15,
+          "devWarmups": 3,
+          "lighthouseRuns": 5,
+          "quietHost": {
+            "ceilingPerCpu": 1,
+            "maxTotalWaitMs": 30000,
+            "pollMs": 1000,
+            "posture": "pre-benchmark-admission-then-post-benchmark-settle"
+          },
+          "skipLighthouse": false,
+          "server": {
+            "concurrencies": [
+              1,
+              8,
+              32
+            ],
+            "durationMs": 15000,
+            "encodings": [
+              "identity",
+              "br"
+            ],
+            "hostSettleMaxMs": 30000,
+            "hostSettlePollMs": 1000,
+            "modes": [
+              "HIT",
+              "304",
+              "dynamic"
+            ],
+            "routes": [
+              "listing",
+              "detail"
+            ],
+            "samples": 7,
+            "warmupMs": 5000
+          },
+          "warmups": 3
+        },
+        "serverSemantic": null
+      },
+      "schema": "kovo-performance-workload-identity/v1"
+    }
+  },
+  "digest": "sha256:d5b7ec1a01cc8692a9fbac4c6a5b45104890a70403ae2dae6cfe115e168ec161"
+}

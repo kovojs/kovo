@@ -1,0 +1,2459 @@
+{
+  "budget": "sha256:688471330fb11482a94114a0eb5b1f75db2d76800eaec92e6c45fd34e3792345",
+  "candidate": {
+    "execution": "sha256:0ea872ef12bf6817d3a424ade9caa30f14384b72dea99e647537c76f1393d3d3",
+    "sourceCommit": "01b2c759468f41a3fc4739225eb13c8f5aa11406"
+  },
+  "checks": [
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/durationMs.median",
+      "kind": "regression",
+      "limit": 15750.388143,
+      "observed": 15000.278518000003,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/durationMs.p95",
+      "kind": "regression",
+      "limit": 15751.588763400003,
+      "observed": 15002.788790999999,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/p50Ms.median",
+      "kind": "regression",
+      "limit": 0.6287253000024066,
+      "observed": 0.5719039999985398,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/p50Ms.p95",
+      "kind": "regression",
+      "limit": 0.635436899999786,
+      "observed": 0.5815419999998994,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/p95Ms.median",
+      "kind": "regression",
+      "limit": 0.8510985000015353,
+      "observed": 0.7503240000005462,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/p95Ms.p95",
+      "kind": "regression",
+      "limit": 0.8645049000001563,
+      "observed": 0.7880949999998847,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/p99Ms.median",
+      "kind": "regression",
+      "limit": 2.892886500000486,
+      "observed": 2.3475269999999,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/p99Ms.p95",
+      "kind": "regression",
+      "limit": 3.20742659999969,
+      "observed": 2.512038000000757,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 368092569.6,
+      "observed": 350244864,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 374049177.6,
+      "observed": 352579584,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 1458.7601380272238,
+      "observed": 1624.7031660615726,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 1482.5471874534078,
+      "observed": 1654.3882346526304,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/responseBytes.median",
+      "kind": "regression",
+      "limit": 0,
+      "observed": 0,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/responseBytes.p95",
+      "kind": "regression",
+      "limit": 0,
+      "observed": 0,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 13650,
+      "observed": 13000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 13650,
+      "observed": 13000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 90.99683529386279,
+      "observed": 86.66421914201058,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c1/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 90.9980772409606,
+      "observed": 86.665389698371,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/durationMs.median",
+      "kind": "regression",
+      "limit": 15764.173637099999,
+      "observed": 15014.053403000002,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/durationMs.p95",
+      "kind": "regression",
+      "limit": 15772.8285603,
+      "observed": 15022.157803,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/p50Ms.median",
+      "kind": "regression",
+      "limit": 14.003130749998583,
+      "observed": 13.844585999999254,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/p50Ms.p95",
+      "kind": "regression",
+      "limit": 14.19186090000112,
+      "observed": 14.403626999999688,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/p95Ms.median",
+      "kind": "regression",
+      "limit": 24.235927799997445,
+      "observed": 26.418385000000853,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/p95Ms.p95",
+      "kind": "regression",
+      "limit": 25.150360199998797,
+      "observed": 27.38804800000071,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/p99Ms.median",
+      "kind": "regression",
+      "limit": 33.63860325000078,
+      "observed": 38.053390000000036,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/p99Ms.p95",
+      "kind": "regression",
+      "limit": 34.216521150000155,
+      "observed": 39.78437699999995,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 410988748.8,
+      "observed": 397250560,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 416184115.2,
+      "observed": 401559552,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 2036.254504278339,
+      "observed": 2007.5647938881234,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 2058.263353074987,
+      "observed": 2031.532380381825,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/responseBytes.median",
+      "kind": "regression",
+      "limit": 0,
+      "observed": 0,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/responseBytes.p95",
+      "kind": "regression",
+      "limit": 0,
+      "observed": 0,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 18000,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 18000,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 118.88018065798947,
+      "observed": 119.81270680380838,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c32/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 118.89395523948006,
+      "observed": 119.88065478017633,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/durationMs.median",
+      "kind": "regression",
+      "limit": 15753.38578695,
+      "observed": 15003.140096,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/durationMs.p95",
+      "kind": "regression",
+      "limit": 15759.0520878,
+      "observed": 15007.699596999999,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/p50Ms.median",
+      "kind": "regression",
+      "limit": 3.119412449998799,
+      "observed": 3.079595999999583,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/p50Ms.p95",
+      "kind": "regression",
+      "limit": 3.198214950000147,
+      "observed": 3.1844209999981103,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/p95Ms.median",
+      "kind": "regression",
+      "limit": 7.5272473500000165,
+      "observed": 7.668216999998549,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/p95Ms.p95",
+      "kind": "regression",
+      "limit": 7.689718050001648,
+      "observed": 7.996347999999671,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/p99Ms.median",
+      "kind": "regression",
+      "limit": 10.475231549999625,
+      "observed": 12.385608000000502,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/p99Ms.p95",
+      "kind": "regression",
+      "limit": 10.783915799999887,
+      "observed": 12.821866000000227,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 382491648,
+      "observed": 366600192,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 390667468.8,
+      "observed": 652034048,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 2027.3360199020174,
+      "observed": 1999.7420801958076,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 2041.4809395577358,
+      "observed": 2052.328223854761,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/responseBytes.median",
+      "kind": "regression",
+      "limit": 0,
+      "observed": 0,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/responseBytes.p95",
+      "kind": "regression",
+      "limit": 0,
+      "observed": 0,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 18000,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 118.97281717797793,
+      "observed": 113.31028944243148,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-detail-identity-c8/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 118.97596233452184,
+      "observed": 119.97356516861902,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/durationMs.median",
+      "kind": "regression",
+      "limit": 15750.270197550002,
+      "observed": 15000.485101000002,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/durationMs.p95",
+      "kind": "regression",
+      "limit": 15750.646187850001,
+      "observed": 15005.170589,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/p50Ms.median",
+      "kind": "regression",
+      "limit": 0.6127211999991232,
+      "observed": 0.5720039999996516,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/p50Ms.p95",
+      "kind": "regression",
+      "limit": 0.6192553499994574,
+      "observed": 0.5794179999993503,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/p95Ms.median",
+      "kind": "regression",
+      "limit": 0.8218171500013342,
+      "observed": 0.7373320000006061,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/p95Ms.p95",
+      "kind": "regression",
+      "limit": 0.8305584000001546,
+      "observed": 0.7827959999995073,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/p99Ms.median",
+      "kind": "regression",
+      "limit": 3.251346000001013,
+      "observed": 2.5995960000000196,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/p99Ms.p95",
+      "kind": "regression",
+      "limit": 3.344725650000055,
+      "observed": 2.876189999999042,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 368221593.6,
+      "observed": 347783168,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 373498675.2,
+      "observed": 355749888,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 1497.5185601080195,
+      "observed": 1619.7476172540746,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 1507.788978431355,
+      "observed": 1643.6845852646406,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/responseBytes.median",
+      "kind": "regression",
+      "limit": 0,
+      "observed": 0,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/responseBytes.p95",
+      "kind": "regression",
+      "limit": 0,
+      "observed": 0,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 13650,
+      "observed": 13000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 13650,
+      "observed": 13000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 90.9974202837999,
+      "observed": 86.66312816492336,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c1/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 90.99858076186817,
+      "observed": 86.66542666929728,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/durationMs.median",
+      "kind": "regression",
+      "limit": 15763.6994529,
+      "observed": 15013.765460000002,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/durationMs.p95",
+      "kind": "regression",
+      "limit": 15770.626620000001,
+      "observed": 15023.584895000002,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/p50Ms.median",
+      "kind": "regression",
+      "limit": 13.549106549999397,
+      "observed": 13.12698299999829,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/p50Ms.p95",
+      "kind": "regression",
+      "limit": 13.78023884999957,
+      "observed": 14.109757999998692,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/p95Ms.median",
+      "kind": "regression",
+      "limit": 23.91078480000042,
+      "observed": 25.37388099999953,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/p95Ms.p95",
+      "kind": "regression",
+      "limit": 24.74683784999852,
+      "observed": 27.419808000002377,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/p99Ms.median",
+      "kind": "regression",
+      "limit": 32.805925949999526,
+      "observed": 35.73998000000029,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/p99Ms.p95",
+      "kind": "regression",
+      "limit": 33.66711810000029,
+      "observed": 41.65415600000051,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 405909504,
+      "observed": 393826304,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 411453235.2,
+      "observed": 398336000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 2096.6652776808874,
+      "observed": 2112.0050028902765,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 2124.4345322704175,
+      "observed": 2143.1665551008277,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/responseBytes.median",
+      "kind": "regression",
+      "limit": 0,
+      "observed": 0,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/responseBytes.p95",
+      "kind": "regression",
+      "limit": 0,
+      "observed": 0,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 18000,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 18000,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 118.8694962231557,
+      "observed": 119.83175218559576,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c32/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 118.89127982161062,
+      "observed": 119.89757782985207,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/durationMs.median",
+      "kind": "regression",
+      "limit": 15753.2427696,
+      "observed": 15003.942148999999,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/durationMs.p95",
+      "kind": "regression",
+      "limit": 15755.797436400002,
+      "observed": 15007.033581,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/p50Ms.median",
+      "kind": "regression",
+      "limit": 3.061523850000276,
+      "observed": 2.8008000000008906,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/p50Ms.p95",
+      "kind": "regression",
+      "limit": 3.1354091999995943,
+      "observed": 2.841926000000967,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/p95Ms.median",
+      "kind": "regression",
+      "limit": 7.350507149999794,
+      "observed": 6.550285000001168,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/p95Ms.p95",
+      "kind": "regression",
+      "limit": 7.621099500000492,
+      "observed": 6.648497000000134,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/p99Ms.median",
+      "kind": "regression",
+      "limit": 10.474821000000066,
+      "observed": 8.907891000000745,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/p99Ms.p95",
+      "kind": "regression",
+      "limit": 11.031387149999274,
+      "observed": 9.115336000000752,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 380336947.2,
+      "observed": 358375424,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 387188121.6,
+      "observed": 367030272,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 2077.79611158567,
+      "observed": 2316.7244751284734,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 2107.206791212306,
+      "observed": 2332.1663189026135,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/responseBytes.median",
+      "kind": "regression",
+      "limit": 0,
+      "observed": 0,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/responseBytes.p95",
+      "kind": "regression",
+      "limit": 0,
+      "observed": 0,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 118.97493112539239,
+      "observed": 113.27968352392195,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/304-listing-identity-c8/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 118.97635746242348,
+      "observed": 113.31174130511832,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/durationMs.median",
+      "kind": "regression",
+      "limit": 15751.5708,
+      "observed": 15001.948495999999,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/durationMs.p95",
+      "kind": "regression",
+      "limit": 15752.870076300002,
+      "observed": 15018.033241000001,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/p50Ms.median",
+      "kind": "regression",
+      "limit": 3.1982222999988155,
+      "observed": 2.9456389999977546,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/p50Ms.p95",
+      "kind": "regression",
+      "limit": 3.2223565500003133,
+      "observed": 2.971867000000202,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/p95Ms.median",
+      "kind": "regression",
+      "limit": 5.328584099999989,
+      "observed": 4.759162000002107,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/p95Ms.p95",
+      "kind": "regression",
+      "limit": 5.465762399999585,
+      "observed": 4.789847000000009,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/p99Ms.median",
+      "kind": "regression",
+      "limit": 6.263163900001564,
+      "observed": 5.382186999999249,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/p99Ms.p95",
+      "kind": "regression",
+      "limit": 6.4107298500015535,
+      "observed": 5.4620429999995395,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 358927564.8,
+      "observed": 340099072,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 422463283.2,
+      "observed": 397131776,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 291.04796142100355,
+      "observed": 320.67904989545434,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 296.24932238500384,
+      "observed": 323.02411379568883,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/responseBytes.median",
+      "kind": "regression",
+      "limit": 8290724.4,
+      "observed": 8265298,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/responseBytes.p95",
+      "kind": "regression",
+      "limit": 8438644.200000001,
+      "observed": 8325428,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 15750,
+      "observed": 15000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 16800,
+      "observed": 15000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 104.99040226737992,
+      "observed": 99.98619187357353,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 111.993764687421,
+      "observed": 99.9944249308313,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/durationMs.median",
+      "kind": "regression",
+      "limit": 15847.538617050004,
+      "observed": 15098.759771000001,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/durationMs.p95",
+      "kind": "regression",
+      "limit": 15851.336164649998,
+      "observed": 15110.223473999999,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/p50Ms.median",
+      "kind": "regression",
+      "limit": 98.07530565000043,
+      "observed": 98.34654800000044,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/p50Ms.p95",
+      "kind": "regression",
+      "limit": 98.8391659500021,
+      "observed": 101.06710499999826,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/p95Ms.median",
+      "kind": "regression",
+      "limit": 114.21533655000003,
+      "observed": 125.5876900000003,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/p95Ms.p95",
+      "kind": "regression",
+      "limit": 118.94072190000061,
+      "observed": 134.63629800000126,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/p99Ms.median",
+      "kind": "regression",
+      "limit": 199.06774440000078,
+      "observed": 201.05874199999926,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/p99Ms.p95",
+      "kind": "regression",
+      "limit": 200.4062192999999,
+      "observed": 207.6998429999985,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 384762470.40000004,
+      "observed": 373473280,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 389015961.6,
+      "observed": 378904576,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 312.489050688915,
+      "observed": 309.7447176305195,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 314.2262590637051,
+      "observed": 313.5808250023065,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/responseBytes.median",
+      "kind": "regression",
+      "limit": 8956363.5,
+      "observed": 8036804,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/responseBytes.p95",
+      "kind": "regression",
+      "limit": 9006872.700000001,
+      "observed": 8134730,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 118.26700281460785,
+      "observed": 112.58354896361129,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 118.28957997351054,
+      "observed": 112.6535148979646,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/durationMs.median",
+      "kind": "regression",
+      "limit": 15773.2719753,
+      "observed": 15023.016493,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/durationMs.p95",
+      "kind": "regression",
+      "limit": 15776.655750450003,
+      "observed": 15030.228497,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/p50Ms.median",
+      "kind": "regression",
+      "limit": 22.268626799999037,
+      "observed": 22.052185000000463,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/p50Ms.p95",
+      "kind": "regression",
+      "limit": 22.74084014999921,
+      "observed": 22.8265820000006,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/p95Ms.median",
+      "kind": "regression",
+      "limit": 45.72880305000108,
+      "observed": 45.46616400000039,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/p95Ms.p95",
+      "kind": "regression",
+      "limit": 46.61267835000008,
+      "observed": 47.424888000001374,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/p99Ms.median",
+      "kind": "regression",
+      "limit": 49.58554335000372,
+      "observed": 56.8680230000009,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/p99Ms.p95",
+      "kind": "regression",
+      "limit": 51.35725035000033,
+      "observed": 63.580423999999766,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 357142732.8,
+      "observed": 364294144,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 411367219.2,
+      "observed": 372408320,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 307.60999111481976,
+      "observed": 307.7369778967509,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 313.5174740206958,
+      "observed": 310.7352075199438,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/responseBytes.median",
+      "kind": "regression",
+      "limit": 8774169.6,
+      "observed": 7942314,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/responseBytes.p95",
+      "kind": "regression",
+      "limit": 8941932.3,
+      "observed": 8021342,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 118.81203216510565,
+      "observed": 113.13337601940793,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 118.82799423645457,
+      "observed": 113.1689472289623,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/durationMs.median",
+      "kind": "regression",
+      "limit": 15751.9138581,
+      "observed": 15002.148684999998,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/durationMs.p95",
+      "kind": "regression",
+      "limit": 15754.3598268,
+      "observed": 15003.886923000002,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/p50Ms.median",
+      "kind": "regression",
+      "limit": 4.600678950000293,
+      "observed": 4.198448999999528,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/p50Ms.p95",
+      "kind": "regression",
+      "limit": 4.731693749999931,
+      "observed": 4.253282000000581,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/p95Ms.median",
+      "kind": "regression",
+      "limit": 8.07503025000051,
+      "observed": 7.190264999999272,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/p95Ms.p95",
+      "kind": "regression",
+      "limit": 8.449294350000764,
+      "observed": 7.3330820000010135,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/p99Ms.median",
+      "kind": "regression",
+      "limit": 10.201962749998165,
+      "observed": 8.218800000000556,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/p99Ms.p95",
+      "kind": "regression",
+      "limit": 10.95485370000115,
+      "observed": 8.27075700000023,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 350717337.6,
+      "observed": 332406784,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 355134259.2,
+      "observed": 335585280,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 198.62946763074416,
+      "observed": 223.2899032833988,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 202.63233349513504,
+      "observed": 226.43423094429892,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/responseBytes.median",
+      "kind": "regression",
+      "limit": 41087484.9,
+      "observed": 41787900,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/responseBytes.p95",
+      "kind": "regression",
+      "limit": 41912640,
+      "observed": 42374178,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 16800,
+      "observed": 16000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 16800,
+      "observed": 16000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 111.9851683856719,
+      "observed": 106.65057325158385,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 111.99608868593077,
+      "observed": 106.6626898976016,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/durationMs.median",
+      "kind": "regression",
+      "limit": 15898.74140295,
+      "observed": 15159.881035000002,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/durationMs.p95",
+      "kind": "regression",
+      "limit": 15917.212073700002,
+      "observed": 15176.461175,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/p50Ms.median",
+      "kind": "regression",
+      "limit": 147.4259335499991,
+      "observed": 153.7889869999999,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/p50Ms.p95",
+      "kind": "regression",
+      "limit": 150.06081720000074,
+      "observed": 164.2880670000004,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/p95Ms.median",
+      "kind": "regression",
+      "limit": 167.81492279999839,
+      "observed": 208.72372899999937,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/p95Ms.p95",
+      "kind": "regression",
+      "limit": 170.90031734999977,
+      "observed": 218.1120719999999,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/p99Ms.median",
+      "kind": "regression",
+      "limit": 298.69374675000074,
+      "observed": 317.7466429999986,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/p99Ms.p95",
+      "kind": "regression",
+      "limit": 305.1224284500003,
+      "observed": 341.11114,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 380057395.2,
+      "observed": 361091072,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 385398988.8,
+      "observed": 372232192,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 208.41024896993287,
+      "observed": 197.27961696857426,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 210.35981653865414,
+      "observed": 206.6726010617558,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/responseBytes.median",
+      "kind": "regression",
+      "limit": 43484364,
+      "observed": 37259838,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/responseBytes.p95",
+      "kind": "regression",
+      "limit": 43929685.800000004,
+      "observed": 39105990,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 117.88505258771164,
+      "observed": 112.13641106598182,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 117.93822189964565,
+      "observed": 112.27672801934993,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/durationMs.median",
+      "kind": "regression",
+      "limit": 15783.274369800001,
+      "observed": 15032.276034999999,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/durationMs.p95",
+      "kind": "regression",
+      "limit": 15792.428316,
+      "observed": 15071.541314000002,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/p50Ms.median",
+      "kind": "regression",
+      "limit": 32.68670685000043,
+      "observed": 34.40944799999852,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/p50Ms.p95",
+      "kind": "regression",
+      "limit": 33.71973464999983,
+      "observed": 37.84543600000143,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/p95Ms.median",
+      "kind": "regression",
+      "limit": 68.94768089999926,
+      "observed": 72.29605399999855,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/p95Ms.p95",
+      "kind": "regression",
+      "limit": 70.16731575000058,
+      "observed": 79.08030400000098,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/p99Ms.median",
+      "kind": "regression",
+      "limit": 74.15541419999973,
+      "observed": 87.30272800000239,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/p99Ms.p95",
+      "kind": "regression",
+      "limit": 76.7370313500005,
+      "observed": 100.96400100000028,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 392138342.40000004,
+      "observed": 370167808,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 402976358.40000004,
+      "observed": 378716160,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 206.99770375585987,
+      "observed": 196.02249997597747,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 210.27425352875676,
+      "observed": 235.08234140209632,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/responseBytes.median",
+      "kind": "regression",
+      "limit": 42894967.5,
+      "observed": 36823248,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/responseBytes.p95",
+      "kind": "regression",
+      "limit": 43576047.9,
+      "observed": 44070642,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 118.74339894261114,
+      "observed": 113.07853029973296,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 118.75859519158257,
+      "observed": 113.11518664636215,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/durationMs.median",
+      "kind": "regression",
+      "limit": 15750.598688999999,
+      "observed": 15000.40841,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/durationMs.p95",
+      "kind": "regression",
+      "limit": 15750.794210549999,
+      "observed": 15000.555168000003,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/p50Ms.median",
+      "kind": "regression",
+      "limit": 0.7530904499998542,
+      "observed": 0.6838720000014291,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/p50Ms.p95",
+      "kind": "regression",
+      "limit": 0.7716229500015288,
+      "observed": 0.6939710000006016,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/p95Ms.median",
+      "kind": "regression",
+      "limit": 1.0599466500000745,
+      "observed": 0.9673089999996591,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/p95Ms.p95",
+      "kind": "regression",
+      "limit": 1.0873726500005432,
+      "observed": 0.976967999999033,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/p99Ms.median",
+      "kind": "regression",
+      "limit": 3.59108505000022,
+      "observed": 3.104003999998895,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/p99Ms.p95",
+      "kind": "regression",
+      "limit": 3.95811464999988,
+      "observed": 3.379958000001352,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 394331750.40000004,
+      "observed": 379154432,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 615276748.8000001,
+      "observed": 515395584,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 1176.6055917982383,
+      "observed": 1300.9518502108813,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 1198.581807458787,
+      "observed": 1322.158831059038,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/responseBytes.median",
+      "kind": "regression",
+      "limit": 33415319.700000003,
+      "observed": 33429195,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/responseBytes.p95",
+      "kind": "regression",
+      "limit": 34039451.25,
+      "observed": 33973929,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 14700,
+      "observed": 14000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 14700,
+      "observed": 14000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 97.99709217801578,
+      "observed": 93.32987001118501,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 97.99892207718977,
+      "observed": 93.33238826823622,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/durationMs.median",
+      "kind": "regression",
+      "limit": 15769.3252059,
+      "observed": 15022.377961000002,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/durationMs.p95",
+      "kind": "regression",
+      "limit": 15783.84305715,
+      "observed": 15060.735897999999,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/p50Ms.median",
+      "kind": "regression",
+      "limit": 19.553995650000797,
+      "observed": 19.493669999999838,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/p50Ms.p95",
+      "kind": "regression",
+      "limit": 19.69332749999985,
+      "observed": 20.082353999998304,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/p95Ms.median",
+      "kind": "regression",
+      "limit": 32.34604275000129,
+      "observed": 35.611401000000114,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/p95Ms.p95",
+      "kind": "regression",
+      "limit": 33.06097725000091,
+      "observed": 37.15881700000318,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/p99Ms.median",
+      "kind": "regression",
+      "limit": 44.387062649999464,
+      "observed": 47.29076999999961,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/p99Ms.p95",
+      "kind": "regression",
+      "limit": 45.2366963999998,
+      "observed": 50.34495599999991,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 412063948.8,
+      "observed": 394256384,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 414885273.6,
+      "observed": 400924672,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 1471.5320414995056,
+      "observed": 1471.006587505021,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 1504.103589646856,
+      "observed": 1483.4465725577402,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/responseBytes.median",
+      "kind": "regression",
+      "limit": 41849189.550000004,
+      "observed": 37843596,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/responseBytes.p95",
+      "kind": "regression",
+      "limit": 42766501.050000004,
+      "observed": 38186196,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 18000,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 18000,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 118.8504495048144,
+      "observed": 119.51511582911296,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 118.85592623757059,
+      "observed": 119.85382039183241,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/durationMs.median",
+      "kind": "regression",
+      "limit": 15754.747607550002,
+      "observed": 15004.204021000001,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/durationMs.p95",
+      "kind": "regression",
+      "limit": 15757.228868850001,
+      "observed": 15008.077511,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/p50Ms.median",
+      "kind": "regression",
+      "limit": 4.390613850000409,
+      "observed": 4.209569999999076,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/p50Ms.p95",
+      "kind": "regression",
+      "limit": 4.465677300000334,
+      "observed": 4.246227999999974,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/p95Ms.median",
+      "kind": "regression",
+      "limit": 9.848164200000793,
+      "observed": 9.803362000000561,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/p95Ms.p95",
+      "kind": "regression",
+      "limit": 10.076607449999756,
+      "observed": 10.030327999998917,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/p99Ms.median",
+      "kind": "regression",
+      "limit": 13.745961600000284,
+      "observed": 15.711908000000221,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/p99Ms.p95",
+      "kind": "regression",
+      "limit": 14.336586599998373,
+      "observed": 17.371515999999247,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 383377612.8,
+      "observed": 365891584,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 545943552,
+      "observed": 677818368,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 1476.5672784728888,
+      "observed": 1509.5380316481962,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 1495.6762570540022,
+      "observed": 1536.7088868601327,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/responseBytes.median",
+      "kind": "regression",
+      "limit": 41949913.95,
+      "observed": 38799450,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/responseBytes.p95",
+      "kind": "regression",
+      "limit": 42489508.95,
+      "observed": 39496641,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 18000,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 118.90990796372259,
+      "observed": 113.30109689769058,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 118.96625293820203,
+      "observed": 119.96571391892768,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/durationMs.median",
+      "kind": "regression",
+      "limit": 15750.42747495,
+      "observed": 15000.496562999999,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/durationMs.p95",
+      "kind": "regression",
+      "limit": 15753.97353495,
+      "observed": 15000.757741000001,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/p50Ms.median",
+      "kind": "regression",
+      "limit": 0.7984305000008135,
+      "observed": 0.7288760000001275,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/p50Ms.p95",
+      "kind": "regression",
+      "limit": 0.8047483500005002,
+      "observed": 0.7511570000006031,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/p95Ms.median",
+      "kind": "regression",
+      "limit": 1.1061203999986902,
+      "observed": 1.019866999999067,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/p95Ms.p95",
+      "kind": "regression",
+      "limit": 1.1344357500003752,
+      "observed": 1.0368280000002414,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/p99Ms.median",
+      "kind": "regression",
+      "limit": 4.299152549999508,
+      "observed": 3.6574929999987944,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/p99Ms.p95",
+      "kind": "regression",
+      "limit": 4.503371249998873,
+      "observed": 3.821175000000949,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 583394918.4,
+      "observed": 338784256,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 597729484.8000001,
+      "observed": 583856128,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 1113.8783942795217,
+      "observed": 1221.0867146033374,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 1124.265000281355,
+      "observed": 1240.8435766357782,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/responseBytes.median",
+      "kind": "regression",
+      "limit": 230270010.60000002,
+      "observed": 228394673,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/responseBytes.p95",
+      "kind": "regression",
+      "limit": 232417172.4,
+      "observed": 232085497,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 14700,
+      "observed": 13000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 14700,
+      "observed": 14000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 97.9959511470179,
+      "observed": 86.66311037082457,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 97.99718966272744,
+      "observed": 93.33105856299883,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/durationMs.median",
+      "kind": "regression",
+      "limit": 15769.9437126,
+      "observed": 15020.943462000001,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/durationMs.p95",
+      "kind": "regression",
+      "limit": 15775.920137250001,
+      "observed": 15060.053709000002,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/p50Ms.median",
+      "kind": "regression",
+      "limit": 20.066654999999127,
+      "observed": 19.511900999998034,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/p50Ms.p95",
+      "kind": "regression",
+      "limit": 20.529415200002042,
+      "observed": 20.196342000000186,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/p95Ms.median",
+      "kind": "regression",
+      "limit": 34.11024120000002,
+      "observed": 36.90831900000012,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/p95Ms.p95",
+      "kind": "regression",
+      "limit": 35.96054174999981,
+      "observed": 38.258567999999286,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/p99Ms.median",
+      "kind": "regression",
+      "limit": 46.55668605000083,
+      "observed": 51.34115899999961,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/p99Ms.p95",
+      "kind": "regression",
+      "limit": 48.37275134999836,
+      "observed": 57.62019899999905,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 410769408,
+      "observed": 390176768,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 524818022.40000004,
+      "observed": 444448768,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 1426.7017088499938,
+      "observed": 1441.0196060838546,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 1455.4093965501731,
+      "observed": 1490.6774926905657,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/responseBytes.median",
+      "kind": "regression",
+      "limit": 295378764.45,
+      "observed": 270041133,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/responseBytes.p95",
+      "kind": "regression",
+      "limit": 301231089.6,
+      "observed": 279205848,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 18000,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 118.83942782537673,
+      "observed": 113.15984433977302,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 118.85260644558288,
+      "observed": 119.78968644540467,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/durationMs.median",
+      "kind": "regression",
+      "limit": 15754.70028825,
+      "observed": 15004.363435,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/durationMs.p95",
+      "kind": "regression",
+      "limit": 15758.462506500004,
+      "observed": 15013.108711,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/p50Ms.median",
+      "kind": "regression",
+      "limit": 4.438742699998147,
+      "observed": 4.068127000000459,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/p50Ms.p95",
+      "kind": "regression",
+      "limit": 4.530886499999951,
+      "observed": 4.087810999999419,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/p95Ms.median",
+      "kind": "regression",
+      "limit": 10.218487650000133,
+      "observed": 9.023932000000059,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/p95Ms.p95",
+      "kind": "regression",
+      "limit": 10.397788799998308,
+      "observed": 9.322701000000961,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/p99Ms.median",
+      "kind": "regression",
+      "limit": 14.425059600001806,
+      "observed": 12.940718999998353,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/p99Ms.p95",
+      "kind": "regression",
+      "limit": 15.063779849999628,
+      "observed": 13.534739000000627,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 377377996.8,
+      "observed": 361484288,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 699120844.8000001,
+      "observed": 664608768,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/requestsPerSecond.median",
+      "kind": "regression",
+      "limit": 1445.6299268157286,
+      "observed": 1590.0041413519652,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/requestsPerSecond.p95",
+      "kind": "regression",
+      "limit": 1460.1395248892766,
+      "observed": 1605.5716885150498,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/responseBytes.median",
+      "kind": "regression",
+      "limit": 299005373.1,
+      "observed": 297472933,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/responseBytes.p95",
+      "kind": "regression",
+      "limit": 301938081.90000004,
+      "observed": 300403148,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/serverCpuMs.median",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/serverCpuMs.p95",
+      "kind": "regression",
+      "limit": 17850,
+      "observed": 17000,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/serverCpuPercent.median",
+      "kind": "regression",
+      "limit": 118.96307202248204,
+      "observed": 113.29927521619896,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/serverCpuPercent.p95",
+      "kind": "regression",
+      "limit": 118.96577219113081,
+      "observed": 113.30319352816227,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c1/requestsPerSecond.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 0.8,
+      "observed": 0.7799508602980868,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c8/requestsPerSecond.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 0.8,
+      "observed": 0.7096351258884143,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-listing-identity-c32/requestsPerSecond.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 0.8,
+      "observed": 0.7241927465307568,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c1/requestsPerSecond.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 0.8,
+      "observed": 0.8045274783876782,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c8/requestsPerSecond.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 0.8,
+      "observed": 0.8068387223502855,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/dynamic-detail-identity-c32/requestsPerSecond.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 0.8,
+      "observed": 0.8097566679286249,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c1/requestsPerSecond.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 0.9,
+      "observed": 0.9326693137366431,
+      "status": "pass"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c8/requestsPerSecond.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 0.9,
+      "observed": 0.7690637298310251,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-listing-identity-c32/requestsPerSecond.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 0.9,
+      "observed": 0.7411664507331144,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c1/requestsPerSecond.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 0.9,
+      "observed": 0.7981485618921668,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c8/requestsPerSecond.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 0.9,
+      "observed": 0.7127436714695635,
+      "status": "fail"
+    },
+    {
+      "id": "matched-runtime/server/hit-detail-identity-c32/requestsPerSecond.median-vs-next",
+      "kind": "competitive-target",
+      "limit": 0.9,
+      "observed": 0.6977056811283064,
+      "status": "fail"
+    }
+  ],
+  "schema": "kovo-comparison-performance-evaluation/v2",
+  "verdict": {
+    "failures": [
+      "matched-runtime/server/304-detail-identity-c32/p50Ms.p95",
+      "matched-runtime/server/304-detail-identity-c32/p95Ms.median",
+      "matched-runtime/server/304-detail-identity-c32/p95Ms.p95",
+      "matched-runtime/server/304-detail-identity-c32/p99Ms.median",
+      "matched-runtime/server/304-detail-identity-c32/p99Ms.p95",
+      "matched-runtime/server/304-detail-identity-c32/requestsPerSecond.median",
+      "matched-runtime/server/304-detail-identity-c32/requestsPerSecond.p95",
+      "matched-runtime/server/304-detail-identity-c32/serverCpuMs.median",
+      "matched-runtime/server/304-detail-identity-c32/serverCpuMs.p95",
+      "matched-runtime/server/304-detail-identity-c32/serverCpuPercent.median",
+      "matched-runtime/server/304-detail-identity-c32/serverCpuPercent.p95",
+      "matched-runtime/server/304-detail-identity-c8/p95Ms.median",
+      "matched-runtime/server/304-detail-identity-c8/p95Ms.p95",
+      "matched-runtime/server/304-detail-identity-c8/p99Ms.median",
+      "matched-runtime/server/304-detail-identity-c8/p99Ms.p95",
+      "matched-runtime/server/304-detail-identity-c8/peakRssBytes.p95",
+      "matched-runtime/server/304-detail-identity-c8/requestsPerSecond.median",
+      "matched-runtime/server/304-detail-identity-c8/serverCpuMs.p95",
+      "matched-runtime/server/304-detail-identity-c8/serverCpuPercent.p95",
+      "matched-runtime/server/304-listing-identity-c32/p50Ms.p95",
+      "matched-runtime/server/304-listing-identity-c32/p95Ms.median",
+      "matched-runtime/server/304-listing-identity-c32/p95Ms.p95",
+      "matched-runtime/server/304-listing-identity-c32/p99Ms.median",
+      "matched-runtime/server/304-listing-identity-c32/p99Ms.p95",
+      "matched-runtime/server/304-listing-identity-c32/serverCpuMs.median",
+      "matched-runtime/server/304-listing-identity-c32/serverCpuMs.p95",
+      "matched-runtime/server/304-listing-identity-c32/serverCpuPercent.median",
+      "matched-runtime/server/304-listing-identity-c32/serverCpuPercent.p95",
+      "matched-runtime/server/dynamic-detail-identity-c32/p50Ms.median",
+      "matched-runtime/server/dynamic-detail-identity-c32/p50Ms.p95",
+      "matched-runtime/server/dynamic-detail-identity-c32/p95Ms.median",
+      "matched-runtime/server/dynamic-detail-identity-c32/p95Ms.p95",
+      "matched-runtime/server/dynamic-detail-identity-c32/p99Ms.median",
+      "matched-runtime/server/dynamic-detail-identity-c32/p99Ms.p95",
+      "matched-runtime/server/dynamic-detail-identity-c32/requestsPerSecond.median",
+      "matched-runtime/server/dynamic-detail-identity-c32/requestsPerSecond.p95",
+      "matched-runtime/server/dynamic-detail-identity-c8/p50Ms.p95",
+      "matched-runtime/server/dynamic-detail-identity-c8/p95Ms.p95",
+      "matched-runtime/server/dynamic-detail-identity-c8/p99Ms.median",
+      "matched-runtime/server/dynamic-detail-identity-c8/p99Ms.p95",
+      "matched-runtime/server/dynamic-detail-identity-c8/peakRssBytes.median",
+      "matched-runtime/server/dynamic-detail-identity-c8/requestsPerSecond.p95",
+      "matched-runtime/server/dynamic-listing-identity-c1/responseBytes.median",
+      "matched-runtime/server/dynamic-listing-identity-c1/responseBytes.p95",
+      "matched-runtime/server/dynamic-listing-identity-c32/p50Ms.median",
+      "matched-runtime/server/dynamic-listing-identity-c32/p50Ms.p95",
+      "matched-runtime/server/dynamic-listing-identity-c32/p95Ms.median",
+      "matched-runtime/server/dynamic-listing-identity-c32/p95Ms.p95",
+      "matched-runtime/server/dynamic-listing-identity-c32/p99Ms.median",
+      "matched-runtime/server/dynamic-listing-identity-c32/p99Ms.p95",
+      "matched-runtime/server/dynamic-listing-identity-c32/requestsPerSecond.median",
+      "matched-runtime/server/dynamic-listing-identity-c32/requestsPerSecond.p95",
+      "matched-runtime/server/dynamic-listing-identity-c8/p50Ms.median",
+      "matched-runtime/server/dynamic-listing-identity-c8/p50Ms.p95",
+      "matched-runtime/server/dynamic-listing-identity-c8/p95Ms.median",
+      "matched-runtime/server/dynamic-listing-identity-c8/p95Ms.p95",
+      "matched-runtime/server/dynamic-listing-identity-c8/p99Ms.median",
+      "matched-runtime/server/dynamic-listing-identity-c8/p99Ms.p95",
+      "matched-runtime/server/dynamic-listing-identity-c8/requestsPerSecond.median",
+      "matched-runtime/server/dynamic-listing-identity-c8/responseBytes.p95",
+      "matched-runtime/server/hit-detail-identity-c1/responseBytes.median",
+      "matched-runtime/server/hit-detail-identity-c32/p50Ms.p95",
+      "matched-runtime/server/hit-detail-identity-c32/p95Ms.median",
+      "matched-runtime/server/hit-detail-identity-c32/p95Ms.p95",
+      "matched-runtime/server/hit-detail-identity-c32/p99Ms.median",
+      "matched-runtime/server/hit-detail-identity-c32/p99Ms.p95",
+      "matched-runtime/server/hit-detail-identity-c32/requestsPerSecond.median",
+      "matched-runtime/server/hit-detail-identity-c32/requestsPerSecond.p95",
+      "matched-runtime/server/hit-detail-identity-c32/serverCpuMs.median",
+      "matched-runtime/server/hit-detail-identity-c32/serverCpuMs.p95",
+      "matched-runtime/server/hit-detail-identity-c32/serverCpuPercent.median",
+      "matched-runtime/server/hit-detail-identity-c32/serverCpuPercent.p95",
+      "matched-runtime/server/hit-detail-identity-c8/p99Ms.median",
+      "matched-runtime/server/hit-detail-identity-c8/p99Ms.p95",
+      "matched-runtime/server/hit-detail-identity-c8/peakRssBytes.p95",
+      "matched-runtime/server/hit-detail-identity-c8/serverCpuMs.p95",
+      "matched-runtime/server/hit-detail-identity-c8/serverCpuPercent.p95",
+      "matched-runtime/server/hit-listing-identity-c32/p95Ms.median",
+      "matched-runtime/server/hit-listing-identity-c32/p95Ms.p95",
+      "matched-runtime/server/hit-listing-identity-c32/p99Ms.median",
+      "matched-runtime/server/hit-listing-identity-c32/p99Ms.p95",
+      "matched-runtime/server/hit-listing-identity-c32/serverCpuMs.p95",
+      "matched-runtime/server/hit-listing-identity-c32/serverCpuPercent.p95",
+      "matched-runtime/server/dynamic-listing-identity-c1/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/dynamic-listing-identity-c8/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/dynamic-listing-identity-c32/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/hit-listing-identity-c8/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/hit-listing-identity-c32/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/hit-detail-identity-c1/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/hit-detail-identity-c8/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/hit-detail-identity-c32/requestsPerSecond.median-vs-next"
+    ],
+    "reasons": [],
+    "status": "regression"
+  }
+}
