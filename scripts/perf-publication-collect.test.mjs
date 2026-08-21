@@ -194,11 +194,12 @@ describe('metrics-blind performance publication collection', () => {
     );
   });
 
-  it('retains a qualifying Production bytes artifact even when the selected run has no family artifact', async () => {
+  it('retains Production bytes when a failed family producer emitted no family artifact', async () => {
     const root = await temporaryRoot();
     const checkout = await realDirectory(path.join(root, 'checkout'));
     const campaign = campaignFixture([{ family: 'browser', productionBytes: true, runId: 1001 }]);
     const fixture = campaign.byRun.get(1001);
+    setFamilyProducerConclusion(campaign, fixture, 'failure');
     campaign.endpoints.set(
       `repos/${REPOSITORY}/actions/runs/1001/artifacts?per_page=100`,
       jsonBytes({
@@ -219,6 +220,341 @@ describe('metrics-blind performance publication collection', () => {
 
     expect(result.ledger.candidates).toEqual([]);
     expect(result.ledger.productionBytes).toHaveLength(1);
+  });
+
+  it('rejects a successful family producer with no literal family artifact', async () => {
+    const root = await temporaryRoot();
+    const checkout = await realDirectory(path.join(root, 'checkout'));
+    const campaign = campaignFixture([{ family: 'browser', runId: 1001 }]);
+    const fixture = campaign.byRun.get(1001);
+    campaign.endpoints.set(
+      `repos/${REPOSITORY}/actions/runs/1001/artifacts?per_page=100`,
+      jsonBytes({
+        artifacts: [
+          { id: fixture.productionBytes.artifact.id, name: fixture.productionBytes.artifact.name },
+        ],
+        total_count: 1,
+      }),
+    );
+
+    await expect(
+      collectPerformancePublicationRuns({
+        ...campaignBoundary(campaign),
+        checkoutDirectory: checkout,
+        operations: fixtureOperations(campaign, checkout),
+        outDirectory: path.join(root, 'missing-success-artifact'),
+        repository: REPOSITORY,
+        runIds: [1001],
+        sourceSha: SOURCE,
+      }),
+    ).rejects.toThrow(
+      'successful Browser matrix producer has no literal kovo-perf-browser-matrix artifact',
+    );
+  });
+
+  it('keeps failed producer diagnostics in campaign custody without fetching or admitting them', async () => {
+    const root = await temporaryRoot();
+    const checkout = await realDirectory(path.join(root, 'checkout'));
+    const campaign = campaignFixture([
+      { family: 'browser', runId: 1001 },
+      { family: 'server', runId: 1002 },
+      { family: 'dev-n24', runId: 1003 },
+    ]);
+    const failedBrowser = campaign.byRun.get(1001);
+    const cancelledDev = campaign.byRun.get(1003);
+    setFamilyProducerConclusion(campaign, failedBrowser, 'failure');
+    setFamilyProducerConclusion(campaign, cancelledDev, 'cancelled');
+    const diagnosticArchive = storedZip([
+      { bytes: failedBrowser.reportBytes, name: 'comparison.json' },
+      {
+        bytes: Buffer.from('{"diagnostic":true}\n', 'utf8'),
+        name: 'raw/matched-l1-0-kovo-browser-failed.json',
+      },
+    ]);
+    setFamilyArchive(campaign, failedBrowser, diagnosticArchive);
+
+    const forbiddenEndpoints = new Set(
+      [failedBrowser, cancelledDev].flatMap((fixture) => {
+        const endpoint = `repos/${REPOSITORY}/actions/artifacts/${String(fixture.artifact.id)}`;
+        return [endpoint, `${endpoint}/zip`];
+      }),
+    );
+    const fetchedFailedArtifacts = [];
+    const operations = fixtureOperations(campaign, checkout);
+    const fetchApi = operations.fetchApi.bind(operations);
+    operations.fetchApi = async (endpoint, options) => {
+      if (forbiddenEndpoints.has(endpoint)) {
+        fetchedFailedArtifacts.push(endpoint);
+        throw new Error(`failed producer artifact was fetched: ${endpoint}`);
+      }
+      return fetchApi(endpoint, options);
+    };
+    const collection = path.join(root, 'producer-filtered');
+
+    const result = await collectPerformancePublicationRuns({
+      ...campaignBoundary(campaign),
+      checkoutDirectory: checkout,
+      operations,
+      outDirectory: collection,
+      repository: REPOSITORY,
+      runIds: [1001, 1002, 1003],
+      sourceSha: SOURCE,
+    });
+
+    expect(fetchedFailedArtifacts).toEqual([]);
+    expect(result.ledger.candidates.map(({ family, runId }) => ({ family, runId }))).toEqual([
+      { family: 'server', runId: 1002 },
+    ]);
+    expect(result.ledger.excludedFamilyArtifacts).toEqual([
+      {
+        artifactId: failedBrowser.artifact.id,
+        conclusion: 'failure',
+        family: 'browser',
+        producerJobId: failedBrowser.jobs.jobs.find(({ name }) => name === 'Browser matrix').id,
+        runId: 1001,
+      },
+      {
+        artifactId: cancelledDev.artifact.id,
+        conclusion: 'cancelled',
+        family: 'dev-n24',
+        producerJobId: cancelledDev.jobs.jobs.find(({ name }) => name === 'N=24 developer loop').id,
+        runId: 1003,
+      },
+    ]);
+    expect(result.ledger.productionBytes).toHaveLength(3);
+    const failedRun = result.ledger.campaign.runs.find(({ runId }) => runId === 1001);
+    const rawListing = JSON.parse(
+      await readFile(path.join(collection, failedRun.artifactsApiMetadata.path), 'utf8'),
+    );
+    expect(rawListing.artifacts).toContainEqual({
+      id: failedBrowser.artifact.id,
+      name: failedBrowser.artifact.name,
+    });
+
+    const loaded = await loadOneCollection(checkout, collection);
+    expect(loaded.candidates.map(({ family, runId }) => ({ family, runId }))).toEqual([
+      { family: 'server', runId: 1002 },
+    ]);
+    expect(loaded.excludedFamilyArtifacts).toEqual(result.ledger.excludedFamilyArtifacts);
+    expect(loaded.productionBytes).toHaveLength(3);
+  });
+
+  it('rejects ledger admission and saved-job disposition tampering for an excluded artifact', async () => {
+    const root = await temporaryRoot();
+    const checkout = await realDirectory(path.join(root, 'checkout'));
+    const campaign = campaignFixture([
+      { family: 'browser', runId: 1001 },
+      { family: 'server', runId: 1002 },
+    ]);
+    const failedBrowser = campaign.byRun.get(1001);
+    setFamilyProducerConclusion(campaign, failedBrowser, 'failure');
+    const collection = path.join(root, 'excluded-custody');
+    await collectPerformancePublicationRuns({
+      ...campaignBoundary(campaign),
+      checkoutDirectory: checkout,
+      operations: fixtureOperations(campaign, checkout),
+      outDirectory: collection,
+      repository: REPOSITORY,
+      runIds: [1001, 1002],
+      sourceSha: SOURCE,
+    });
+    const ledgerPath = path.join(collection, 'collection.json');
+    const original = JSON.parse(await readFile(ledgerPath, 'utf8'));
+
+    const omittedExclusion = structuredClone(original);
+    omittedExclusion.excludedFamilyArtifacts = [];
+    await writeFile(ledgerPath, `${JSON.stringify(omittedExclusion, null, 2)}\n`);
+    await expect(loadOneCollection(checkout, collection)).rejects.toThrow(
+      'omits or invents a campaign artifact-listing candidate',
+    );
+
+    const inserted = structuredClone(original);
+    inserted.candidates.push({
+      ...structuredClone(inserted.candidates[0]),
+      artifactId: failedBrowser.artifact.id,
+      family: 'browser',
+      runCreatedAt: failedBrowser.run.created_at,
+      runId: 1001,
+    });
+    await writeFile(ledgerPath, `${JSON.stringify(inserted, null, 2)}\n`);
+    await expect(loadOneCollection(checkout, collection)).rejects.toThrow();
+
+    await writeFile(ledgerPath, `${JSON.stringify(original, null, 2)}\n`);
+    const bytesEntry = original.productionBytes.find(({ runId }) => runId === 1001);
+    const canonicalJobsPath = path.join(collection, bytesEntry.descriptor.jobsApiMetadata);
+    const savedJobs = JSON.parse(await readFile(canonicalJobsPath, 'utf8'));
+    savedJobs.jobs.find(({ name }) => name === 'Browser matrix').conclusion = 'success';
+    await writeFile(canonicalJobsPath, `${JSON.stringify(savedJobs)}\n`);
+    await expect(loadOneCollection(checkout, collection)).rejects.toThrow(
+      /successful Browser matrix producer|omits or invents/u,
+    );
+  });
+
+  it('requires every family candidate jobs copy to equal its Production bytes authority', async () => {
+    const root = await temporaryRoot();
+    const checkout = await realDirectory(path.join(root, 'checkout'));
+    const campaign = campaignFixture([{ family: 'browser', runId: 1001 }]);
+    const collection = path.join(root, 'canonical-jobs');
+    const result = await collectPerformancePublicationRuns({
+      ...campaignBoundary(campaign),
+      checkoutDirectory: checkout,
+      operations: fixtureOperations(campaign, checkout),
+      outDirectory: collection,
+      repository: REPOSITORY,
+      runIds: [1001],
+      sourceSha: SOURCE,
+    });
+    const familyJobsPath = path.join(
+      collection,
+      result.ledger.candidates[0].descriptor.jobsApiMetadata,
+    );
+    const originalJobs = await readFile(familyJobsPath);
+    await writeFile(familyJobsPath, Buffer.concat([originalJobs, Buffer.from('\n', 'utf8')]));
+
+    await expect(loadOneCollection(checkout, collection)).rejects.toThrow(
+      "browser candidate jobs API differs from its run's Production bytes authority",
+    );
+  });
+
+  it('still rejects a successful producer artifact with a diagnostic ZIP member', async () => {
+    const root = await temporaryRoot();
+    const checkout = await realDirectory(path.join(root, 'checkout'));
+    const campaign = campaignFixture([{ family: 'browser', runId: 1001 }]);
+    const fixture = campaign.byRun.get(1001);
+    setFamilyArchive(
+      campaign,
+      fixture,
+      storedZip([
+        { bytes: fixture.reportBytes, name: 'comparison.json' },
+        { bytes: Buffer.from('{}\n', 'utf8'), name: 'raw/unexpected.json' },
+      ]),
+    );
+
+    await expect(
+      collectPerformancePublicationRuns({
+        ...campaignBoundary(campaign),
+        checkoutDirectory: checkout,
+        operations: fixtureOperations(campaign, checkout),
+        outDirectory: path.join(root, 'successful-diagnostic'),
+        repository: REPOSITORY,
+        runIds: [1001],
+        sourceSha: SOURCE,
+      }),
+    ).rejects.toThrow('artifact ZIP must contain exactly its one literal report member');
+  });
+
+  it('fails closed on ambiguous, foreign, and malformed family producer jobs before fetching', async () => {
+    const root = await temporaryRoot();
+    const checkout = await realDirectory(path.join(root, 'checkout'));
+    const cases = [
+      {
+        label: 'ambiguous',
+        mutate(fixture) {
+          const producer = fixture.jobs.jobs.find(
+            ({ name }) => name === PERF_PUBLICATION_FAMILIES.browser.workflowJobName,
+          );
+          producer.conclusion = 'failure';
+          fixture.jobs.jobs.push({
+            ...structuredClone(producer),
+            id: producer.id + 1_000_000,
+            url: `https://api.github.com/repos/${REPOSITORY}/actions/jobs/${String(producer.id + 1_000_000)}`,
+          });
+          fixture.jobs.total_count = fixture.jobs.jobs.length;
+        },
+        message: 'exact Browser matrix producers',
+      },
+      {
+        label: 'foreign',
+        mutate(fixture) {
+          const producer = fixture.jobs.jobs.find(
+            ({ name }) => name === PERF_PUBLICATION_FAMILIES.browser.workflowJobName,
+          );
+          producer.conclusion = 'failure';
+          producer.head_sha = 'b'.repeat(40);
+          producer.run_id = 9999;
+        },
+        message: 'expected artifact producer is not one exact authorized workflow job',
+      },
+      {
+        label: 'wrong-attempt',
+        mutate(fixture) {
+          const producer = fixture.jobs.jobs.find(
+            ({ name }) => name === PERF_PUBLICATION_FAMILIES.browser.workflowJobName,
+          );
+          producer.conclusion = 'cancelled';
+          producer.run_attempt = 2;
+        },
+        message: 'exact Browser matrix producers',
+      },
+      {
+        label: 'wrong-name',
+        mutate(fixture) {
+          const producer = fixture.jobs.jobs.find(
+            ({ name }) => name === PERF_PUBLICATION_FAMILIES.browser.workflowJobName,
+          );
+          producer.conclusion = 'cancelled';
+          producer.name = 'Foreign Browser matrix';
+        },
+        message: 'exact Browser matrix producers',
+      },
+      {
+        label: 'malformed',
+        mutate(fixture) {
+          const producer = fixture.jobs.jobs.find(
+            ({ name }) => name === PERF_PUBLICATION_FAMILIES.browser.workflowJobName,
+          );
+          producer.completed_at = null;
+          producer.conclusion = 'cancelled';
+          producer.status = 'in_progress';
+        },
+        message: 'expected artifact producer is not one exact authorized workflow job',
+      },
+      {
+        label: 'unknown-conclusion',
+        mutate(fixture) {
+          fixture.jobs.jobs.find(
+            ({ name }) => name === PERF_PUBLICATION_FAMILIES.browser.workflowJobName,
+          ).conclusion = 'mystery';
+        },
+        message: 'expected artifact producer is not one exact authorized workflow job',
+      },
+    ];
+
+    for (const [index, testCase] of cases.entries()) {
+      const runId = 1101 + index;
+      const campaign = campaignFixture([{ family: 'browser', runId }]);
+      const fixture = campaign.byRun.get(runId);
+      testCase.mutate(fixture);
+      fixture.jobsApiBytes = jsonBytes(fixture.jobs);
+      campaign.endpoints.set(
+        `repos/${REPOSITORY}/actions/runs/${String(runId)}/jobs?filter=all&per_page=100`,
+        fixture.jobsApiBytes,
+      );
+      const familyArtifactEndpoint = `repos/${REPOSITORY}/actions/artifacts/${String(fixture.artifact.id)}`;
+      const fetchedFamilyArtifacts = [];
+      const operations = fixtureOperations(campaign, checkout);
+      const fetchApi = operations.fetchApi.bind(operations);
+      operations.fetchApi = async (endpoint, options) => {
+        if (endpoint === familyArtifactEndpoint || endpoint === `${familyArtifactEndpoint}/zip`) {
+          fetchedFamilyArtifacts.push(endpoint);
+        }
+        return fetchApi(endpoint, options);
+      };
+
+      await expect(
+        collectPerformancePublicationRuns({
+          ...campaignBoundary(campaign),
+          checkoutDirectory: checkout,
+          operations,
+          outDirectory: path.join(root, testCase.label),
+          repository: REPOSITORY,
+          runIds: [runId],
+          sourceSha: SOURCE,
+        }),
+        testCase.label,
+      ).rejects.toThrow(testCase.message);
+      expect(fetchedFamilyArtifacts, testCase.label).toEqual([]);
+    }
   });
 
   it('never publishes a partial collection after a later authenticated API call fails', async () => {
@@ -279,6 +615,13 @@ describe('metrics-blind performance publication collection', () => {
     const omittedCandidate = structuredClone(original);
     omittedCandidate.productionBytes.shift();
     await writeFile(ledgerPath, `${JSON.stringify(omittedCandidate, null, 2)}\n`);
+    await expect(loadOneCollection(checkout, collection)).rejects.toThrow(
+      'omits or invents a campaign artifact-listing candidate',
+    );
+
+    const omittedSuccessfulFamily = structuredClone(original);
+    omittedSuccessfulFamily.candidates.shift();
+    await writeFile(ledgerPath, `${JSON.stringify(omittedSuccessfulFamily, null, 2)}\n`);
     await expect(loadOneCollection(checkout, collection)).rejects.toThrow(
       'omits or invents a campaign artifact-listing candidate',
     );
@@ -790,6 +1133,8 @@ describe('metrics-blind performance publication collection', () => {
       }
     }
     const campaign = campaignFixture(assignments);
+    const excludedBrowser = campaign.byRun.get(assignments[0].runId);
+    setFamilyProducerConclusion(campaign, excludedBrowser, 'failure');
     const collection = path.join(root, 'collection');
     await collectPerformancePublicationRuns({
       ...campaignBoundary(campaign),
@@ -838,7 +1183,16 @@ describe('metrics-blind performance publication collection', () => {
     for (const relative of Object.values(result.manifest.productionBytes)) {
       await expect(readFile(path.join(publication, relative))).resolves.not.toHaveLength(0);
     }
-    expect(result.manifest.campaign.familyCandidates).toHaveLength(49);
+    expect(result.manifest.campaign.familyCandidates).toHaveLength(48);
+    expect(result.manifest.campaign.excludedFamilyArtifacts).toEqual([
+      {
+        artifactId: excludedBrowser.artifact.id,
+        conclusion: 'failure',
+        family: 'browser',
+        producerJobId: excludedBrowser.jobs.jobs.find(({ name }) => name === 'Browser matrix').id,
+        runId: excludedBrowser.run.id,
+      },
+    ]);
     expect(result.manifest.campaign.productionBytesCandidates).toHaveLength(49);
     for (const candidate of [
       ...result.manifest.campaign.familyCandidates,
@@ -1360,6 +1714,7 @@ function campaignFixture(assignments) {
       productArtifact,
       runId: assignment.runId,
     });
+    addSkippedFamilyProducerJobs(fixture);
     let bytesFixture = null;
     if (producesBytes) {
       bytesFixture = productionBytesReportFixture({
@@ -1401,6 +1756,24 @@ function campaignFixture(assignments) {
     }
   }
   return { byRun, endpoints };
+}
+
+function addSkippedFamilyProducerJobs(fixture) {
+  const template = fixture.jobs.jobs[0];
+  for (const [familyIndex, familyName] of PERF_PUBLICATION_FAMILY_NAMES.entries()) {
+    const workflowJobName = PERF_PUBLICATION_FAMILIES[familyName].workflowJobName;
+    if (fixture.jobs.jobs.some(({ name }) => name === workflowJobName)) continue;
+    const jobId = 230_000_000 + fixture.run.id * 10 + familyIndex;
+    fixture.jobs.jobs.push({
+      ...structuredClone(template),
+      conclusion: 'skipped',
+      id: jobId,
+      name: workflowJobName,
+      url: `https://api.github.com/repos/${REPOSITORY}/actions/jobs/${String(jobId)}`,
+    });
+  }
+  fixture.jobs.total_count = fixture.jobs.jobs.length;
+  fixture.jobsApiBytes = jsonBytes(fixture.jobs);
 }
 
 function reportFixture({
@@ -1735,6 +2108,28 @@ function markProductionBudgetFailure(fixture) {
   fixture.jobsApiBytes = jsonBytes(fixture.jobs);
   fixture.run.conclusion = 'failure';
   fixture.runApiBytes = jsonBytes(fixture.run);
+}
+
+function setFamilyProducerConclusion(campaign, fixture, conclusion) {
+  fixture.jobs.jobs.find(
+    ({ name }) => name === PERF_PUBLICATION_FAMILIES[fixture.familyName].workflowJobName,
+  ).conclusion = conclusion;
+  fixture.jobsApiBytes = jsonBytes(fixture.jobs);
+  campaign.endpoints.set(
+    `repos/${REPOSITORY}/actions/runs/${String(fixture.run.id)}/jobs?filter=all&per_page=100`,
+    fixture.jobsApiBytes,
+  );
+}
+
+function setFamilyArchive(campaign, fixture, archiveBytes) {
+  fixture.archiveBytes = archiveBytes;
+  updateArtifact(fixture, {
+    digest: digest(archiveBytes),
+    size_in_bytes: archiveBytes.length,
+  });
+  const artifactPath = `repos/${REPOSITORY}/actions/artifacts/${String(fixture.artifact.id)}`;
+  campaign.endpoints.set(artifactPath, fixture.artifactApiBytes);
+  campaign.endpoints.set(`${artifactPath}/zip`, fixture.archiveBytes);
 }
 
 function fixtureOperations(campaign, checkout) {
