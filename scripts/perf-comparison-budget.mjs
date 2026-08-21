@@ -53,6 +53,11 @@ const BROWSER_NAVIGATION_ATTRIBUTION_PHASES = Object.freeze([
   'layout',
   'paint',
 ]);
+const BROWSER_DEFAULT_NAVIGATION_ATTRIBUTION_PHASES = Object.freeze([
+  'style',
+  'layout',
+  'paint',
+]);
 const BROWSER_SESSION_BYTE_PHASES = Object.freeze([
   'initial',
   'automaticPrefetch',
@@ -570,7 +575,14 @@ function requiredBrowserPublicationMetrics() {
         metrics.push(`${lane}/browser//${formFactor}.coldLoad.${leaf}`);
       }
       metrics.push(`${lane}/browser//${formFactor}.navigation.navToPaintMs`);
-      for (const phase of BROWSER_NAVIGATION_ATTRIBUTION_PHASES) {
+      // Default Next may satisfy an as-shipped navigation from prefetch without a click-window
+      // primary response. Its response-dependent phases are therefore honestly unsupported, while
+      // the trace-observed style/layout/paint phases remain required in every lane.
+      const attributionPhases =
+        lane === 'default'
+          ? BROWSER_DEFAULT_NAVIGATION_ATTRIBUTION_PHASES
+          : BROWSER_NAVIGATION_ATTRIBUTION_PHASES;
+      for (const phase of attributionPhases) {
         metrics.push(
           `${lane}/browser//${formFactor}.navigation.navAttribution.phases.${phase}.durationMs`,
         );

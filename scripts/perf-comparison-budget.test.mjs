@@ -196,7 +196,9 @@ describe('browser/server comparison budgets', () => {
 
     for (const requiredMetric of [
       'default/browser//desktop.coldLoad.fcpMs',
+      'default/browser//desktop.navigation.navAttribution.phases.style.durationMs',
       'matched-l0/browser//mobile.navigation.navAttribution.phases.responseProcessingDomApply.durationMs',
+      'matched-l1/browser//mobile.navigation.navAttribution.phases.responseProcessingDomApply.durationMs',
       'matched-l1/browser//lighthouse.mobile.detail.lcpMs',
     ]) {
       const missingMetric = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
@@ -209,6 +211,37 @@ describe('browser/server comparison budgets', () => {
         deriveComparisonPerformanceBudget(baseline, { baselineEntries: missingMetric }),
       ).toThrow(`required browser metric ${requiredMetric} is unavailable`);
     }
+
+    const prefetchedDefault = Array.from({ length: 5 }, (_, index) =>
+      reportEntry(index, 'browser'),
+    );
+    for (const entry of prefetchedDefault) {
+      for (const formFactor of ['desktop', 'mobile']) {
+        for (const phase of ['server', 'transfer', 'responseProcessingDomApply']) {
+          delete entry.report.analysis[
+            `default/browser//${formFactor}.navigation.navAttribution.phases.${phase}.durationMs`
+          ];
+        }
+      }
+      refreshEntry(entry);
+    }
+    const prefetchedDefaultBaseline = ratifyPerformanceBaseline(prefetchedDefault);
+    expect(prefetchedDefaultBaseline.verdict.status).toBe('ratified');
+    const prefetchedDefaultBudget = deriveComparisonPerformanceBudget(prefetchedDefaultBaseline, {
+      baselineEntries: prefetchedDefault,
+    });
+    const prefetchedDefaultHoldout = reportEntry(5, 'browser').report;
+    for (const formFactor of ['desktop', 'mobile']) {
+      for (const phase of ['server', 'transfer', 'responseProcessingDomApply']) {
+        delete prefetchedDefaultHoldout.analysis[
+          `default/browser//${formFactor}.navigation.navAttribution.phases.${phase}.durationMs`
+        ];
+      }
+    }
+    expect(
+      evaluateComparisonPerformanceBudget(prefetchedDefaultBudget, prefetchedDefaultHoldout).verdict
+        .reasons,
+    ).toEqual([]);
 
     const serverEntries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'server'));
     for (const entry of serverEntries) {
