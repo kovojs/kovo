@@ -73,8 +73,8 @@ import {
   performanceGateWorkloadIdentity,
 } from './perf-gate.mjs';
 
-export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v6';
-export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v8';
+export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v7';
+export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v9';
 export const PERF_PUBLICATION_REPOSITORY = 'kovojs/kovo';
 
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
@@ -166,6 +166,13 @@ const PRODUCTION_BYTES_CONFIG = Object.freeze({
     name: 'Production bytes',
     triggerPolicy: 'production-bytes',
   }),
+});
+const CHECK_SCALING_FAILURE_POLICY = Object.freeze({
+  budgetFailureStep: 'Evaluate against perf-budgets.json',
+  requiredSuccessSteps: Object.freeze([
+    'Run the kovo check component-count ladder',
+    'Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+  ]),
 });
 const FAMILY_NAMES = Object.freeze([
   'browser',
@@ -314,6 +321,7 @@ const FAMILY_CONFIG = Object.freeze({
 export async function authenticatePerformancePublicationInput(
   input,
   {
+    authenticateArtifactEvidence = authenticatePerformanceArtifactEvidence,
     baseDirectory = process.cwd(),
     descriptorReadHook,
     fetchCampaignWorkflowRunsApi = fetchGitHubCampaignWorkflowRunsApiResponse,
@@ -333,17 +341,20 @@ export async function authenticatePerformancePublicationInput(
   validateInputManifest(input);
   validateBuildProfileEvidencePair(input.buildProfiles);
   validateCampaignManifest(input.campaign);
-  const openingManifestCensus = await authenticateManifestFilesystemCensus(input, {
+  const openingManifestMetadata = await authenticateManifestFilesystemMetadataCensus(input, {
     baseDirectory,
     manifestPath,
-    phase: 'opening',
     snapshotHook: filesystemCensusHook,
   });
+  const authoritySnapshots = await snapshotManifestCustodyStage(
+    openingManifestMetadata,
+    campaignAuthorityCustodyPaths(input, openingManifestMetadata.manifestRelativePath),
+  );
   const descriptorCustody = await createPerformanceArtifactDescriptorCustody({
-    baseDirectory: openingManifestCensus.baseDirectory,
-    openingFileCensus: openingManifestCensus.files,
+    baseDirectory: openingManifestMetadata.baseDirectory,
+    openingFileCensus: authoritySnapshots,
   });
-  const manifestRelativePath = openingManifestCensus.manifestRelativePath;
+  const manifestRelativePath = openingManifestMetadata.manifestRelativePath;
   const manifestBytes = await readPerformanceArtifactCustodyFile(manifestRelativePath, {
     custody: descriptorCustody,
     descriptorKey: 'manifest',
@@ -357,100 +368,9 @@ export async function authenticatePerformancePublicationInput(
   ) {
     throw new TypeError('parsed manifest differs from its stable on-disk custody bytes');
   }
-  const families = {};
-  for (const familyName of FAMILY_NAMES) {
-    const config = FAMILY_CONFIG[familyName];
-    const descriptor = input.families[familyName];
-    const baseline = [];
-    for (const [index, evidence] of descriptor.baseline.entries()) {
-      try {
-        baseline.push(
-          await authenticatePerformanceArtifactEvidence(evidence, {
-            baseDirectory,
-            descriptorCustody,
-            descriptorReadHook,
-            expectedArtifactName: config.artifactName,
-            expectedArchiveMembers: [config.reportMember],
-            expectedReportMember: config.reportMember,
-            expectedWorkflowJob: config.workflowJob,
-            fetchArtifactApi,
-            fetchWorkflowFileApi,
-            fetchWorkflowJobsApi,
-            fetchWorkflowRunApi,
-            loadTrustedWorkflow,
-            now,
-            repository: input.repository,
-            repositoryDirectory,
-          }),
-        );
-      } catch (error) {
-        throw contextualError(`${familyName} baseline[${String(index)}]`, error);
-      }
-    }
-    let holdout;
-    try {
-      holdout = await authenticatePerformanceArtifactEvidence(descriptor.holdout, {
-        baseDirectory,
-        descriptorCustody,
-        descriptorReadHook,
-        expectedArtifactName: config.artifactName,
-        expectedArchiveMembers: [config.reportMember],
-        expectedReportMember: config.reportMember,
-        expectedWorkflowJob: config.workflowJob,
-        fetchArtifactApi,
-        fetchWorkflowFileApi,
-        fetchWorkflowJobsApi,
-        fetchWorkflowRunApi,
-        loadTrustedWorkflow,
-        now,
-        repository: input.repository,
-        repositoryDirectory,
-      });
-    } catch (error) {
-      throw contextualError(`${familyName} holdout`, error);
-    }
-    families[familyName] = { baseline, holdout };
-  }
-  const buildProfiles = [];
-  for (const mode of BUILD_PROFILE_MODES) {
-    if (input.buildProfiles === undefined) break;
-    try {
-      const entry = await authenticatePerformanceArtifactEvidence(input.buildProfiles[mode], {
-        baseDirectory,
-        descriptorCustody,
-        descriptorCustodyShare: { archive: 'build-profile-archive' },
-        descriptorReadHook,
-        expectedArtifactName: BUILD_PROFILE_ARTIFACT_NAME,
-        expectedAuxiliaryMemberGroup: {
-          prefix: `raw-${mode}-`,
-          suffix: '.cpuprofile',
-        },
-        expectedAuxiliaryMembers: [`build-${mode}.cpuprofile`, `process-cpu-${mode}.txt`],
-        expectedReportMember: `profile-${mode}.json`,
-        expectedWorkflowJob: BUILD_PROFILE_WORKFLOW_JOB,
-        fetchArtifactApi,
-        fetchWorkflowFileApi,
-        fetchWorkflowJobsApi,
-        fetchWorkflowRunApi,
-        loadTrustedWorkflow,
-        now,
-        repository: input.repository,
-        repositoryDirectory,
-      });
-      const profileFindings = buildProfilePublicationFindings(entry, mode);
-      if (profileFindings.length > 0) throw new TypeError(profileFindings.join('\n'));
-      buildProfiles.push(entry);
-    } catch (error) {
-      throw contextualError(`build profile ${mode}`, error);
-    }
-  }
-  const buildProfileFindings = buildProfileEntrySetFindings(buildProfiles);
-  if (buildProfileFindings.length > 0) {
-    throw new TypeError(`build profile evidence: ${buildProfileFindings.join('\n')}`);
-  }
   let productionBytes;
   try {
-    productionBytes = await authenticatePerformanceArtifactEvidence(input.productionBytes, {
+    productionBytes = await authenticateArtifactEvidence(input.productionBytes, {
       allowedProducerJobConclusions: ['failure', 'success'],
       allowedProducerFailureStep: PRODUCTION_BYTES_CONFIG.budgetFailureStep,
       requiredProducerSuccessSteps: PRODUCTION_BYTES_CONFIG.budgetFailureSuccessSteps,
@@ -483,10 +403,12 @@ export async function authenticatePerformancePublicationInput(
   } catch (error) {
     throw contextualError('Production bytes', error);
   }
+  let openingManifestCensus;
+  let admittedDescriptorCustody;
   let campaign;
   try {
     campaign = await authenticatePerformancePublicationCampaign(input.campaign, {
-      authenticateArtifactEvidence: authenticatePerformanceArtifactEvidence,
+      authenticateArtifactEvidence,
       baseDirectory,
       custody: descriptorCustody,
       descriptorReadHook,
@@ -498,16 +420,59 @@ export async function authenticatePerformancePublicationInput(
       fetchWorkflowRunApi: fetchWorkflowRunApi ?? fetchGitHubWorkflowRunApiResponse,
       loadTrustedWorkflow,
       now,
+      prepareCandidateCustody: async () => {
+        openingManifestCensus = await authenticateManifestFilesystemCensus(input, {
+          baseDirectory: openingManifestMetadata.baseDirectory,
+          manifestPath,
+          phase: 'opening',
+          snapshotHook: filesystemCensusHook,
+        });
+        assertManifestHashedCensusMatchesMetadata(openingManifestMetadata, openingManifestCensus);
+        admittedDescriptorCustody = await createPerformanceArtifactDescriptorCustody({
+          baseDirectory: openingManifestCensus.baseDirectory,
+          openingFileCensus: openingManifestCensus.files,
+        });
+        return admittedDescriptorCustody;
+      },
       repository: input.repository,
       repositoryDirectory,
-      selectedFamilies: families,
       selectedProductionBytes: productionBytes,
     });
   } catch (error) {
     throw contextualError('campaign chronology', error);
   }
+  if (openingManifestCensus === undefined || admittedDescriptorCustody === undefined) {
+    throw new TypeError('campaign eligibility did not establish admitted descriptor custody');
+  }
+  const families = await authenticateSelectedPublicationFamilies(input, {
+    authenticateArtifactEvidence,
+    baseDirectory,
+    descriptorCustody: admittedDescriptorCustody,
+    descriptorReadHook,
+    fetchArtifactApi,
+    fetchWorkflowFileApi,
+    fetchWorkflowJobsApi,
+    fetchWorkflowRunApi,
+    loadTrustedWorkflow,
+    now,
+    repositoryDirectory,
+  });
+  assertSelectedFamilyDescriptors(campaign.selectedFamilies, families);
+  const buildProfiles = await authenticatePublicationBuildProfiles(input, {
+    authenticateArtifactEvidence,
+    baseDirectory,
+    descriptorCustody: admittedDescriptorCustody,
+    descriptorReadHook,
+    fetchArtifactApi,
+    fetchWorkflowFileApi,
+    fetchWorkflowJobsApi,
+    fetchWorkflowRunApi,
+    loadTrustedWorkflow,
+    now,
+    repositoryDirectory,
+  });
   const closingManifestCensus = await authenticateManifestFilesystemCensus(input, {
-    baseDirectory: descriptorCustody.baseDirectory,
+    baseDirectory: admittedDescriptorCustody.baseDirectory,
     manifestPath,
     phase: 'closing',
     snapshotHook: filesystemCensusHook,
@@ -518,6 +483,119 @@ export async function authenticatePerformancePublicationInput(
     );
   }
   return { buildProfiles, campaign, families, productionBytes, repository: input.repository };
+}
+
+async function authenticateSelectedPublicationFamilies(
+  input,
+  {
+    authenticateArtifactEvidence,
+    baseDirectory,
+    descriptorCustody,
+    descriptorReadHook,
+    fetchArtifactApi,
+    fetchWorkflowFileApi,
+    fetchWorkflowJobsApi,
+    fetchWorkflowRunApi,
+    loadTrustedWorkflow,
+    now,
+    repositoryDirectory,
+  },
+) {
+  const families = {};
+  for (const familyName of FAMILY_NAMES) {
+    const config = FAMILY_CONFIG[familyName];
+    const descriptor = input.families[familyName];
+    const common = {
+      ...campaignFamilyProducerAuthenticationPolicy(familyName),
+      baseDirectory,
+      descriptorCustody,
+      descriptorReadHook,
+      expectedArtifactName: config.artifactName,
+      expectedArchiveMembers: [config.reportMember],
+      expectedReportMember: config.reportMember,
+      expectedWorkflowJob: config.workflowJob,
+      fetchArtifactApi,
+      fetchWorkflowFileApi,
+      fetchWorkflowJobsApi,
+      fetchWorkflowRunApi,
+      loadTrustedWorkflow,
+      now,
+      repository: input.repository,
+      repositoryDirectory,
+    };
+    const baseline = [];
+    for (const [index, evidence] of descriptor.baseline.entries()) {
+      try {
+        baseline.push(await authenticateArtifactEvidence(evidence, common));
+      } catch (error) {
+        throw contextualError(`${familyName} baseline[${String(index)}]`, error);
+      }
+    }
+    let holdout;
+    try {
+      holdout = await authenticateArtifactEvidence(descriptor.holdout, common);
+    } catch (error) {
+      throw contextualError(`${familyName} holdout`, error);
+    }
+    families[familyName] = { baseline, holdout };
+  }
+  return families;
+}
+
+async function authenticatePublicationBuildProfiles(
+  input,
+  {
+    authenticateArtifactEvidence,
+    baseDirectory,
+    descriptorCustody,
+    descriptorReadHook,
+    fetchArtifactApi,
+    fetchWorkflowFileApi,
+    fetchWorkflowJobsApi,
+    fetchWorkflowRunApi,
+    loadTrustedWorkflow,
+    now,
+    repositoryDirectory,
+  },
+) {
+  const buildProfiles = [];
+  for (const mode of BUILD_PROFILE_MODES) {
+    if (input.buildProfiles === undefined) break;
+    try {
+      const entry = await authenticateArtifactEvidence(input.buildProfiles[mode], {
+        baseDirectory,
+        descriptorCustody,
+        descriptorCustodyShare: { archive: 'build-profile-archive' },
+        descriptorReadHook,
+        expectedArtifactName: BUILD_PROFILE_ARTIFACT_NAME,
+        expectedAuxiliaryMemberGroup: {
+          prefix: `raw-${mode}-`,
+          suffix: '.cpuprofile',
+        },
+        expectedAuxiliaryMembers: [`build-${mode}.cpuprofile`, `process-cpu-${mode}.txt`],
+        expectedReportMember: `profile-${mode}.json`,
+        expectedWorkflowJob: BUILD_PROFILE_WORKFLOW_JOB,
+        fetchArtifactApi,
+        fetchWorkflowFileApi,
+        fetchWorkflowJobsApi,
+        fetchWorkflowRunApi,
+        loadTrustedWorkflow,
+        now,
+        repository: input.repository,
+        repositoryDirectory,
+      });
+      const profileFindings = buildProfilePublicationFindings(entry, mode);
+      if (profileFindings.length > 0) throw new TypeError(profileFindings.join('\n'));
+      buildProfiles.push(entry);
+    } catch (error) {
+      throw contextualError(`build profile ${mode}`, error);
+    }
+  }
+  const findings = buildProfileEntrySetFindings(buildProfiles);
+  if (findings.length > 0) {
+    throw new TypeError(`build profile evidence: ${findings.join('\n')}`);
+  }
+  return buildProfiles;
 }
 
 function validateBuildProfileEvidencePair(descriptors) {
@@ -543,6 +621,53 @@ export async function authenticateManifestFilesystemCensus(
   if (snapshotHook !== undefined && typeof snapshotHook !== 'function') {
     throw new TypeError('manifest custody snapshot hook is invalid');
   }
+  const { expectedDirectories, expectedFiles, manifestRelativePath, resolvedBaseDirectory } =
+    await resolveManifestCustodyLayout(input, { baseDirectory, manifestPath });
+  const seenFiles = new Set();
+  const seenInodes = new Set();
+  const snapshots = [];
+  await walkManifestCustodyDirectory(resolvedBaseDirectory, '', {
+    expectedDirectories,
+    expectedFiles,
+    rootDirectory: resolvedBaseDirectory,
+    seenFiles,
+    seenInodes,
+    snapshotHook,
+    snapshots,
+    phase,
+  });
+  if (
+    seenFiles.size !== expectedFiles.size ||
+    [...expectedFiles.keys()].some((relativePath) => !seenFiles.has(relativePath))
+  ) {
+    throw new TypeError('manifest custody directory is missing one or more referenced files');
+  }
+  snapshots.sort((left, right) => left.path.localeCompare(right.path));
+  const verifiedFiles = new Set();
+  const verifiedInodes = new Set();
+  const snapshotsByPath = new Map(snapshots.map((snapshot) => [snapshot.path, snapshot]));
+  await verifyManifestCustodyDirectory(resolvedBaseDirectory, '', {
+    expectedDirectories,
+    expectedFiles,
+    rootDirectory: resolvedBaseDirectory,
+    seenFiles: verifiedFiles,
+    seenInodes: verifiedInodes,
+    snapshotsByPath,
+  });
+  if (
+    verifiedFiles.size !== expectedFiles.size ||
+    [...expectedFiles.keys()].some((relativePath) => !verifiedFiles.has(relativePath))
+  ) {
+    throw new TypeError('final manifest custody identity sweep is missing a referenced file');
+  }
+  return Object.freeze({
+    baseDirectory: resolvedBaseDirectory,
+    files: Object.freeze(snapshots),
+    manifestRelativePath,
+  });
+}
+
+async function resolveManifestCustodyLayout(input, { baseDirectory, manifestPath }) {
   const resolvedBaseDirectory = await realpath(path.resolve(baseDirectory));
   const requestedManifest = path.resolve(manifestPath);
   const manifestFacts = await lstat(requestedManifest);
@@ -593,18 +718,32 @@ export async function authenticateManifestFilesystemCensus(
       expectedDirectories.add(parts.slice(0, index).join('/'));
     }
   }
+  return { expectedDirectories, expectedFiles, manifestRelativePath, resolvedBaseDirectory };
+}
+
+/**
+ * Pin the complete manifest layout without opening any descriptor payload. Family bytes are not
+ * hashed until raw run/artifact/job authority has proved that their producer is admissible.
+ */
+async function authenticateManifestFilesystemMetadataCensus(
+  input,
+  { baseDirectory, manifestPath, snapshotHook },
+) {
+  if (snapshotHook !== undefined && typeof snapshotHook !== 'function') {
+    throw new TypeError('manifest custody snapshot hook is invalid');
+  }
+  const { expectedDirectories, expectedFiles, manifestRelativePath, resolvedBaseDirectory } =
+    await resolveManifestCustodyLayout(input, { baseDirectory, manifestPath });
+  const files = [];
   const seenFiles = new Set();
   const seenInodes = new Set();
-  const snapshots = [];
-  await walkManifestCustodyDirectory(resolvedBaseDirectory, '', {
+  await walkManifestCustodyMetadataDirectory(resolvedBaseDirectory, '', {
     expectedDirectories,
     expectedFiles,
-    rootDirectory: resolvedBaseDirectory,
+    files,
     seenFiles,
     seenInodes,
     snapshotHook,
-    snapshots,
-    phase,
   });
   if (
     seenFiles.size !== expectedFiles.size ||
@@ -612,29 +751,160 @@ export async function authenticateManifestFilesystemCensus(
   ) {
     throw new TypeError('manifest custody directory is missing one or more referenced files');
   }
-  snapshots.sort((left, right) => left.path.localeCompare(right.path));
-  const verifiedFiles = new Set();
-  const verifiedInodes = new Set();
-  const snapshotsByPath = new Map(snapshots.map((snapshot) => [snapshot.path, snapshot]));
-  await verifyManifestCustodyDirectory(resolvedBaseDirectory, '', {
-    expectedDirectories,
-    expectedFiles,
-    rootDirectory: resolvedBaseDirectory,
-    seenFiles: verifiedFiles,
-    seenInodes: verifiedInodes,
-    snapshotsByPath,
-  });
-  if (
-    verifiedFiles.size !== expectedFiles.size ||
-    [...expectedFiles.keys()].some((relativePath) => !verifiedFiles.has(relativePath))
-  ) {
-    throw new TypeError('final manifest custody identity sweep is missing a referenced file');
-  }
+  files.sort((left, right) => left.path.localeCompare(right.path));
   return Object.freeze({
     baseDirectory: resolvedBaseDirectory,
-    files: Object.freeze(snapshots),
+    files: Object.freeze(files),
     manifestRelativePath,
   });
+}
+
+async function walkManifestCustodyMetadataDirectory(
+  absoluteDirectory,
+  relativeDirectory,
+  { expectedDirectories, expectedFiles, files, seenFiles, seenInodes, snapshotHook },
+) {
+  const before = await lstat(absoluteDirectory);
+  if (!before.isDirectory() || before.isSymbolicLink()) {
+    throw new TypeError('manifest metadata traversal encountered a non-directory or symlink');
+  }
+  const entries = (await readdir(absoluteDirectory)).sort((left, right) =>
+    left.localeCompare(right),
+  );
+  for (const name of entries) {
+    const relativePath = relativeDirectory === '' ? name : `${relativeDirectory}/${name}`;
+    const absolutePath = path.join(absoluteDirectory, name);
+    const facts = await lstat(absolutePath);
+    if (facts.isSymbolicLink()) {
+      throw new TypeError(`${relativePath} is an untrusted symlink in manifest custody`);
+    }
+    if (facts.isDirectory()) {
+      if (!expectedDirectories.has(relativePath)) {
+        throw new TypeError(`${relativePath} is an unreferenced manifest custody directory`);
+      }
+      await walkManifestCustodyMetadataDirectory(absolutePath, relativePath, {
+        expectedDirectories,
+        expectedFiles,
+        files,
+        seenFiles,
+        seenInodes,
+        snapshotHook,
+      });
+      continue;
+    }
+    const expected = expectedFiles.get(relativePath);
+    if (
+      expected === undefined ||
+      !facts.isFile() ||
+      facts.nlink !== 1 ||
+      facts.size < 1 ||
+      facts.size > expected.maximumBytes
+    ) {
+      throw new TypeError(`${relativePath} is not a referenced bounded unique regular file`);
+    }
+    const inode = `${String(facts.dev)}:${String(facts.ino)}`;
+    if (seenInodes.has(inode)) {
+      throw new TypeError(`${relativePath} hardlink-aliases another manifest custody file`);
+    }
+    seenInodes.add(inode);
+    seenFiles.add(relativePath);
+    files.push(
+      Object.freeze({
+        ctimeMs: facts.ctimeMs,
+        dev: facts.dev,
+        ino: facts.ino,
+        kind: expected.kind,
+        maximumBytes: expected.maximumBytes,
+        mode: facts.mode,
+        mtimeMs: facts.mtimeMs,
+        nlink: facts.nlink,
+        path: relativePath,
+        size: facts.size,
+      }),
+    );
+    await snapshotHook?.({ phase: 'opening', relativePath, stage: 'metadata' });
+  }
+  const after = await lstat(absoluteDirectory);
+  if (!sameManifestFilesystemIdentity(before, after)) {
+    throw new TypeError('manifest custody directory changed while metadata was enumerated');
+  }
+}
+
+function sameManifestFilesystemIdentity(left, right) {
+  return (
+    left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.mode === right.mode &&
+    left.mtimeMs === right.mtimeMs &&
+    left.ctimeMs === right.ctimeMs
+  );
+}
+
+function assertManifestHashedCensusMatchesMetadata(metadataCensus, hashedCensus) {
+  if (
+    metadataCensus.baseDirectory !== hashedCensus.baseDirectory ||
+    metadataCensus.manifestRelativePath !== hashedCensus.manifestRelativePath ||
+    metadataCensus.files.length !== hashedCensus.files.length
+  ) {
+    throw new TypeError('hashed manifest custody census differs from its opening metadata stage');
+  }
+  const hashedByPath = new Map(hashedCensus.files.map((entry) => [entry.path, entry]));
+  for (const metadata of metadataCensus.files) {
+    const hashed = hashedByPath.get(metadata.path);
+    if (hashed === undefined || !manifestMetadataMatchesSnapshot(metadata, hashed)) {
+      throw new TypeError(
+        `${metadata.path} changed between metadata classification and hashed custody`,
+      );
+    }
+  }
+}
+
+function manifestMetadataMatchesSnapshot(metadata, snapshot) {
+  return (
+    metadata.path === snapshot.path &&
+    metadata.dev === snapshot.dev &&
+    metadata.ino === snapshot.ino &&
+    metadata.mode === snapshot.mode &&
+    metadata.nlink === snapshot.nlink &&
+    metadata.size === snapshot.size &&
+    metadata.mtimeMs === snapshot.mtimeMs &&
+    metadata.ctimeMs === snapshot.ctimeMs
+  );
+}
+
+async function snapshotManifestCustodyStage(metadataCensus, relativePaths) {
+  const metadataByPath = new Map(metadataCensus.files.map((entry) => [entry.path, entry]));
+  const snapshots = [];
+  for (const relativePath of [...new Set(relativePaths)].sort((left, right) =>
+    left.localeCompare(right),
+  )) {
+    const metadata = metadataByPath.get(relativePath);
+    if (metadata === undefined) {
+      throw new TypeError(`${relativePath} is absent from opening manifest metadata custody`);
+    }
+    const snapshot = await snapshotPerformanceArtifactCustodyFile(relativePath, {
+      baseDirectory: metadataCensus.baseDirectory,
+      label: `${metadata.kind} staged manifest custody file`,
+      maximumBytes: metadata.maximumBytes,
+    });
+    if (!manifestMetadataMatchesSnapshot(metadata, snapshot)) {
+      throw new TypeError(`${relativePath} changed before staged custody hashing`);
+    }
+    snapshots.push(snapshot);
+  }
+  return snapshots;
+}
+
+function campaignAuthorityCustodyPaths(input, manifestRelativePath) {
+  const paths = [manifestRelativePath, ...Object.values(input.productionBytes)];
+  paths.push(input.campaign.workflowRunsApiMetadata.path);
+  for (const run of input.campaign.runs) {
+    paths.push(run.artifactsApiMetadata.path, run.runApiMetadata.path);
+  }
+  for (const candidate of input.campaign.productionBytesCandidates) {
+    paths.push(...Object.values(candidate.descriptor));
+  }
+  return paths;
 }
 
 async function walkManifestCustodyDirectory(
@@ -888,6 +1158,7 @@ export async function authenticatePerformancePublicationCampaign(
     fetchWorkflowRunApi,
     loadTrustedWorkflow,
     now,
+    prepareCandidateCustody,
     repository,
     repositoryDirectory,
     selectedFamilies,
@@ -931,6 +1202,9 @@ export async function authenticatePerformancePublicationCampaign(
   });
   if (canonicalJson(savedRunCensus) !== canonicalJson(liveRunCensus)) {
     throw new TypeError('saved campaign workflow-runs authority differs from the live response');
+  }
+  if (savedRunCensus.length !== campaign.pulseCount) {
+    throw new TypeError('campaign authority census differs from the declared fixed pulse count');
   }
   const manifestRunIds = campaign.runs.map((run) => run.runId);
   if (canonicalJson(manifestRunIds) !== canonicalJson(savedRunCensus.map((run) => run.runId))) {
@@ -1032,6 +1306,7 @@ export async function authenticatePerformancePublicationCampaign(
     fetchWorkflowRunApi,
     loadTrustedWorkflow,
     now,
+    prepareCandidateCustody,
     repository,
     repositoryDirectory,
     runAuthorities: savedRunCensus,
@@ -1042,7 +1317,9 @@ export async function authenticatePerformancePublicationCampaign(
     authenticatedCandidates.familyCandidates,
     campaign.cohortSelections,
   );
-  assertSelectedFamilyDescriptors(selectedFamilyCandidates, selectedFamilies);
+  if (selectedFamilies !== undefined) {
+    assertSelectedFamilyDescriptors(selectedFamilyCandidates, selectedFamilies);
+  }
   const selected = authenticatedCandidates.productionBytesCandidates[0];
   if (
     canonicalJson(campaign.selectedProductionBytes) !==
@@ -1063,6 +1340,7 @@ export async function authenticatePerformancePublicationCampaign(
     productionBytesCandidates: authenticatedCandidates.productionBytesCandidates.map(
       campaignCandidateReference,
     ),
+    pulseCount: campaign.pulseCount,
     runs,
     selectedFamilies: Object.fromEntries(
       FAMILY_NAMES.map((familyName) => [
@@ -1213,10 +1491,10 @@ function classifyCampaignPublicationArtifacts(publicationArtifacts, producers, r
   for (const family of FAMILY_NAMES) {
     const producer = producers.get(family);
     const artifact = familyArtifacts.get(family);
-    if (producer.conclusion === 'success') {
+    if (campaignFamilyProducerIsAdmitted(family, producer)) {
       if (artifact === undefined) {
         throw new TypeError(
-          `successful ${FAMILY_CONFIG[family].workflowJob.name} producer has no literal ${FAMILY_CONFIG[family].artifactName} artifact`,
+          `${producer.conclusion === 'success' ? 'successful' : 'authorized budget-failed'} ${FAMILY_CONFIG[family].workflowJob.name} producer has no literal ${FAMILY_CONFIG[family].artifactName} artifact`,
         );
       }
       familyCandidates.push({ artifactId: artifact.artifactId, family });
@@ -1231,6 +1509,49 @@ function classifyCampaignPublicationArtifacts(publicationArtifacts, producers, r
     }
   }
   return { excludedFamilyArtifacts, familyCandidates };
+}
+
+function campaignFamilyProducerIsAdmitted(family, producer) {
+  if (producer?.conclusion === 'success') return true;
+  if (family !== 'check' || producer?.conclusion !== 'failure') return false;
+  const steps = Array.isArray(producer.steps) ? producer.steps : [];
+  const failedSteps = steps.filter((step) => step?.conclusion === 'failure');
+  const failureSteps = steps.filter(
+    (step) => step?.name === CHECK_SCALING_FAILURE_POLICY.budgetFailureStep,
+  );
+  const required = CHECK_SCALING_FAILURE_POLICY.requiredSuccessSteps.map((name) =>
+    steps.filter((step) => step?.name === name),
+  );
+  const failure = failureSteps[0];
+  const successes = required.map(([step]) => step);
+  return (
+    failedSteps.length === 1 &&
+    failureSteps.length === 1 &&
+    failure?.conclusion === 'failure' &&
+    failure?.status === 'completed' &&
+    Number.isSafeInteger(failure?.number) &&
+    failure.number > 0 &&
+    required.every(
+      (matches) =>
+        matches.length === 1 &&
+        matches[0]?.conclusion === 'success' &&
+        matches[0]?.status === 'completed' &&
+        Number.isSafeInteger(matches[0]?.number) &&
+        matches[0].number > 0,
+    ) &&
+    successes[0].number < failure.number &&
+    failure.number < successes[1].number
+  );
+}
+
+function campaignFamilyProducerAuthenticationPolicy(family) {
+  return family !== 'check'
+    ? {}
+    : {
+        allowedProducerFailureStep: CHECK_SCALING_FAILURE_POLICY.budgetFailureStep,
+        allowedProducerJobConclusions: ['failure', 'success'],
+        requiredProducerSuccessSteps: CHECK_SCALING_FAILURE_POLICY.requiredSuccessSteps,
+      };
 }
 
 function campaignFamilyProducerJob(jobsMetadata, family, { repository, run, sourceSha }) {
@@ -1248,12 +1569,11 @@ function campaignFamilyProducerJob(jobsMetadata, family, { repository, run, sour
   const completedAt = Date.parse(job?.completed_at ?? '');
   if (
     run.status !== 'completed' ||
-    !Number.isSafeInteger(run.runAttempt) ||
-    run.runAttempt < 1 ||
+    run.runAttempt !== 1 ||
     !Number.isSafeInteger(job?.id) ||
     job.id < 1 ||
     job.run_id !== run.runId ||
-    job.run_attempt !== run.runAttempt ||
+    job.run_attempt !== 1 ||
     job.head_sha !== sourceSha ||
     job.status !== 'completed' ||
     !TERMINAL_JOB_CONCLUSIONS.includes(job.conclusion) ||
@@ -1357,6 +1677,7 @@ async function authenticateCampaignCandidates(
     fetchWorkflowRunApi,
     loadTrustedWorkflow,
     now,
+    prepareCandidateCustody,
     repository,
     repositoryDirectory,
     runAuthorities,
@@ -1402,9 +1723,20 @@ async function authenticateCampaignCandidates(
     );
   }
 
+  const candidateCustody =
+    prepareCandidateCustody === undefined
+      ? (custody ?? (await createPerformanceArtifactDescriptorCustody({ baseDirectory })))
+      : await prepareCandidateCustody({
+          excludedFamilyArtifacts: classified.excludedFamilyArtifacts,
+          familyCandidates: classified.familyCandidates,
+        });
+  if (!ownRecord(candidateCustody)) {
+    throw new TypeError('campaign admitted descriptor custody is unavailable');
+  }
+
   const common = {
     baseDirectory,
-    descriptorCustody: custody,
+    descriptorCustody: candidateCustody,
     descriptorReadHook,
     fetchArtifactApi,
     fetchWorkflowFileApi,
@@ -1425,6 +1757,7 @@ async function authenticateCampaignCandidates(
     const config = FAMILY_CONFIG[candidate.family];
     const authenticated = await authenticateArtifactEvidence(candidate.descriptor, {
       ...common,
+      ...campaignFamilyProducerAuthenticationPolicy(candidate.family),
       expectedArtifactName: config.artifactName,
       expectedArchiveMembers: [config.reportMember],
       expectedReportMember: config.reportMember,
@@ -1613,27 +1946,20 @@ function selectGateCampaignFamilyCandidates(candidates, cohortSelections) {
     const qualifying = [...groups.entries()]
       .map(([digest, members]) => [digest, [...members].sort(campaignChronologyOrder)])
       .filter(([, members]) => members.length >= 6)
-      .sort(([left], [right]) => left.localeCompare(right));
+      .sort(
+        ([leftDigest, leftMembers], [rightDigest, rightMembers]) =>
+          rightMembers.length - leftMembers.length || leftDigest.localeCompare(rightDigest),
+      );
     if (qualifying.length === 0) {
       throw new TypeError(`${familyName} has no authenticated six-run campaign cohort`);
     }
-    const selector = cohortSelections[familyName];
-    if (qualifying.length === 1 && selector !== undefined) {
-      throw new TypeError(`${familyName} cohort selector is unnecessary for one qualifying cohort`);
+    const winner = qualifying[0];
+    if (cohortSelections[familyName] !== winner[0]) {
+      throw new TypeError(
+        `${familyName} manifest cohort winner differs from automatic count-descending, digest-ascending selection`,
+      );
     }
-    if (qualifying.length > 1 && selector === undefined) {
-      throw new TypeError(`${familyName} has multiple qualifying cohorts without explicit choice`);
-    }
-    const eligible =
-      selector === undefined
-        ? qualifying
-        : qualifying.filter(
-            ([digest, members]) => digest === selector || members[0]?.hostDigest === selector,
-          );
-    if (eligible.length !== 1) {
-      throw new TypeError(`${familyName} cohort selector does not identify one qualifying cohort`);
-    }
-    result[familyName] = eligible[0][1].slice(0, 6);
+    result[familyName] = winner[1].slice(0, 6);
   }
   return result;
 }
@@ -1755,6 +2081,7 @@ function validateCampaignManifest(campaign) {
         'familyCandidates',
         'productionBytes',
         'productionBytesCandidates',
+        'pulseCount',
         'runs',
         'selectedProductionBytes',
         'workflowRunsApiMetadata',
@@ -1775,23 +2102,24 @@ function validateCampaignManifest(campaign) {
   ) {
     throw new TypeError('manifest campaign boundary is malformed');
   }
+  if (
+    !Number.isSafeInteger(campaign.pulseCount) ||
+    campaign.pulseCount < 6 ||
+    campaign.pulseCount > MAX_CAMPAIGN_RUNS
+  ) {
+    throw new TypeError('manifest campaign pulse count must be an integer from 6 through 100');
+  }
   validateCampaignCustodyReference(campaign.workflowRunsApiMetadata, 'campaign workflow-runs API');
   if (
     !ownRecord(campaign.cohortSelections) ||
-    Object.keys(campaign.cohortSelections).some(
-      (family) =>
-        !FAMILY_NAMES.includes(family) ||
-        !DIGEST_PATTERN.test(campaign.cohortSelections[family] ?? ''),
-    )
+    canonicalJson(Object.keys(campaign.cohortSelections).sort()) !==
+      canonicalJson([...FAMILY_NAMES].sort()) ||
+    FAMILY_NAMES.some((family) => !DIGEST_PATTERN.test(campaign.cohortSelections[family] ?? ''))
   ) {
-    throw new TypeError('manifest campaign cohort selections are malformed');
+    throw new TypeError('manifest campaign cohort winners are malformed or incomplete');
   }
-  if (
-    !Array.isArray(campaign.runs) ||
-    campaign.runs.length < 1 ||
-    campaign.runs.length > MAX_CAMPAIGN_RUNS
-  ) {
-    throw new TypeError('manifest campaign run census is unavailable');
+  if (!Array.isArray(campaign.runs) || campaign.runs.length !== campaign.pulseCount) {
+    throw new TypeError('manifest campaign run census differs from its fixed pulse count');
   }
   for (const run of campaign.runs) {
     if (
@@ -2037,6 +2365,8 @@ function campaignWorkflowRunsAuthorityProjection(listing, { boundary, sourceSha 
         run?.name !== 'Perf Realistic Tier' ||
         run?.path !== PERF_REALISTIC_WORKFLOW_PATH ||
         run?.event !== 'pull_request' ||
+        run?.run_attempt !== 1 ||
+        run?.status !== 'completed' ||
         !validExactTimestamp(run?.created_at)
       ) {
         throw new TypeError('campaign workflow-runs API contains foreign run identity');
@@ -2070,6 +2400,8 @@ function campaignRunAuthorityProjection(run, { repository, runId, sourceSha }) {
     run.name !== 'Perf Realistic Tier' ||
     run.path !== PERF_REALISTIC_WORKFLOW_PATH ||
     run.event !== 'pull_request' ||
+    run.run_attempt !== 1 ||
+    run.status !== 'completed' ||
     run.url !== apiUrl ||
     run.artifacts_url !== `${apiUrl}/artifacts` ||
     !validExactTimestamp(run.created_at)
@@ -4640,6 +4972,7 @@ function campaignPublicationFindings(campaign, publication) {
     'excludedFamilyArtifacts',
     'familyCandidates',
     'liveWorkflowRunsApiResponseDigest',
+    'pulseCount',
     'productionBytes',
     'productionBytesCandidates',
     'runs',
@@ -4662,13 +4995,17 @@ function campaignPublicationFindings(campaign, publication) {
     findings.push('boundary is malformed');
   }
   if (
+    !Number.isSafeInteger(campaign.pulseCount) ||
+    campaign.pulseCount < 6 ||
+    campaign.pulseCount > MAX_CAMPAIGN_RUNS ||
     !Array.isArray(campaign.runs) ||
-    campaign.runs.length < 1 ||
-    campaign.runs.length > MAX_CAMPAIGN_RUNS ||
+    campaign.runs.length !== campaign.pulseCount ||
     new Set(campaign.runs.map((run) => run?.runId)).size !== campaign.runs.length ||
     canonicalJson([...campaign.runs].sort(campaignChronologyOrder)) !== canonicalJson(campaign.runs)
   ) {
-    findings.push('run chronology is incomplete, duplicated, or non-canonical');
+    findings.push(
+      'run chronology differs from its fixed pulse count or is duplicated/non-canonical',
+    );
   }
   if (
     Array.isArray(campaign.runs) &&
@@ -4862,12 +5199,11 @@ function campaignPublicationFindings(campaign, publication) {
   }
   if (
     !ownRecord(campaign.cohortSelections) ||
-    Object.entries(campaign.cohortSelections).some(
-      ([family, selector]) =>
-        !FAMILY_NAMES.includes(family) || !DIGEST_PATTERN.test(selector ?? ''),
-    )
+    canonicalJson(Object.keys(campaign.cohortSelections).sort()) !==
+      canonicalJson([...FAMILY_NAMES].sort()) ||
+    FAMILY_NAMES.some((family) => !DIGEST_PATTERN.test(campaign.cohortSelections[family] ?? ''))
   ) {
-    findings.push('cohort selections are malformed');
+    findings.push('cohort winners are malformed or incomplete');
   }
   let derivedFamilySelection;
   try {
@@ -4973,27 +5309,20 @@ function selectAggregateCampaignFamilies(candidates, cohortSelections) {
     const qualifying = [...groups.entries()]
       .map(([digest, members]) => [digest, [...members].sort(campaignChronologyOrder)])
       .filter(([, members]) => members.length >= 6)
-      .sort(([left], [right]) => left.localeCompare(right));
-    const selector = cohortSelections[familyName];
+      .sort(
+        ([leftDigest, leftMembers], [rightDigest, rightMembers]) =>
+          rightMembers.length - leftMembers.length || leftDigest.localeCompare(rightDigest),
+      );
     if (qualifying.length === 0) {
       throw new TypeError(`${familyName} has no authenticated six-run campaign cohort`);
     }
-    if (qualifying.length === 1 && selector !== undefined) {
-      throw new TypeError(`${familyName} cohort selector is unnecessary for one qualifying cohort`);
+    const winner = qualifying[0];
+    if (cohortSelections[familyName] !== winner[0]) {
+      throw new TypeError(
+        `${familyName} manifest cohort winner differs from automatic count-descending, digest-ascending selection`,
+      );
     }
-    if (qualifying.length > 1 && selector === undefined) {
-      throw new TypeError(`${familyName} has multiple qualifying cohorts without explicit choice`);
-    }
-    const eligible =
-      selector === undefined
-        ? qualifying
-        : qualifying.filter(
-            ([digest, members]) => digest === selector || members[0]?.hostDigest === selector,
-          );
-    if (eligible.length !== 1) {
-      throw new TypeError(`${familyName} cohort selector does not identify one qualifying cohort`);
-    }
-    result[familyName] = eligible[0][1].slice(0, 6);
+    result[familyName] = winner[1].slice(0, 6);
   }
   return result;
 }

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -122,7 +123,9 @@ describe('seven-family performance publication gate', () => {
           selectedFamilies: adversarial.selectedFamilies,
           selectedProductionBytes: adversarial.selectedProductionBytes,
         }),
-      ).rejects.toThrow(/omits|chronology|created_at|artifact census|identity is malformed/u);
+      ).rejects.toThrow(
+        /omits|chronology|created_at|artifact census|identity is malformed|pulse count/u,
+      );
     }
   });
 
@@ -192,6 +195,50 @@ describe('seven-family performance publication gate', () => {
       ).descriptor.report,
     );
     expect(fixture.authenticatedDescriptors).toHaveLength(55);
+  });
+
+  it('rejects a manifest-inserted failed family at the production entry point without opening its descriptor payload', async () => {
+    const fixture = writeTopLevelFailedProducerFixture();
+    const opened = [];
+    const censusStages = [];
+
+    await expect(
+      authenticatePerformancePublicationInput(fixture.input, {
+        authenticateArtifactEvidence: async (descriptor) => {
+          if (descriptor === fixture.input.productionBytes) return fixture.selectedProductionBytes;
+          throw new TypeError('family artifact authentication ran before producer eligibility');
+        },
+        baseDirectory: fixture.directory,
+        descriptorReadHook: ({ relativePath }) => opened.push(relativePath),
+        fetchCampaignWorkflowRunsApi: async () => fixture.liveWorkflowRunsBytes,
+        fetchWorkflowArtifactsApi: async ({ workflowRunId }) =>
+          fixture.liveArtifactsByRun.get(workflowRunId),
+        fetchWorkflowJobsApi: async ({ workflowRunId }) => fixture.liveJobsByRun.get(workflowRunId),
+        fetchWorkflowRunApi: async ({ workflowRunId }) => fixture.liveRunById.get(workflowRunId),
+        filesystemCensusHook: ({ relativePath, stage }) =>
+          censusStages.push({ relativePath, stage }),
+        loadPerformanceBudgets: async () => ({ budgetCustody: {}, budgets: {} }),
+        manifestPath: path.join(fixture.directory, 'performance-publication-input.json'),
+        repositoryDirectory: fixture.directory,
+      }),
+    ).rejects.toThrow(/admits an ineligible artifact/u);
+
+    expect(opened.filter((relativePath) => fixture.forbiddenPaths.has(relativePath))).toEqual([]);
+    expect(
+      censusStages.filter(({ relativePath }) => fixture.forbiddenPaths.has(relativePath)),
+    ).toEqual(
+      expect.arrayContaining(
+        [...fixture.forbiddenPaths].map((relativePath) => ({
+          relativePath,
+          stage: 'metadata',
+        })),
+      ),
+    );
+    expect(
+      censusStages.filter(
+        ({ relativePath, stage }) => fixture.forbiddenPaths.has(relativePath) && stage === 'hashed',
+      ),
+    ).toEqual([]);
   });
 
   it('fails closed on missing, ambiguous, malformed, or foreign family producer authority', async () => {
@@ -276,6 +323,67 @@ describe('seven-family performance publication gate', () => {
     ).resolves.toMatchObject({ excludedFamilyArtifacts: [], familyCandidates: expect.any(Array) });
   });
 
+  it('admits only the exact check-scaling budget-failure shape and authenticates it as authorized', async () => {
+    const admitted = writeCampaignAuthenticationFixture();
+    authorizeCheckBudgetFailure(admitted, 10_007);
+    const checkCandidate = admitted.campaign.familyCandidates.find(
+      ({ family, runId }) => family === 'check' && runId === 10_007,
+    );
+    const baseAuthenticator = admitted.authenticateArtifactEvidence;
+    let observedPolicy;
+    admitted.authenticateArtifactEvidence = async (descriptor, options) => {
+      if (descriptor === checkCandidate.descriptor) observedPolicy = options;
+      return baseAuthenticator(descriptor, options);
+    };
+
+    const admittedResult = await authenticatePerformancePublicationCampaign(
+      admitted.campaign,
+      await campaignAuthenticationOptions(admitted),
+    );
+    expect(admittedResult.excludedFamilyArtifacts).toEqual([]);
+    expect(observedPolicy).toMatchObject({
+      allowedProducerFailureStep: 'Evaluate against perf-budgets.json',
+      allowedProducerJobConclusions: ['failure', 'success'],
+      requiredProducerSuccessSteps: [
+        'Run the kovo check component-count ladder',
+        'Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+      ],
+    });
+
+    const excluded = writeCampaignAuthenticationFixture();
+    const failed = excludeCampaignFamilyArtifact(excluded, {
+      family: 'check',
+      runId: 10_007,
+    });
+    rewriteCampaignRunJobs(excluded, 10_007, (jobs) => {
+      const producer = jobs.jobs.find(({ name }) => name === 'Check scaling');
+      producer.steps = [
+        campaignJobStep(1, 'Run the kovo check component-count ladder', 'failure'),
+        campaignJobStep(2, 'Evaluate against perf-budgets.json', 'skipped'),
+        campaignJobStep(
+          3,
+          'Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+          'success',
+        ),
+      ];
+    });
+    const excludeAuthenticator = excluded.authenticateArtifactEvidence;
+    excluded.authenticateArtifactEvidence = async (descriptor, options) => {
+      if (descriptor === failed.descriptor) {
+        throw new TypeError('unauthorized check failure payload was opened');
+      }
+      return excludeAuthenticator(descriptor, options);
+    };
+    await expect(
+      authenticatePerformancePublicationCampaign(
+        excluded.campaign,
+        await campaignAuthenticationOptions(excluded),
+      ),
+    ).resolves.toMatchObject({
+      excludedFamilyArtifacts: [expect.objectContaining({ family: 'check' })],
+    });
+  });
+
   it('rejects saved/live job conclusion drift, candidate insertion, and exclusion-census drift', async () => {
     const conclusionDrift = writeCampaignAuthenticationFixture();
     rewriteCampaignRunJobs(
@@ -345,6 +453,52 @@ describe('seven-family performance publication gate', () => {
     ]);
   });
 
+  it('chooses cohort winners by count descending and then digest ascending', async () => {
+    const countWinner = writeCampaignAuthenticationFixture({ pulseCount: 13 });
+    const countCandidates = countWinner.campaign.familyCandidates.filter(
+      ({ family }) => family === 'browser',
+    );
+    for (const candidate of countCandidates.slice(0, 6)) {
+      await rewriteCampaignCandidateCohort(countWinner, candidate, 'six-member-cohort');
+    }
+    const sevenMemberDigest = countCandidates[6].cohortDigest;
+    countWinner.campaign.cohortSelections.browser = sevenMemberDigest;
+    await setSelectedCampaignFamily(countWinner, 'browser', countCandidates.slice(6, 12));
+
+    const countResult = await authenticatePerformancePublicationCampaign(
+      countWinner.campaign,
+      await campaignAuthenticationOptions(countWinner),
+    );
+    expect(countResult.selectedFamilies.browser.map(({ runId }) => runId)).toEqual([
+      10_007, 10_008, 10_009, 10_010, 10_011, 10_012,
+    ]);
+
+    const tieWinner = writeCampaignAuthenticationFixture({ pulseCount: 12 });
+    const tieCandidates = tieWinner.campaign.familyCandidates.filter(
+      ({ family }) => family === 'browser',
+    );
+    for (const candidate of tieCandidates.slice(0, 6)) {
+      await rewriteCampaignCandidateCohort(tieWinner, candidate, 'tie-cohort');
+    }
+    const groups = new Map();
+    for (const candidate of tieCandidates) {
+      const members = groups.get(candidate.cohortDigest) ?? [];
+      members.push(candidate);
+      groups.set(candidate.cohortDigest, members);
+    }
+    const winningDigest = [...groups.keys()].sort((left, right) => left.localeCompare(right))[0];
+    tieWinner.campaign.cohortSelections.browser = winningDigest;
+    await setSelectedCampaignFamily(tieWinner, 'browser', groups.get(winningDigest).slice(0, 6));
+
+    const tieResult = await authenticatePerformancePublicationCampaign(
+      tieWinner.campaign,
+      await campaignAuthenticationOptions(tieWinner),
+    );
+    expect(
+      new Set(tieResult.selectedFamilies.browser.map(({ cohortDigest }) => cohortDigest)),
+    ).toEqual(new Set([winningDigest]));
+  });
+
   it('rejects dispatch and scheduled runs from pull-request publication campaigns', async () => {
     for (const event of ['workflow_dispatch', 'schedule']) {
       const fixture = writeCampaignAuthenticationFixture();
@@ -358,6 +512,38 @@ describe('seven-family performance publication gate', () => {
         ),
       ).rejects.toThrow('campaign workflow-runs API contains foreign run identity');
     }
+  });
+
+  it('requires first-attempt authority and an exact declared 6..100 pulse census', async () => {
+    const retried = writeCampaignAuthenticationFixture();
+    const reference = retried.campaign.workflowRunsApiMetadata;
+    const census = JSON.parse(readFileSync(path.join(retried.directory, reference.path), 'utf8'));
+    census.workflow_runs.find(({ id }) => id === 10_007).run_attempt = 2;
+    retried.liveWorkflowRunsBytes = rewriteCampaignReference(retried, reference, census);
+    await expect(
+      authenticatePerformancePublicationCampaign(
+        retried.campaign,
+        await campaignAuthenticationOptions(retried),
+      ),
+    ).rejects.toThrow(/foreign run identity/u);
+
+    const countDrift = writeCampaignAuthenticationFixture();
+    countDrift.campaign.pulseCount += 1;
+    await expect(
+      authenticatePerformancePublicationCampaign(
+        countDrift.campaign,
+        await campaignAuthenticationOptions(countDrift),
+      ),
+    ).rejects.toThrow(/run census differs from its fixed pulse count/u);
+
+    const tooShort = writeCampaignAuthenticationFixture();
+    tooShort.campaign.pulseCount = 5;
+    await expect(
+      authenticatePerformancePublicationCampaign(
+        tooShort.campaign,
+        await campaignAuthenticationOptions(tooShort),
+      ),
+    ).rejects.toThrow(/pulse count must be an integer from 6 through 100/u);
   });
 
   it('allows an authenticated dispatch preflight outside the inclusive campaign boundary', async () => {
@@ -514,7 +700,7 @@ describe('seven-family performance publication gate', () => {
     ).rejects.toThrow(/source and dependency-lock identity are malformed/u);
   });
 
-  it('rejects cherry-picked descriptors, outside-boundary substitutions, and unnecessary selectors', async () => {
+  it('rejects cherry-picked descriptors, outside-boundary substitutions, and host-digest cohort shortcuts', async () => {
     const cherryPicked = writeCampaignAuthenticationFixture();
     const seventh = cherryPicked.campaign.familyCandidates.filter(
       ({ family }) => family === 'browser',
@@ -550,17 +736,16 @@ describe('seven-family performance publication gate', () => {
       ),
     ).rejects.toThrow(/identity is malformed/u);
 
-    const unnecessarySelector = writeCampaignAuthenticationFixture();
-    unnecessarySelector.campaign.cohortSelections.browser =
-      unnecessarySelector.campaign.familyCandidates.find(
-        ({ family }) => family === 'browser',
-      ).cohortDigest;
+    const hostShortcut = writeCampaignAuthenticationFixture();
+    hostShortcut.campaign.cohortSelections.browser = hostShortcut.campaign.familyCandidates.find(
+      ({ family }) => family === 'browser',
+    ).hostDigest;
     await expect(
       authenticatePerformancePublicationCampaign(
-        unnecessarySelector.campaign,
-        await campaignAuthenticationOptions(unnecessarySelector),
+        hostShortcut.campaign,
+        await campaignAuthenticationOptions(hostShortcut),
       ),
-    ).rejects.toThrow(/selector is unnecessary/u);
+    ).rejects.toThrow(/manifest cohort winner differs from automatic/u);
   });
 
   it('keeps metrics, timings, verdict details, and budgets outside candidate selection', async () => {
@@ -671,6 +856,20 @@ describe('seven-family performance publication gate', () => {
     }
     expect(() => renderPerformancePublicationMarkdown(result.publication)).toThrow(
       /must contain only documents and publication/u,
+    );
+  });
+
+  it('rederives the aggregate cohort winner without accepting a host-digest shortcut', () => {
+    const authenticated = authenticatedFixture();
+    const result = derivePerformancePublication(authenticated, fixtureDerivationOptions());
+    result.publication.campaign.cohortSelections.browser =
+      result.publication.campaign.familyCandidates.find(
+        ({ family }) => family === 'browser',
+      ).hostDigest;
+    resealPublication(result.publication);
+
+    expect(performancePublicationFindings(result.publication)).toContain(
+      'browser manifest cohort winner differs from automatic count-descending, digest-ascending selection',
     );
   });
 
@@ -2936,12 +3135,18 @@ function authenticatedCampaignFixture(productionBytes, families) {
   familyCandidates.sort((left, right) => left.runId - right.runId);
   return {
     boundary: { firstRunId: runs[0].runId, lastRunId: runs.at(-1).runId },
-    cohortSelections: {},
+    cohortSelections: Object.fromEntries(
+      FAMILY_NAMES.map((familyName) => [
+        familyName,
+        familyCandidates.find((candidate) => candidate.family === familyName).cohortDigest,
+      ]),
+    ),
     excludedFamilyArtifacts: [],
     familyCandidates,
     liveWorkflowRunsApiResponseDigest: digest('campaign-live-runs'),
     productionBytes: [selectedProductionBytes],
     productionBytesCandidates: [productionBytesCandidate],
+    pulseCount: runs.length,
     runs,
     selectedFamilies,
     selectedProductionBytes,
@@ -2960,11 +3165,11 @@ function productionBytesMetricIds() {
   ];
 }
 
-function writeCampaignAuthenticationFixture() {
+function writeCampaignAuthenticationFixture({ pulseCount = 7 } = {}) {
   const directory = mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-campaign-gate-'));
   temporaryDirectories.push(directory);
   const sourceCommit = 'a'.repeat(40);
-  const runIds = [10_001, 10_002, 10_003, 10_004, 10_005, 10_006, 10_007];
+  const runIds = Array.from({ length: pulseCount }, (_, index) => 10_001 + index);
   const locks = {
     'benchmarks/harness/pnpm-lock.yaml': digest('harness-lock'),
     'benchmarks/nextjs/pnpm-lock.yaml': digest('next-lock'),
@@ -2996,7 +3201,7 @@ function writeCampaignAuthenticationFixture() {
     FAMILY_NAMES.map((familyName) => [familyName, { baseline: [], holdout: null }]),
   );
   for (const [index, runId] of runIds.entries()) {
-    const runCreatedAt = `2026-08-13T00:0${String(index)}:00.000Z`;
+    const runCreatedAt = new Date(Date.UTC(2026, 7, 13, 0, index, 0)).toISOString();
     const apiUrl = `https://api.github.com/repos/kovojs/kovo/actions/runs/${String(runId)}`;
     const run = {
       artifacts_url: `${apiUrl}/artifacts`,
@@ -3174,11 +3379,17 @@ function writeCampaignAuthenticationFixture() {
   return {
     campaign: {
       boundary: { firstRunId: runIds[0], lastRunId: runIds.at(-1) },
-      cohortSelections: {},
+      cohortSelections: Object.fromEntries(
+        FAMILY_NAMES.map((familyName) => [
+          familyName,
+          familyCandidates.find((candidate) => candidate.family === familyName).cohortDigest,
+        ]),
+      ),
       excludedFamilyArtifacts: [],
       familyCandidates,
       productionBytes,
       productionBytesCandidates,
+      pulseCount: runIds.length,
       runs,
       selectedProductionBytes,
       workflowRunsApiMetadata: writeReference('campaign/workflow-runs.json', workflowRunsDocument),
@@ -3200,6 +3411,66 @@ function writeCampaignAuthenticationFixture() {
   };
 }
 
+function writeTopLevelFailedProducerFixture() {
+  const fixture = writeCampaignAuthenticationFixture();
+  rewriteCampaignRunJobs(fixture, 10_006, (jobs) => {
+    jobs.jobs.find(({ name }) => name === 'Browser matrix').conclusion = 'failure';
+  });
+  const failedCandidate = fixture.campaign.familyCandidates.find(
+    ({ family, runId }) => family === 'browser' && runId === 10_006,
+  );
+  const families = {};
+  const forbiddenPaths = new Set(Object.values(failedCandidate.descriptor));
+  for (const familyName of FAMILY_NAMES) {
+    const selected = fixture.campaign.familyCandidates
+      .filter(({ family }) => family === familyName)
+      .slice(0, 6)
+      .map((candidate, index) => {
+        const descriptor = campaignCandidateDescriptor(
+          `selected/${familyName}-${String(candidate.runId)}-${String(index)}`,
+        );
+        writeDescriptorPlaceholders(fixture.directory, descriptor);
+        if (familyName === 'browser' && candidate.runId === failedCandidate.runId) {
+          for (const relativePath of Object.values(descriptor)) forbiddenPaths.add(relativePath);
+        }
+        return descriptor;
+      });
+    families[familyName] = { baseline: selected.slice(0, 5), holdout: selected[5] };
+  }
+  for (const candidate of fixture.campaign.familyCandidates) {
+    writeDescriptorPlaceholders(fixture.directory, candidate.descriptor);
+  }
+  for (const candidate of fixture.campaign.productionBytesCandidates) {
+    writeDescriptorPlaceholders(fixture.directory, candidate.descriptor);
+  }
+  const productionBytes = campaignCandidateDescriptor('selected/production-bytes');
+  writeDescriptorPlaceholders(fixture.directory, productionBytes);
+  const input = {
+    campaign: fixture.campaign,
+    families,
+    productionBytes,
+    repository: 'kovojs/kovo',
+    schema: PERF_PUBLICATION_INPUT_SCHEMA,
+  };
+  writeFileSync(
+    path.join(fixture.directory, 'performance-publication-input.json'),
+    `${JSON.stringify(input, null, 2)}\n`,
+  );
+  for (const relativePath of forbiddenPaths) {
+    chmodSync(path.join(fixture.directory, relativePath), 0o000);
+  }
+  return { ...fixture, failedCandidate, forbiddenPaths, input };
+}
+
+function writeDescriptorPlaceholders(directory, descriptor) {
+  for (const relativePath of Object.values(descriptor)) {
+    const file = path.join(directory, relativePath);
+    if (existsSync(file)) continue;
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, 'tampered-untrusted-payload\n');
+  }
+}
+
 async function campaignAuthenticationOptions(fixture) {
   return {
     authenticateArtifactEvidence: fixture.authenticateArtifactEvidence,
@@ -3214,6 +3485,28 @@ async function campaignAuthenticationOptions(fixture) {
     repository: 'kovojs/kovo',
     selectedFamilies: fixture.selectedFamilies,
     selectedProductionBytes: fixture.selectedProductionBytes,
+  };
+}
+
+async function rewriteCampaignCandidateCohort(fixture, candidate, seed) {
+  const evidence = await fixture.authenticateArtifactEvidence(candidate.descriptor);
+  const host = structuredClone(evidence.report.host);
+  host.cpu.model = seed;
+  const { digest: _digest, schema: _schema, totalMemoryBytes: _totalMemoryBytes, ...facts } = host;
+  host.digest = canonicalDigest(facts);
+  evidence.report.host = host;
+  candidate.hostDigest = host.digest;
+  candidate.cohortDigest = campaignTestCohortDigest(evidence.report, candidate.family);
+}
+
+async function setSelectedCampaignFamily(fixture, family, candidates) {
+  const evidence = [];
+  for (const candidate of candidates) {
+    evidence.push(await fixture.authenticateArtifactEvidence(candidate.descriptor));
+  }
+  fixture.selectedFamilies[family] = {
+    baseline: evidence.slice(0, 5),
+    holdout: evidence[5],
   };
 }
 
@@ -3291,6 +3584,33 @@ function excludeCampaignFamilyArtifact(fixture, { conclusion = 'failure', family
       left.family.localeCompare(right.family),
   );
   return candidate;
+}
+
+function authorizeCheckBudgetFailure(fixture, runId) {
+  rewriteCampaignRunJobs(fixture, runId, (jobs) => {
+    const producer = jobs.jobs.find(({ name }) => name === 'Check scaling');
+    producer.conclusion = 'failure';
+    producer.steps = [
+      campaignJobStep(1, 'Run the kovo check component-count ladder', 'success'),
+      campaignJobStep(2, 'Evaluate against perf-budgets.json', 'failure'),
+      campaignJobStep(
+        3,
+        'Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+        'success',
+      ),
+    ];
+  });
+}
+
+function campaignJobStep(number, name, conclusion) {
+  return {
+    completed_at: `2026-08-13T00:00:${String(number + 10).padStart(2, '0')}.000Z`,
+    conclusion,
+    name,
+    number,
+    started_at: `2026-08-13T00:00:${String(number).padStart(2, '0')}.000Z`,
+    status: 'completed',
+  };
 }
 
 function omitCampaignProductionBytes(fixture, runId, { listingEvent } = {}) {
