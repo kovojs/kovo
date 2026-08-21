@@ -305,6 +305,7 @@ shows one family's shape:
   "repository": "kovojs/kovo",
   "campaign": {
     "boundary": { "firstRunId": 1001, "lastRunId": 1024 },
+    "pulseCount": 24,
     "workflowRunsApiMetadata": {
       "path": "campaign/workflow-runs.api.json",
       "byteLength": 1234,
@@ -391,15 +392,16 @@ five-plus-one shape for `browser`, `dev-n24`, `dev-n216`, `build-n24`, `build-n2
 `check`, plus exactly one top-level `productionBytes` descriptor and the complete campaign custody
 object. Missing or additional families, a missing sidecar, an omitted eligible campaign candidate,
 or an invented/altered exclusion fails before publication. Every path is canonical and relative to
-the manifest directory. Before live
-API access, the gate recursively opens every exact file without following symlinks, including the
-manifest, and pins its SHA-256, device, inode, mode, link count, size, modification time, and change
-time. Each contained, single-link descriptor read must match that opening identity and digest; path
-or inode reuse across descriptors fails closed. After all descriptor authentication, the gate
-independently re-hashes the exact recursive tree, requires the closing census to equal the opening
-census byte-for-byte, and completes a final no-follow path/identity sweep against the closing
-snapshots. Extra or missing files/directories, non-regular nodes, unlink/recreate replacement,
-same-inode rewriting, and attempted timestamp restoration all fail closed.
+the manifest directory. Before live API access, the gate takes a full no-follow metadata-only tree
+census; it does not hash or open family payloads. It hashes and reads the manifest, campaign
+authority, and Production-bytes authority first, authenticates saved/live producer eligibility,
+then takes the admitted tree's opening hash census before reading admitted family descriptors. Each
+contained, single-link descriptor read must match that opening identity and digest; path or inode
+reuse across descriptors fails closed. After all descriptor authentication, the gate independently
+re-hashes the admitted recursive tree, requires the closing census to equal the opening census
+byte-for-byte, and completes a final no-follow path/identity sweep against the closing snapshots.
+Extra or missing files/directories, non-regular nodes, unlink/recreate replacement, same-inode
+rewriting, and attempted timestamp restoration all fail closed.
 
 The filesystem checks establish custody through the final sweep; they are not an atomic snapshot or
 an external timestamp. The operator must prevent concurrent writes throughout the gate invocation
@@ -550,14 +552,15 @@ response digests for audit, then canonicalizes only their reviewed immutable fie
 saved/live authority digests to match. Whole-response equality is deliberately not authority: an
 old run's embedded `pull_requests[].head.sha` follows the current PR head after the measured run.
 The run must be completed, use `.github/workflows/perf-realistic.yml`, belong to `kovojs/kovo`, and
-retain the exact immutable head/source SHA, run attempt, and expected producer job. Every ratified
-family producer must succeed. The Production-bytes producer may conclude `failure` only when the
-all-attempt jobs API proves this ordered step outcome: measurement succeeded, the separate budget
-evaluation was the sole failed step, and the later commit-pinned `always()` upload succeeded. These
-step facts participate in saved/live authority equality and remain in the publication reference. A
-skipped, cancelled, failed, duplicated, or out-of-order measurement/upload is rejected; the report
-must also remain complete, measured, clean, and byte-authenticated. A failed unrelated sibling job
-does not invalidate an accepted producer's artifact.
+retain the exact immutable head/source SHA, run attempt, and expected producer job. Browser, dev,
+build, and server family producers must succeed. The check producer may conclude `failure` only
+when its component-count measurement succeeded, budget evaluation was the sole failed step, and
+the later commit-pinned `always()` upload succeeded. The Production-bytes producer independently
+permits the same exact posture using its bytes measurement step. These step facts participate in
+saved/live authority equality and remain in the publication reference. A skipped, cancelled,
+failed, duplicated, or out-of-order measurement/upload is rejected; the report must also remain
+complete, measured, clean, and byte-authenticated. A failed unrelated sibling job does not
+invalidate an accepted producer's artifact.
 
 The report separately retains `GITHUB_WORKFLOW_SHA`, the commit whose workflow GitHub evaluated.
 For the required pull-request campaign it is the synthetic merge/event SHA. The gate fetches the

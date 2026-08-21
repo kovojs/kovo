@@ -154,16 +154,17 @@ family or byte candidate. Unselected seventh-or-later admitted family reports an
 candidates are retained. Exclusions are identities in the ledger and manifest, not copied payload
 files, so they do not change this count.
 
-Before any live GitHub request, the gate recursively opens every exact file without following
-symlinks, including the manifest, and records its SHA-256 plus device, inode, mode, link count,
-size, modification time, and change time. Every later descriptor read must match that opening
-identity and digest. After authentication, the gate independently repeats the recursive hash and
-identity census, requires it to equal the opening census byte-for-byte, then performs one more
-complete no-follow path/identity sweep to catch a file changed after its closing hash but before
-its final identity check. The tree must equal the manifest plus all referenced raw files exactly.
-Missing or extra files and directories, traversal, unlink/recreate, same-inode rewrites, metadata
-restoration attempts, symlinks, hardlinks, FIFOs, sockets, devices, and file/directory substitution
-fail closed.
+Before any live GitHub request, the gate recursively inventories the exact tree without following
+symlinks, recording path, device, inode, mode, link count, size, modification time, and change time
+without opening or hashing family payloads. It then hashes and reads only the manifest, campaign
+authority, and Production-bytes authority needed to authenticate saved/live identities and producer
+eligibility. Only after that classification does it take the admitted tree's opening hash census;
+every admitted descriptor read must match that identity and digest. After authentication, the gate
+independently repeats the admitted recursive hash and identity census, requires it to equal the
+opening census byte-for-byte, then performs one more complete no-follow path/identity sweep. The
+tree must equal the manifest plus all referenced raw files exactly. Missing or extra files and
+directories, traversal, unlink/recreate, same-inode rewrites, metadata restoration attempts,
+symlinks, hardlinks, FIFOs, sockets, devices, and file/directory substitution fail closed.
 
 This is a local custody proof through the final sweep, not an atomic filesystem snapshot or an
 external timestamp. The operator must exclude concurrent writers for the entire gate invocation
