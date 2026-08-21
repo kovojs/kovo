@@ -67,23 +67,38 @@ vp exec node scripts/perf-publication-collect.mjs collect \
   --run <workflow-run-id>
 ```
 
-Collection preserves and content-addresses the raw campaign workflow-run census and every run's raw
-artifact listing, in addition to the exact artifact API, workflow-run API, all-attempt jobs API,
-ZIP, and extracted report bytes. Its ledger must enumerate every literal publication artifact in
-those listings; removing a run, listing, family candidate, or Production-bytes candidate is rejected.
-It accepts the seven literal baseline artifacts plus every literal
-`kovo-perf-bytes` artifact present in the selected runs. Family reports retain their existing
-run/source/workload rules. A Production-bytes candidate must be the PR-only `bytes` / `Production
-bytes` producer, a one-member `bytes.json` ZIP, clean and stable exact-source provenance with the
-three required lock digests, `suite=bytes`, `componentCount=24`, complete integrity, and the exact
-five deterministic byte metrics. The report itself may be measured even when its budget-evaluation
-step makes the producer job fail. That exception is authenticated from the all-attempt jobs API: the
-measurement step must have succeeded, budget evaluation must be the sole failed step, and the later
-commit-pinned artifact-upload step must have succeeded. A skipped, cancelled, failed, duplicated, or
-out-of-order required step is rejected. This preserves a measured block without admitting a stale or
-partial report as evidence. The single complete campaign directory is an immutable manifest input.
-The moment at which its run-ID endpoints were preregistered remains a procedural trust boundary;
-without an external timestamping service the repository cannot prove that timing cryptographically.
+Collection schema `kovo-performance-publication-collection/v4` preserves and content-addresses the
+raw campaign workflow-run census and every run's complete raw artifact listing, in addition to the
+exact artifact API, workflow-run API, all-attempt jobs API, ZIP, and extracted report bytes for
+admitted evidence. A recognized family artifact name is not sufficient evidence: the collector
+first authenticates the one exact current-attempt producer for every family. It admits and downloads
+that family's artifact only when the producer concluded `success`. A named artifact from an
+authenticated terminal non-success producer stays in the raw listing and is recorded in the
+ledger's exact exclusion census
+`{runId,family,artifactId,producerJobId,conclusion}`, but its ZIP and report are never opened or
+treated as a sample. A successful producer with a missing, duplicate, multi-member, malformed, or
+wrong-source artifact invalidates the campaign rather than becoming an exclusion. Missing,
+ambiguous, non-terminal, or foreign producer authority also fails closed.
+
+The collection ledger, manifest reload, and live gate independently rederive the eligible inventory
+as the intersection of the complete artifact listing and exact successful producer jobs. Removing
+an eligible family candidate, inventing one from a failed producer, altering an exclusion, or
+omitting a run, listing, or Production-bytes candidate is rejected. The manifest is
+`kovo-performance-publication-input/v6`; it carries the complete raw listings, admitted candidates,
+and explicit exclusions without copying excluded payloads.
+
+Every literal `kovo-perf-bytes` artifact remains required and is outside the family-exclusion rule.
+A Production-bytes candidate must be the PR-only `bytes` / `Production bytes` producer, a one-member
+`bytes.json` ZIP, clean and stable exact-source provenance with the three required lock digests,
+`suite=bytes`, `componentCount=24`, complete integrity, and the exact five deterministic byte
+metrics. The report itself may be measured even when its budget-evaluation step makes the producer
+job fail. That exception is authenticated from the all-attempt jobs API: the measurement step must
+have succeeded, budget evaluation must be the sole failed step, and the later commit-pinned
+artifact-upload step must have succeeded. A skipped, cancelled, failed, duplicated, or out-of-order
+required step is rejected. This preserves a measured block without admitting a stale or partial
+report as evidence. The single complete campaign directory is an immutable manifest input. The
+moment at which its run-ID endpoints were preregistered remains a procedural trust boundary; without
+an external timestamping service the repository cannot prove that timing cryptographically.
 
 Collection prints each family's identity-only cohort digest and admitted report count. If any
 family has no cohort of at least six reports, the campaign is insufficient and invalid: do not top
@@ -138,11 +153,13 @@ reauthentication retain them all.
 
 The result is `performance-publication-input.json` plus `216 + 2R + 5F + 5B` raw custody files,
 excluding optional build profiles, where `R` is the campaign-run count, `F` is every authenticated
-literal family candidate, and `B` is every authenticated literal Production-bytes candidate. The
-fixed 216 comprises 210 files for the selected 42 family reports, five for the selected top-level
-Production-bytes sidecar, and one exact-source workflow-run census. Campaign authority contributes
-two files per run, and complete candidate custody contributes five files per family or byte
-candidate. Unselected seventh-or-later family reports and later byte candidates are retained.
+successful-producer family candidate, and `B` is every authenticated literal Production-bytes
+candidate. The fixed 216 comprises 210 files for the selected 42 family reports, five for the
+selected top-level Production-bytes sidecar, and one exact-source workflow-run census. Campaign
+authority contributes two files per run, and complete candidate custody contributes five files per
+family or byte candidate. Unselected seventh-or-later successful family reports and later byte
+candidates are retained. Exclusions are identities in the ledger and manifest, not copied payload
+files, so they do not change this count.
 
 Before any live GitHub request, the gate recursively opens every exact file without following
 symlinks, including the manifest, and records its SHA-256 plus device, inode, mode, link count,
@@ -161,8 +178,14 @@ and preserve the custody directory after the gate returns if it is to remain rep
 evidence. Raw campaign, profile, and Production-bytes custody stays in this external directory and
 is never copied into the committed publication tree. The separately generated publication root is
 only the exact 23-file derived inventory: aggregate JSON and Markdown plus 21 evidence JSON files.
-Returning from the gate does not transfer custody responsibility to those derived files. Run
-`scripts/perf-publication-gate.mjs` from the same clean measured checkout; that gate remains the
-authority for live GitHub/workflow authentication, re-ratification, budget derivation, holdout
-evaluation, and the final publishable/blocked/unproven verdict. Optional N=216 build-profile
-evidence is a separate conditional input and is not selected by this baseline-only helper.
+Returning from the gate does not transfer custody responsibility to those derived files. Normally,
+run `scripts/perf-publication-gate.mjs` from the same clean measured checkout. If a committed
+evidence-interpreter repair is required after measurement, seal its commit, tree, and stable patch
+identity separately from the measured source and invoke the repaired collector/gate by absolute
+path while the process working directory remains the clean measured checkout. The measured checkout
+continues to own source, workflow, budget, and dependency authority; the separate committed tool is
+only the evidence interpreter. Never use an uncommitted interpreter or move the measured PR head
+before the live gate. The gate remains the authority for live GitHub/workflow/jobs authentication,
+re-ratification, budget derivation, holdout evaluation, and the final
+publishable/blocked/unproven verdict. Optional N=216 build-profile evidence is a separate conditional
+input and is not selected by this baseline-only helper.

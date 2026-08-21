@@ -134,6 +134,14 @@ not another six-report family. It is emitted only by the PR-only `bytes` / `Prod
 The metrics-blind collector retains every such artifact in the selected runs and chooses the
 earliest authenticated candidate by immutable run chronology for the final manifest.
 
+A recognized family artifact name is only a listing identity. The collector and live gate admit it
+as a candidate only after authenticating the exact current-attempt family producer as successful.
+If a terminal non-success producer still uploads a named artifact, the complete raw listing and an
+explicit `{runId,family,artifactId,producerJobId,conclusion}` exclusion remain in custody, but the
+artifact ZIP and report are never opened or counted. A successful producer's missing or malformed
+artifact still invalidates the campaign. This classification uses only job authority, never report
+metrics or budget outcomes, and does not permit replacement or top-up samples.
+
 Use the canonical artifact page URL, not a signed download URL, for every `--location`:
 
 ```text
@@ -286,12 +294,12 @@ unzip -p "$kovo_perf_custody/run-1/browser.zip" comparison.json \
   > "$kovo_perf_custody/run-1/comparison.json"
 ```
 
-The input manifest is `kovo-performance-publication-input/v5`. This abridged, non-runnable example
+The input manifest is `kovo-performance-publication-input/v6`. This abridged, non-runnable example
 shows one family's shape:
 
 ```json
 {
-  "schema": "kovo-performance-publication-input/v5",
+  "schema": "kovo-performance-publication-input/v6",
   "repository": "kovojs/kovo",
   "campaign": {
     "boundary": { "firstRunId": 1001, "lastRunId": 1013 },
@@ -302,7 +310,16 @@ shows one family's shape:
     },
     "cohortSelections": {},
     "runs": ["13 content-addressed run API and artifact-list API pairs"],
-    "familyCandidates": ["every literal family candidate and its five-file descriptor"],
+    "familyCandidates": ["every exact successful-producer family candidate and descriptor"],
+    "excludedFamilyArtifacts": [
+      {
+        "runId": 1002,
+        "family": "browser",
+        "artifactId": 2002,
+        "producerJobId": 3002,
+        "conclusion": "failure"
+      }
+    ],
     "productionBytes": ["complete created_at/run-ID chronology"],
     "productionBytesCandidates": [
       "every literal Production-bytes candidate and its five-file descriptor"
@@ -370,8 +387,9 @@ shows one family's shape:
 The example expands only `browser` for readability. A real manifest must contain that exact
 five-plus-one shape for `browser`, `dev-n24`, `dev-n216`, `build-n24`, `build-n216`, `server`, and
 `check`, plus exactly one top-level `productionBytes` descriptor and the complete campaign custody
-object. Missing or additional families, a missing sidecar, or an omitted campaign run/candidate fail
-before publication. Every path is canonical and relative to the manifest directory. Before live
+object. Missing or additional families, a missing sidecar, an omitted eligible campaign candidate,
+or an invented/altered exclusion fails before publication. Every path is canonical and relative to
+the manifest directory. Before live
 API access, the gate recursively opens every exact file without following symlinks, including the
 manifest, and pins its SHA-256, device, inode, mode, link count, size, modification time, and change
 time. Each contained, single-link descriptor read must match that opening identity and digest; path
@@ -442,13 +460,14 @@ directory alias, or symlink is rejected instead of overwritten.
 
 The CLI completes all 42 selected baseline/holdout custody calls, the selected Production-bytes
 custody call, every carried family and Production-bytes candidate custody call, live
-reauthentication of the complete campaign workflow-run and artifact-list chronology, and both
-optional build-profile calls before
-it creates an evidence, JSON, Markdown, staging, or output path. A requested in-repository output is
-therefore created only after the whole measured checkout has passed every clean-source check; using
-the external directory above avoids coupling collection and publication to repository state.
+reauthentication of the complete campaign workflow-run, artifact-list, and all-attempt jobs
+chronology, exact rederivation of admitted candidates and exclusions, and both optional build-profile
+calls before it creates an evidence, JSON, Markdown, staging, or output path. A requested
+in-repository output is therefore created only after the whole measured checkout has passed every
+clean-source check; using the external directory above avoids coupling collection and publication
+to repository state.
 
-The output schema is `kovo-performance-publication/v7`. Browser/server budget and holdout documents
+The output schema is `kovo-performance-publication/v8`. Browser/server budget and holdout documents
 use `kovo-comparison-performance-budget/v2` and
 `kovo-comparison-performance-evaluation/v2`. The output root contains exactly 23 regular files:
 `performance-publication.json`, `performance-publication.md`, and exactly 21 JSON files under
@@ -459,9 +478,10 @@ pre-write and readback inventory gates. The aggregate JSON content-addresses tho
 retains every canonical artifact page, API URL, API-response digest, artifact ZIP digest, report
 digest, execution, source, lock, host, and workload identity. The aggregate also retains the
 preregistered boundary,
-every authenticated run and literal publication-artifact identity, the complete Production-bytes
-chronology, every authenticated family/byte candidate reference, the independently re-derived
-cohort selection, and the earliest selected candidate. Its Markdown surfaces baseline and holdout
+every authenticated run and literal publication-artifact identity, every authenticated
+failed-producer exclusion, the complete Production-bytes chronology, every authenticated family/byte
+candidate reference, the independently re-derived cohort selection, and the earliest selected
+candidate. Its Markdown surfaces baseline and holdout
 completion and follow-on assessments for all seven families, links exact fixture sources at the
 measured commit, and preserves the architectural lane warning beside each subject. It also embeds
 and renders the cross-corpus
