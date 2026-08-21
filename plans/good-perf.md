@@ -217,6 +217,12 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     retain every required browser-visible latency, correctness, state, ready, and RSS metric. The
     resulting recovery p95 miss (2,348.68/2,464.17 ms at N=24 and 3,015.42/2,947.49 ms at N=216
     for baseline/holdout) remains literal open performance work.
+- [x] Decide the mode-invariant fresh query-identity fast path selected from the recovery profiles.
+  - Rejected; do not integrate `e52ddaf84` → `53eef7c02` → `64abadb44`. Clean full N=24 and N=216
+    `B,S,S,B` reports met both absolute latency targets, every causal win/CI, correctness, state,
+    and RSS guardrail, but N=216 fresh-ready p95 regressed 6.92% against the 5% limit. Exact
+    candidate custody, metrics, raw-report digests, and the non-retry disposition are in
+    `docs/performance/dev-query-identity-spike.md`.
 - [ ] Reach the syntax-error/recovery first milestone at both N=24 and N=216: syntax p95 at most
       1 second, recovery p95 at most 2 seconds, zero lost/silent revisions, and no greater than 5%
       p95 latency or process-tree RSS regression. Accept an implementation only under the plan's
