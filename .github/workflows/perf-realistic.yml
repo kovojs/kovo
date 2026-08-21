@@ -670,11 +670,11 @@ jobs:
           printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
       - name: Prepare exact baseline and profile-driven candidate source worktrees
         env:
-          KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 1c591eca2fa7d1ba9c5cf90673cea36c54ee158f
-          KOVO_DEV_GENERATION_CANDIDATE_FIRST_COMMIT: 1aea7dd0678254ceeaa869c537b8f5317777cb08
-          KOVO_DEV_GENERATION_CANDIDATE_PARENT: eb16f11734a2ab635a8207f2e6ece4612713f248
-          KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-async-analysis-only-20260814
-          KOVO_DEV_GENERATION_CANDIDATE_SECOND_COMMIT: 07d6e5b23245df0d48fc071f78397329750705ee
+          KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 64abadb44c02d9414ddc684684c67ab1a921fbea
+          KOVO_DEV_GENERATION_CANDIDATE_FIRST_COMMIT: e52ddaf846b8729abcc2d9887ff648429407f86c
+          KOVO_DEV_GENERATION_CANDIDATE_PARENT: 01b2c759468f41a3fc4739225eb13c8f5aa11406
+          KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-query-mode-safe-20260821
+          KOVO_DEV_GENERATION_CANDIDATE_SECOND_COMMIT: 53eef7c028089c6ef8be33594a4626a849c957ca
           KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
         run: |
           baseline_root="$RUNNER_TEMP/kovo-dev-generation-n$KOVO_PERF_CORPUS_SIZE-baseline"
@@ -690,8 +690,8 @@ jobs:
           test "$(git rev-parse "$KOVO_DEV_GENERATION_CANDIDATE_FIRST_COMMIT^")" = "$KOVO_DEV_GENERATION_CANDIDATE_PARENT"
           test "$(git rev-parse "$KOVO_DEV_GENERATION_CANDIDATE_SECOND_COMMIT^")" = "$KOVO_DEV_GENERATION_CANDIDATE_FIRST_COMMIT"
           test "$(git rev-parse "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT^")" = "$KOVO_DEV_GENERATION_CANDIDATE_SECOND_COMMIT"
-          git worktree add --detach "$baseline_root" "$KOVO_PERF_SOURCE_SHA"
-          git worktree add --detach "$spike_root" "$KOVO_PERF_SOURCE_SHA"
+          git worktree add --detach "$baseline_root" "$KOVO_DEV_GENERATION_CANDIDATE_PARENT"
+          git worktree add --detach "$spike_root" "$KOVO_DEV_GENERATION_CANDIDATE_PARENT"
           git -C "$spike_root" \
             -c user.name='Kovo Performance CI' \
             -c user.email='performance-ci@kovo.invalid' \
@@ -700,8 +700,8 @@ jobs:
               "$KOVO_DEV_GENERATION_CANDIDATE_FIRST_COMMIT" \
               "$KOVO_DEV_GENERATION_CANDIDATE_SECOND_COMMIT" \
               "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"
-          test "$(git -C "$spike_root" rev-parse HEAD~3)" = "$KOVO_PERF_SOURCE_SHA"
-          test "$(git -C "$spike_root" rev-list --count "$KOVO_PERF_SOURCE_SHA..HEAD")" = 3
+          test "$(git -C "$spike_root" rev-parse HEAD~3)" = "$KOVO_DEV_GENERATION_CANDIDATE_PARENT"
+          test "$(git -C "$spike_root" rev-list --count "$KOVO_DEV_GENERATION_CANDIDATE_PARENT..HEAD")" = 3
           test -z "$(git -C "$baseline_root" status --porcelain=v1 --untracked-files=all)"
           test -z "$(git -C "$spike_root" status --porcelain=v1 --untracked-files=all)"
       # The runner prepares/builds/packs/frozen-installs one exact product per source worktree,

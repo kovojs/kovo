@@ -55,7 +55,7 @@ describe('dev-generation candidate comparator', () => {
     expect(DEV_GENERATION_SPIKE_SCHEMA).toBe('kovo-dev-generation-spike-comparison/v3');
     expect(DEV_GENERATION_SPIKE_PREPARE_SCHEMA).toBe('kovo-dev-generation-spike-prepare/v3');
     expect(DEV_GENERATION_CANDIDATE_BINDING_SCHEMA).toBe(
-      'kovo-dev-generation-candidate-binding/v6',
+      'kovo-dev-generation-candidate-binding/v7',
     );
     expect(DEV_GENERATION_CANDIDATE_DELTA_SCHEMA).toBe('kovo-dev-generation-path-blob-delta/v1');
     expect(DEV_GENERATION_ADAPTER_FAILURE_SCHEMA).toBe('kovo-dev-generation-adapter-failure/v3');
@@ -78,36 +78,32 @@ describe('dev-generation candidate comparator', () => {
 
   it('binds the profile-driven development critical-path candidate identity', () => {
     expect(DEV_CRITICAL_PATH_CANDIDATE).toEqual({
-      commit: '1c591eca2fa7d1ba9c5cf90673cea36c54ee158f',
-      parent: 'eb16f11734a2ab635a8207f2e6ece4612713f248',
-      parentTree: '66aa1edca7a8112ebd708511e462e24bbd9b80b6',
+      commit: '64abadb44c02d9414ddc684684c67ab1a921fbea',
+      parent: '01b2c759468f41a3fc4739225eb13c8f5aa11406',
+      parentTree: 'dc738e259fe265fe3be0ad6264b7253aada68585',
       paths: [
-        'packages/server/src/internal/data-plane-static-analysis.test.ts',
-        'packages/server/src/internal/data-plane-static-analysis.ts',
-        'packages/server/src/internal/runtime-registry-wire.ts',
-        'packages/server/src/registry-facts.test.ts',
-        'packages/server/src/vite-data-plane-gate.test.ts',
-        'packages/server/src/vite.ts',
+        'packages/compiler/src/query-runtime-identities.test.ts',
+        'packages/compiler/src/scan/query-runtime-identities.ts',
       ],
-      ref: 'refs/heads/perf-spike/dev-async-analysis-only-20260814',
+      ref: 'refs/heads/perf-spike/dev-query-mode-safe-20260821',
       series: [
         {
-          commit: '1aea7dd0678254ceeaa869c537b8f5317777cb08',
-          parent: 'eb16f11734a2ab635a8207f2e6ece4612713f248',
-          tree: '2b9ecbca08f6ebc7777a21163eead9dd9b3205e4',
+          commit: 'e52ddaf846b8729abcc2d9887ff648429407f86c',
+          parent: '01b2c759468f41a3fc4739225eb13c8f5aa11406',
+          tree: '09bc74a747ddd309a407dede73a13eba5340e01c',
         },
         {
-          commit: '07d6e5b23245df0d48fc071f78397329750705ee',
-          parent: '1aea7dd0678254ceeaa869c537b8f5317777cb08',
-          tree: '4c9a0aaa38ce39ddf73c839e083660f131bd951b',
+          commit: '53eef7c028089c6ef8be33594a4626a849c957ca',
+          parent: 'e52ddaf846b8729abcc2d9887ff648429407f86c',
+          tree: '08d5f1874f9533eb1f5ba1b52bbeec49796e16ae',
         },
         {
-          commit: '1c591eca2fa7d1ba9c5cf90673cea36c54ee158f',
-          parent: '07d6e5b23245df0d48fc071f78397329750705ee',
-          tree: 'c409518713e7ae1451b4eb3d3524b17b4ac823fa',
+          commit: '64abadb44c02d9414ddc684684c67ab1a921fbea',
+          parent: '53eef7c028089c6ef8be33594a4626a849c957ca',
+          tree: 'fcacdc88f1bab2375c7fa46c768489dfc9a7b16d',
         },
       ],
-      tree: 'c409518713e7ae1451b4eb3d3524b17b4ac823fa',
+      tree: 'fcacdc88f1bab2375c7fa46c768489dfc9a7b16d',
     });
   });
 
@@ -250,7 +246,7 @@ describe('dev-generation candidate comparator', () => {
     );
   });
 
-  it('rejects shortened and extended v6 candidate series before reading their objects', () => {
+  it('rejects shortened and extended v7 candidate series before reading their objects', () => {
     const fixture = candidateFixture();
     const authenticate = (series) =>
       authenticateGenerationCandidateRoots(
@@ -286,7 +282,7 @@ describe('dev-generation candidate comparator', () => {
     expect(binding).toMatchObject({
       baseline: { commit: fixture.sourceCommit },
       candidate: fixture.candidate,
-      schema: 'kovo-dev-generation-candidate-binding/v6',
+      schema: 'kovo-dev-generation-candidate-binding/v7',
       spike: { parent: fixture.sourceCommit },
     });
     expect(fixture.sourceCommit).not.toBe(fixture.candidate.parent);
