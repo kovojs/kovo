@@ -23,10 +23,16 @@ import {
 
 const KOVO_QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 let completeQueryIdentityProgramConstructions = 0;
+let queryIdentityDependencyAnalyses = 0;
 
 /** @internal Test-only observation of conservative full-Program fallbacks. */
 export function completeQueryIdentityProgramConstructionsForTesting(): number {
   return completeQueryIdentityProgramConstructions;
+}
+
+/** @internal Test-only observation of dependency-sensitive query analysis. */
+export function queryIdentityDependencyAnalysesForTesting(): number {
+  return queryIdentityDependencyAnalyses;
 }
 
 export interface QueryRuntimeIdentityProjectOptions {
@@ -58,9 +64,21 @@ export function resolveComponentQueryRuntimeNames(
   const source = options.source;
   if (source.length === 0) return Object.freeze(Object.create(null) as Record<string, string>);
 
-  const compilerOptions = queryIdentityCompilerOptions(options.rootDirectory, fileName);
   const model = parseComponentModule(fileName, source);
   const entries = allComponentOptionObjectEntries(model, 'queries');
+  const sourceParseClean = parseDiagnosticsForSourceFile(model.sourceFile, source).length === 0;
+  // Most component modules do not declare a query plan. Resolve metadata-owned names and
+  // dependency-free aliases before reading tsconfig, constructing a confined filesystem, or
+  // opening either TypeScript project. The parse-diagnostic check preserves the conservative
+  // Program path for malformed source; a successful early return therefore removes work only
+  // when no dependency can affect the result (SPEC §4.1, §5.2, §11.4).
+  if (sourceParseClean) {
+    const independent = dependencyIndependentQueryRuntimeNames(entries, options.knownNames);
+    if (independent.complete) return Object.freeze(independent.names);
+  }
+
+  queryIdentityDependencyAnalyses += 1;
+  const compilerOptions = queryIdentityCompilerOptions(options.rootDirectory, fileName);
   const direct = resolveFreshDirectQueryRuntimeNames({
     compilerOptions,
     entries,
@@ -68,6 +86,7 @@ export function resolveComponentQueryRuntimeNames(
     ...(options.knownNames === undefined ? {} : { knownNames: options.knownNames }),
     model,
     rootDirectory: options.rootDirectory,
+    sourceParseClean,
   });
   if (direct !== undefined) return direct;
 
@@ -119,6 +138,30 @@ interface FreshDirectQueryRuntimeNameOptions {
   readonly knownNames?: Readonly<Record<string, string>>;
   readonly model: ReturnType<typeof parseComponentModule>;
   readonly rootDirectory: string;
+  readonly sourceParseClean: boolean;
+}
+
+interface DependencyIndependentQueryRuntimeNames {
+  readonly complete: boolean;
+  readonly names: Record<string, string>;
+}
+
+function dependencyIndependentQueryRuntimeNames(
+  entries: readonly ObjectLiteralEntry[],
+  knownNames: Readonly<Record<string, string>> | undefined,
+): DependencyIndependentQueryRuntimeNames {
+  const names = initialQueryRuntimeNames(knownNames);
+  let complete = true;
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    if (Object.getOwnPropertyDescriptor(names, entry.key) !== undefined) continue;
+    if (entry.queryBinding?.queryKeyExpression !== undefined) {
+      complete = false;
+      continue;
+    }
+    defineQueryRuntimeName(names, entry.key, entry.key);
+  }
+  return { complete, names };
 }
 
 /**
@@ -132,11 +175,7 @@ interface FreshDirectQueryRuntimeNameOptions {
 function resolveFreshDirectQueryRuntimeNames(
   options: FreshDirectQueryRuntimeNameOptions,
 ): Readonly<Record<string, string>> | undefined {
-  if (
-    parseDiagnosticsForSourceFile(options.model.sourceFile, options.model.sourceFile.text).length
-  ) {
-    return undefined;
-  }
+  if (!options.sourceParseClean) return undefined;
   const fileSystem = createCompilerSourceFileSystem(options.rootDirectory);
   if (fileSystem === null) return undefined;
   const result = initialQueryRuntimeNames(options.knownNames);
@@ -350,7 +389,22 @@ function initialQueryRuntimeNames(
   knownNames: Readonly<Record<string, string>> | undefined,
 ): Record<string, string> {
   const result = Object.create(null) as Record<string, string>;
-  for (const [alias, runtimeName] of Object.entries(knownNames ?? {})) {
+  if (knownNames === undefined) return result;
+  if (typeof knownNames !== 'object' || knownNames === null || Array.isArray(knownNames)) {
+    throw new TypeError('Kovo query identity known names must be an own string record.');
+  }
+  for (const alias of Object.keys(knownNames)) {
+    const descriptor = Object.getOwnPropertyDescriptor(knownNames, alias);
+    if (
+      descriptor === undefined ||
+      !Object.hasOwn(descriptor, 'value') ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError(
+        `Kovo query identity known name "${alias}" must be an own string data property.`,
+      );
+    }
+    const runtimeName = descriptor.value;
     defineQueryRuntimeName(result, alias, runtimeName);
   }
   return result;

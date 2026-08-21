@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { deriveRegistryIdentity } from './registry-identities.js';
 import {
   completeQueryIdentityProgramConstructionsForTesting,
+  queryIdentityDependencyAnalysesForTesting,
   resolveComponentQueryRuntimeNames,
 } from './scan/query-runtime-identities.js';
 
@@ -28,6 +29,164 @@ afterEach(() => {
 });
 
 describe('compiler-owned query runtime identity project', () => {
+  it('keeps N=216 zero-query modules out of dependency analysis', () => {
+    const root = projectRoot();
+    installFrameworkServer(root);
+    writeFile(
+      root,
+      'package.json',
+      JSON.stringify({ name: 'kovo-query-corpus-test', private: true, type: 'module' }),
+    );
+    writeFile(
+      root,
+      'tsconfig.json',
+      JSON.stringify({ compilerOptions: { module: 'ESNext', moduleResolution: 'Bundler' } }),
+    );
+    writeFile(root, 'src/kovo.ts', corpusQueryProviderSource());
+
+    const beforeDependencies = queryIdentityDependencyAnalysesForTesting();
+    const beforePrograms = completeQueryIdentityProgramConstructionsForTesting();
+    for (let index = 0; index < 213; index += 1) {
+      const id = String(index + 1).padStart(3, '0');
+      const source = [
+        '/** @jsxImportSource @kovojs/server */',
+        "import { component } from '@kovojs/core';",
+        `export const CorpusComponent${id} = component({`,
+        `  render: () => <article data-module="${id}">Module ${id}</article>,`,
+        '});',
+        '',
+      ].join('\n');
+      expect(
+        resolveComponentQueryRuntimeNames({
+          fileName: join(root, `src/components/component-${id}.tsx`),
+          rootDirectory: root,
+          source,
+        }),
+      ).toEqual({});
+    }
+    expect(queryIdentityDependencyAnalysesForTesting()).toBe(beforeDependencies);
+    expect(completeQueryIdentityProgramConstructionsForTesting()).toBe(beforePrograms);
+
+    const querySources = [
+      {
+        exportName: 'CorpusComponent000',
+        fileName: 'src/components/component-000.tsx',
+        moduleSpecifier: '../kovo.js',
+      },
+      {
+        exportName: 'DataRefreshSurface',
+        fileName: 'src/data.tsx',
+        moduleSpecifier: './kovo.js',
+      },
+      {
+        exportName: 'EntryRefreshSurface',
+        fileName: 'src/page.tsx',
+        moduleSpecifier: './kovo.js',
+      },
+    ] as const;
+    for (const entry of querySources) {
+      const source = corpusQueryComponentSource(entry.exportName, entry.moduleSpecifier);
+      writeFile(root, entry.fileName, source);
+      expect(
+        resolveComponentQueryRuntimeNames({
+          fileName: join(root, entry.fileName),
+          rootDirectory: root,
+          source,
+        }),
+      ).toEqual({ refresh: 'kovo/benchmark-refresh-query' });
+    }
+    expect(queryIdentityDependencyAnalysesForTesting()).toBe(beforeDependencies + 3);
+    expect(completeQueryIdentityProgramConstructionsForTesting()).toBe(beforePrograms);
+  });
+
+  it('returns dependency-free and authenticated known names before reading tsconfig', () => {
+    const root = projectRoot();
+    writeFile(root, 'tsconfig.json', '{ this is intentionally invalid JSON');
+    const source = [
+      "import { component } from '@kovojs/core';",
+      "import { status } from './missing-provider.js';",
+      'export const StatusCard = component({',
+      '  queries: { status },',
+      '  render: () => null,',
+      '});',
+      '',
+    ].join('\n');
+    const beforeDependencies = queryIdentityDependencyAnalysesForTesting();
+    const beforePrograms = completeQueryIdentityProgramConstructionsForTesting();
+
+    expect(
+      resolveComponentQueryRuntimeNames({
+        fileName: join(root, 'src/status-card.tsx'),
+        knownNames: { status: 'providers/status/status' },
+        rootDirectory: root,
+        source,
+      }),
+    ).toEqual({ status: 'providers/status/status' });
+    expect(queryIdentityDependencyAnalysesForTesting()).toBe(beforeDependencies);
+    expect(completeQueryIdentityProgramConstructionsForTesting()).toBe(beforePrograms);
+  });
+
+  it('descriptor-reads known names and rejects accessors or malformed values', () => {
+    const root = projectRoot();
+    const source = [
+      "import { component } from '@kovojs/core';",
+      'export const StatusCard = component({ render: () => null });',
+      '',
+    ].join('\n');
+    let getterCalls = 0;
+    const accessorNames = Object.create(null) as Record<string, string>;
+    Object.defineProperty(accessorNames, 'status', {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return 'forged/status';
+      },
+    });
+    const beforeDependencies = queryIdentityDependencyAnalysesForTesting();
+
+    expect(() =>
+      resolveComponentQueryRuntimeNames({
+        fileName: join(root, 'src/status-card.tsx'),
+        knownNames: accessorNames,
+        rootDirectory: root,
+        source,
+      }),
+    ).toThrow(/known name "status" must be an own string data property/u);
+    expect(getterCalls).toBe(0);
+    expect(queryIdentityDependencyAnalysesForTesting()).toBe(beforeDependencies);
+
+    expect(() =>
+      resolveComponentQueryRuntimeNames({
+        fileName: join(root, 'src/status-card.tsx'),
+        knownNames: { status: 42 } as unknown as Readonly<Record<string, string>>,
+        rootDirectory: root,
+        source,
+      }),
+    ).toThrow(/known name "status" must be an own string data property/u);
+    expect(queryIdentityDependencyAnalysesForTesting()).toBe(beforeDependencies);
+  });
+
+  it('preserves the conservative dependency path for parse-invalid zero-query source', () => {
+    const root = projectRoot();
+    const source = [
+      "import { component } from '@kovojs/core';",
+      'export const Broken = component({ render: () => <article> });',
+      '',
+    ].join('\n');
+    const beforeDependencies = queryIdentityDependencyAnalysesForTesting();
+    const beforePrograms = completeQueryIdentityProgramConstructionsForTesting();
+
+    expect(
+      resolveComponentQueryRuntimeNames({
+        fileName: join(root, 'src/broken.tsx'),
+        rootDirectory: root,
+        source,
+      }),
+    ).toEqual({});
+    expect(queryIdentityDependencyAnalysesForTesting()).toBe(beforeDependencies + 1);
+    expect(completeQueryIdentityProgramConstructionsForTesting()).toBe(beforePrograms + 1);
+  });
+
   it('resolves shorthand bindings and extensionless free/namespace query declarations', () => {
     const root = projectRoot();
     const directSourceFile = join(root, 'src/components/direct-status-card.tsx');
@@ -643,6 +802,36 @@ function appQueryProviderSource(): string {
     "import { defineKovo } from '@kovojs/server';",
     "export const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });",
     'export const status = app.query({ load: () => ({ summary: "ready" }) });',
+    '',
+  ].join('\n');
+}
+
+function corpusQueryProviderSource(): string {
+  return [
+    "import { defineKovo, s } from '@kovojs/server';",
+    'export const app = defineKovo({',
+    "  appId: '00000000-0000-4000-8000-000000000001',",
+    "  document: { lang: 'en-US' },",
+    "  renderRoute(value) { return typeof value === 'string' ? value : String(value ?? ''); },",
+    '});',
+    'export const benchmarkRefreshQuery = app.query({',
+    "  access: app.publicAccess('generated equal-shape refresh-surface query'),",
+    "  load: () => ({ label: 'ready' }),",
+    '  output: s.object({ label: s.string() }),',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function corpusQueryComponentSource(exportName: string, moduleSpecifier: string): string {
+  return [
+    '/** @jsxImportSource @kovojs/server */',
+    "import { component } from '@kovojs/core';",
+    `import { benchmarkRefreshQuery } from '${moduleSpecifier}';`,
+    `export const ${exportName} = component({`,
+    '  queries: { refresh: benchmarkRefreshQuery },',
+    '  render: ({ refresh }: { refresh: { label: string } }) => refresh.label,',
+    '});',
     '',
   ].join('\n');
 }
