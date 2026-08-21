@@ -24,6 +24,7 @@ import {
   packedKovoProductIdentityFindings,
 } from './lib/perf-packed-kovo-product.mjs';
 import { canonicalJson, performanceHostFingerprintFindings } from './lib/perf-host.mjs';
+import { performancePublicationPolicyIdentityFindings } from './lib/perf-publication-policy.mjs';
 import { performanceGateWorkloadIdentity } from './perf-gate.mjs';
 import { workloadIdentityFindings } from './perf-regression-check.mjs';
 
@@ -1440,6 +1441,14 @@ function validateFamilyReport(report, { familyName, policy, repository, run, run
     ),
   );
   findings.push(...workloadIdentityFindings(report?.workloadIdentity, familyName));
+  if (policy.cell === 'browser' || policy.cell === 'server') {
+    findings.push(
+      ...performancePublicationPolicyIdentityFindings(
+        report?.workloadIdentity?.identity?.publicationPolicy,
+        `${familyName} workload publication policy`,
+      ),
+    );
+  }
   findings.push(
     ...executionIdentityFindings(report?.execution, { requireProvider: 'github-actions' }).map(
       (finding) => `${familyName} ${finding}`,

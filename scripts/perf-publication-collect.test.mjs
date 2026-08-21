@@ -47,6 +47,7 @@ import {
   fixturePackedKovoProductIdentity,
 } from './fixtures/perf-packed-product-identity.mjs';
 import { canonicalJson } from './lib/perf-host.mjs';
+import { PERF_PUBLICATION_POLICY_IDENTITY } from './lib/perf-publication-policy.mjs';
 
 const REPOSITORY = 'kovojs/kovo';
 const SOURCE = 'a'.repeat(40);
@@ -1131,6 +1132,33 @@ describe('metrics-blind performance publication collection', () => {
     }
   });
 
+  it('requires the prospective publication policy only for browser and server evidence', () => {
+    for (const familyName of ['browser', 'server']) {
+      const missing = campaignFixture([{ family: familyName, runId: 1001 }]).byRun.get(1001);
+      delete missing.report.workloadIdentity.identity.publicationPolicy;
+      resealWorkloadAndArchive(missing);
+      expect(() => validateFixture(missing), `${familyName} missing policy`).toThrow(
+        `${familyName} workload publication policy identity is unavailable`,
+      );
+
+      const tampered = campaignFixture([{ family: familyName, runId: 1001 }]).byRun.get(1001);
+      tampered.report.workloadIdentity.identity.publicationPolicy = {
+        ...PERF_PUBLICATION_POLICY_IDENTITY,
+        contentDigest: digest(`${familyName}-retrospective-policy`),
+      };
+      resealWorkloadAndArchive(tampered);
+      expect(() => validateFixture(tampered), `${familyName} tampered policy`).toThrow(
+        `${familyName} workload publication policy contentDigest differs from the committed prospective policy`,
+      );
+    }
+
+    for (const familyName of ['dev-n24', 'dev-n216', 'build-n24', 'build-n216', 'check']) {
+      const fixture = campaignFixture([{ family: familyName, runId: 1001 }]).byRun.get(1001);
+      expect(fixture.report.workloadIdentity.identity).not.toHaveProperty('publicationPolicy');
+      expect(() => validateFixture(fixture), `${familyName} unrelated policy`).not.toThrow();
+    }
+  });
+
   it('authenticates the exact Production bytes report and rejects every identity/census drift', () => {
     const make = () =>
       campaignFixture([{ family: 'browser', productionBytes: true, runId: 1001 }]).byRun.get(1001)
@@ -2194,6 +2222,9 @@ function reportFixture({
     cells: [policy.cell],
     corpus: {},
     lanes: ['fixture'],
+    ...(policy.cell === 'browser' || policy.cell === 'server'
+      ? { publicationPolicy: PERF_PUBLICATION_POLICY_IDENTITY }
+      : {}),
     ...(policy.packedProduct ? { productArtifactPolicy: PACKED_KOVO_PRODUCT_WORKLOAD_POLICY } : {}),
     policies: policy.corpusSize === null ? {} : { corpusSize: policy.corpusSize },
   };
