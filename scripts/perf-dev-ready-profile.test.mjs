@@ -697,7 +697,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
       expect.objectContaining({
         inspectorPauseOnStart: true,
         inspectorPort: 21_216,
-        targetSession: 'ready-profile[0]',
+        targetSession: 'ready[0]',
       }),
     );
     expect(startAndResume).toHaveBeenCalledOnce();
@@ -850,7 +850,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
     expect(calls[0]).toMatchObject({ priorProcessMarker: null, priorSession: null });
     expect(calls[1]).toMatchObject({
       priorProcessMarker: 'KOVO_PERF_DEV_SESSION_CELL_0',
-      priorSession: 'ready-profile[0]',
+      priorSession: 'ready[0]',
     });
     expect(report).toMatchObject({
       integrity: {

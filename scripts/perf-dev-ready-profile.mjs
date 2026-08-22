@@ -897,7 +897,7 @@ export async function runDevReadyProfile(options = {}, dependencies = {}) {
             validateReadyProfileCell(cell, scheduled);
             cells.push(cell);
             priorProcessMarker = cell.processMarker;
-            priorSession = `ready-profile[${String(scheduled.scheduleIndex)}]`;
+            priorSession = `ready[${String(scheduled.scheduleIndex)}]`;
           } catch (error) {
             errors.push(
               `block ${String(scheduled.scheduleIndex)} ${scheduled.lane}: ${errorMessage(error)}`,
@@ -1097,7 +1097,7 @@ export async function runReadyProfileCell(options, dependencies = {}) {
     options.port,
     packedBefore,
   );
-  const targetSession = `ready-profile[${String(options.scheduleIndex)}]`;
+  const targetSession = `ready[${String(options.scheduleIndex)}]`;
   const launched = await launch({
     appRoot: loaded.appRoot,
     command,
