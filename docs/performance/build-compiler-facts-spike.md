@@ -1,6 +1,6 @@
 # Build compiler-facts candidate
 
-Status: first N=24 attempt unproven; candidate repair required before a new seal.
+Status: repaired candidate sealed and independently approved; fresh N=24/N=216 timing pending.
 
 This spike tests whether reusing one immutable parsed project and carrying a data-only compiler-facts
 capsule across source proof removes enough repeated build work to meet the production-build first
@@ -9,20 +9,27 @@ and 9, and it does not claim to remove the remaining structural-JSX project walk
 
 ## Candidate custody
 
-- Durable ref: `refs/heads/perf-spike/build-compiler-facts-sealed-20260822`
-- Commit: `c81817ac801b4171b806cca1702e31dee90b6080`
+- Durable ref: `refs/heads/perf-spike/build-compiler-facts-sealed-v2-20260822`
+- Commit: `20782ca320b7999d6a8e2f0c0226a39c3aa4e65d`
 - Parent: `01b2c759468f41a3fc4739225eb13c8f5aa11406`
-- Tree: `73740d7e6f8ad898b1283e2dac7254f22636fd2f`
-- Stable patch ID: `9aa6b1bd0179e34ce3ec896573333348ec628099`
-- Full-index binary patch: 133,773 bytes,
-  `sha256:a7757b4146a44ad89b7d5bea6fc3ed99a744c29feff0b60f3a43cb9df5439f8f`
-- Exact 18-path status census: `scripts/perf-build-source-trust-spike.mjs` constant
+- Tree: `8ab4b1cd0fd2f91d038ff117b757c0aa0e773705`
+- Stable patch ID: `0944365d5dcbf37f15d855f2973149c3316ef08c`
+- Full-index binary patch: 144,432 bytes,
+  `sha256:a36d58240f1786190af8ded6a21df3a3a5a8c9da7741176143e058015cacd995`
+- Exact 20-path status census: `scripts/perf-build-source-trust-spike.mjs` constant
   `BUILD_SOURCE_TRUST_CANDIDATE`.
 
 The sealed commit is one direct child of the clean pre-change baseline. Its tree is byte-identical
-to the independently reviewed development candidate at `e882954e8`; the multi-commit history is
+to the independently reviewed development candidate at `b2f18ab18`; the multi-commit history is
 not part of the timed identity. The runner reproduces the direct-child topology, full-index patch,
 patch ID, byte length, tree, and complete path/status census before preparation.
+
+Independent repair review passed query/mutation/task root parity, existing endpoint/fake-app
+coverage, ambiguous-alias refusal, parse/compile exception cleanup, data-only handoff, generated
+posture/pack/certificate convergence, and the SPEC §5.2 source/deployment proof boundary. The
+repair keeps KV424 fail closed; it restores the missing roots by running initial model parsing and
+compilation under the same exact per-entry app-contract resolver while retaining one immutable
+shared SourceFile/project.
 
 ## Attempt 1 disposition
 
@@ -41,6 +48,10 @@ The harness correctly reported 18 misses and refused artifact, diagnostic, phase
 claims. No N=216 run started. A repaired implementation requires a new independently reviewed
 direct-child seal and candidate binding committed before any fresh timing; this report will not be
 topped up, relabeled, or combined with later samples.
+
+The superseded seal remains available at
+`refs/heads/perf-spike/build-compiler-facts-sealed-20260822` (`c81817ac8`) solely to authenticate
+attempt 1. It is not the candidate for the fresh run.
 
 ## Security and correctness boundary
 

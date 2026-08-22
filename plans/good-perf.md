@@ -289,13 +289,16 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
 - [ ] Gate build wall, p95, RSS, and artifact size on the realistic corpus; reach the first milestone
       before attempting the competitive target.
   - Preregistered candidate: durable direct-child ref
-    `perf-spike/build-compiler-facts-sealed-20260822` (`c81817ac8`) reuses one immutable parsed
+    `perf-spike/build-compiler-facts-sealed-v2-20260822` (`20782ca32`) reuses one immutable parsed
     project and a data-only compiler-facts capsule. `docs/performance/build-compiler-facts-spike.md`
-    binds its reviewed tree/patch and the same ≥10% wall win plus positive paired CI at both N=24
-    and N=216, with 5% wall-p95/RSS-p95 guardrails, before timing.
+    binds its independently reviewed tree/patch and the same ≥10% wall win plus positive paired CI
+    at both N=24 and N=216, with 5% wall-p95/RSS-p95 guardrails, before fresh timing.
   - Attempt 1 is unproven and cannot be topped up: the first N=24 candidate cell failed closed with
     KV424 because `query:load` lost its exact semantic root. Only 2/20 cells ran; N=216 never
     started. The retained report/digests and mandatory new-seal disposition are in the same record.
+  - Replacement evidence: `01b2c7594..b2f18ab18` passed independent resolver/security review and
+    the repaired direct-child seal has tree `8ab4b1cd0f`, stable patch ID `0944365d5d`, and an exact
+    20-path census. Fresh N=24/N=216 reports remain required; no attempt-1 timing is admissible.
 
 ## Phase 3 — production runtime
 

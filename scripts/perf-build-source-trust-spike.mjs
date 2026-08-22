@@ -67,14 +67,18 @@ export const BUILD_SOURCE_TRUST_BOUNDARY_POLICY = Object.freeze({
   timedWarmups: 0,
 });
 export const BUILD_SOURCE_TRUST_CANDIDATE = Object.freeze({
-  commit: 'c81817ac801b4171b806cca1702e31dee90b6080',
+  commit: '20782ca320b7999d6a8e2f0c0226a39c3aa4e65d',
   parent: '01b2c759468f41a3fc4739225eb13c8f5aa11406',
-  patchBytes: 133_773,
-  patchId: '9aa6b1bd0179e34ce3ec896573333348ec628099',
-  patchSha256: 'sha256:a7757b4146a44ad89b7d5bea6fc3ed99a744c29feff0b60f3a43cb9df5439f8f',
+  patchBytes: 144_432,
+  patchId: '0944365d5dcbf37f15d855f2973149c3316ef08c',
+  patchSha256: 'sha256:a36d58240f1786190af8ded6a21df3a3a5a8c9da7741176143e058015cacd995',
   pathChanges: Object.freeze([
     Object.freeze({
       path: 'packages/cli/src/commands/build-compiler-facts-handoff.test.ts',
+      status: 'A',
+    }),
+    Object.freeze({
+      path: 'packages/cli/src/commands/build-export-generated-query-source-snapshot.test.ts',
       status: 'A',
     }),
     Object.freeze({ path: 'packages/cli/src/commands/build-export.ts', status: 'M' }),
@@ -82,6 +86,7 @@ export const BUILD_SOURCE_TRUST_CANDIDATE = Object.freeze({
       path: 'packages/cli/src/commands/build-static-trust-worker.test.ts',
       status: 'M',
     }),
+    Object.freeze({ path: 'packages/compiler/src/app-contract-project.test.ts', status: 'M' }),
     Object.freeze({ path: 'packages/compiler/src/app-contract-project.ts', status: 'M' }),
     Object.freeze({ path: 'packages/compiler/src/compile.ts', status: 'M' }),
     Object.freeze({ path: 'packages/compiler/src/emit/render-equivalence.ts', status: 'M' }),
@@ -110,7 +115,7 @@ export const BUILD_SOURCE_TRUST_CANDIDATE = Object.freeze({
     Object.freeze({ path: 'security/kovo-certificate-policy-v1.json', status: 'M' }),
     Object.freeze({ path: 'security/kovo-certificate-v1.json', status: 'M' }),
   ]),
-  tree: '73740d7e6f8ad898b1283e2dac7254f22636fd2f',
+  tree: '8ab4b1cd0fd2f91d038ff117b757c0aa0e773705',
 });
 
 const BUILD_ADAPTER_SCHEMA = 'kovo-build-benchmark/v1';
