@@ -279,6 +279,9 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     project and a data-only compiler-facts capsule. `docs/performance/build-compiler-facts-spike.md`
     binds its reviewed tree/patch and the same ≥10% wall win plus positive paired CI at both N=24
     and N=216, with 5% wall-p95/RSS-p95 guardrails, before timing.
+  - Attempt 1 is unproven and cannot be topped up: the first N=24 candidate cell failed closed with
+    KV424 because `query:load` lost its exact semantic root. Only 2/20 cells ran; N=216 never
+    started. The retained report/digests and mandatory new-seal disposition are in the same record.
 
 ## Phase 3 — production runtime
 

@@ -1,6 +1,6 @@
 # Build compiler-facts candidate
 
-Status: preregistered; measurement not started.
+Status: first N=24 attempt unproven; candidate repair required before a new seal.
 
 This spike tests whether reusing one immutable parsed project and carrying a data-only compiler-facts
 capsule across source proof removes enough repeated build work to meet the production-build first
@@ -23,6 +23,24 @@ The sealed commit is one direct child of the clean pre-change baseline. Its tree
 to the independently reviewed development candidate at `e882954e8`; the multi-commit history is
 not part of the timed identity. The runner reproduces the direct-child topology, full-index patch,
 patch ID, byte length, tree, and complete path/status census before preparation.
+
+## Attempt 1 disposition
+
+The first local N=24 run stopped after its first baseline/candidate pair and is **unproven**, not a
+timing rejection. Its retained aggregate is
+`/private/tmp/kovo-build-compiler-facts-n24-n7diAF/report.json` (SHA-256
+`abbd0c047ac31a451be3f9a3b962671f19a7d560185e7e7f25aadc60ca7bb5d5`). Baseline cell 0 was
+complete. Candidate cell 1 failed closed with KV424 at generated `src/kovo.ts:11`: the
+`query:load` opaque-source sink expected one exact semantic root and found zero. The raw candidate
+report is SHA-256 `261c095bafc19700919668d2cb4ef4103a5102058a1acbe314672c2df9dbf847`;
+its bounded failure envelope is
+`ed06f3bb05ab26cff694eea41e77f6c6d8bf1e48edc0279628b283f643b5b2de`.
+
+Only two of the required 20 cells ran, so the displayed one-pair wall/RSS deltas are inadmissible.
+The harness correctly reported 18 misses and refused artifact, diagnostic, phase, and acceptance
+claims. No N=216 run started. A repaired implementation requires a new independently reviewed
+direct-child seal and candidate binding committed before any fresh timing; this report will not be
+topped up, relabeled, or combined with later samples.
 
 ## Security and correctness boundary
 
