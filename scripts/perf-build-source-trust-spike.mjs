@@ -892,6 +892,32 @@ export function aggregateBuildSourceTrustCells(cells, policy) {
   };
 }
 
+export function buildSourceTrustVerdict({ analysis, complete, errors, policy }) {
+  const reasons = [
+    ...errors,
+    ...(!complete && policy.repetitions !== DECISION_REPETITIONS
+      ? ['measurement did not use the preregistered five B,S,S,B repetitions']
+      : []),
+    ...(!analysis.schedule.complete ? ['measurement schedule is incomplete'] : []),
+    ...(!analysis.correctness.artifactExact
+      ? ['compared build artifacts are not byte-exact across lanes']
+      : []),
+    ...(!analysis.correctness.diagnosticsExact
+      ? ['non-timing build diagnostics differ across lanes']
+      : []),
+    ...(complete && !analysis.acceptance.candidateAccepted
+      ? ['candidate missed at least one preregistered build acceptance threshold']
+      : []),
+  ];
+  if (!complete && reasons.length === 0) {
+    reasons.push('decision evidence is incomplete');
+  }
+  return {
+    reasons,
+    status: !complete ? 'unproven' : analysis.acceptance.candidateAccepted ? 'accept' : 'reject',
+  };
+}
+
 export async function prepareBuildSourceTrustSpike(options, dependencies = {}) {
   const binding =
     options.candidateBinding ??
@@ -1192,18 +1218,7 @@ export async function runBuildSourceTrustSpike(options = {}, dependencies = {}) 
     preparation: prepared === null ? null : preparationEvidence(prepared),
     schema: BUILD_SOURCE_TRUST_SPIKE_SCHEMA,
     sourceAfter,
-    verdict: {
-      reasons: [
-        ...errors,
-        ...(!complete && policy.repetitions !== DECISION_REPETITIONS
-          ? ['measurement did not use the preregistered five B,S,S,B repetitions']
-          : []),
-        ...(complete && !analysis.acceptance.candidateAccepted
-          ? ['candidate missed at least one preregistered build acceptance threshold']
-          : []),
-      ],
-      status: !complete ? 'unproven' : analysis.acceptance.candidateAccepted ? 'accept' : 'reject',
-    },
+    verdict: buildSourceTrustVerdict({ analysis, complete, errors, policy }),
   };
 }
 

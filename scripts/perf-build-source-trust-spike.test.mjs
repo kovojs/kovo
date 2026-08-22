@@ -32,6 +32,7 @@ import {
   buildSourceTrustBoundaryPolicyFindings,
   buildSourceTrustNonTimingDiagnostics,
   buildSourceTrustSchedule,
+  buildSourceTrustVerdict,
   createBuildSourceTrustHostAdmission,
   executeBuildSourceTrustCell,
   gitPatchId,
@@ -996,9 +997,32 @@ describe('build source-trust candidate decision', () => {
       spikeRss: 900,
     });
     diagnosticDrift[1].report.samples[0].phaseCensus.source.checkGraphDigest = digest('changed');
+    const diagnosticAnalysis = aggregateBuildSourceTrustCells(diagnosticDrift, decisionPolicy(216));
+    expect(diagnosticAnalysis.correctness.complete).toBe(false);
+
+    const artifactAnalysis = aggregateBuildSourceTrustCells(artifactDrift, decisionPolicy(216));
     expect(
-      aggregateBuildSourceTrustCells(diagnosticDrift, decisionPolicy(216)).correctness.complete,
-    ).toBe(false);
+      buildSourceTrustVerdict({
+        analysis: artifactAnalysis,
+        complete: false,
+        errors: [],
+        policy: decisionPolicy(216),
+      }),
+    ).toMatchObject({
+      reasons: ['compared build artifacts are not byte-exact across lanes'],
+      status: 'unproven',
+    });
+    expect(
+      buildSourceTrustVerdict({
+        analysis: diagnosticAnalysis,
+        complete: false,
+        errors: [],
+        policy: decisionPolicy(216),
+      }),
+    ).toMatchObject({
+      reasons: ['non-timing build diagnostics differ across lanes'],
+      status: 'unproven',
+    });
   });
 
   it('shares one bounded host-settle budget and marks post-preparation admissions', async () => {
