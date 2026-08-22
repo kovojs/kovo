@@ -345,20 +345,18 @@ export async function runReadyProfileBootstrap(argv = process.argv.slice(2), dep
       schema: DEV_READY_PROFILE_BOOTSTRAP_ATTESTATION_SCHEMA,
       tree: authenticated.tree,
     };
+    const prepublicationPhase = {
+      analysisSha256: controllerAnalysisSha256,
+      artifactSealSha256: controllerArtifactSealSha256,
+      reportSha256: canonicalSha256(report),
+    };
     dependencies.afterPrepublicationVerification?.({
       authenticated,
       materialized,
       report,
       stagedProfiles,
     });
-    verifyReportEvidenceDigests(
-      report,
-      {
-        analysisSha256: controllerAnalysisSha256,
-        artifactSealSha256: controllerArtifactSealSha256,
-      },
-      'after prepublication verification',
-    );
+    verifyWholeReportPhase(report, prepublicationPhase, 'after prepublication verification');
     verifyReadyProfileControllerSource(authenticated, dependencies);
     verifyPrivateController(
       materialized.binding,
@@ -367,67 +365,61 @@ export async function runReadyProfileBootstrap(argv = process.argv.slice(2), dep
     verifyProfileArtifactCustody(report, stagedProfiles);
     rmSync(stagedOut, { force: true });
     publishedProfile = publishReadyProfileArtifacts(report, stagedProfiles, targets.profileDir, {
-      beforeTargetCreate: dependencies.beforeProfilePublication,
+      beforeTargetCreate(context) {
+        dependencies.beforeProfilePublication?.(context);
+        verifyWholeReportPhase(
+          report,
+          prepublicationPhase,
+          'after profile publication preparation hook',
+        );
+      },
     });
     if (publishedProfile.attestation.controllerSealSha256 !== controllerArtifactSealSha256) {
       throw new Error('artifact publication does not preserve the authenticated controller seal');
     }
+    const publishedProfileAttestationSha256 = canonicalSha256(publishedProfile.attestation);
     const publishedArtifactSealSha256 = canonicalSha256(report.artifactSeal);
-    report.controller.bootstrap.artifactPublication = publishedProfile.attestation;
+    report.controller.bootstrap.artifactPublication = structuredClone(publishedProfile.attestation);
     report.controller.bootstrap.publishedArtifactSealSha256 = publishedArtifactSealSha256;
-    verifyReportEvidenceDigests(
-      report,
-      { analysisSha256: controllerAnalysisSha256, artifactSealSha256: publishedArtifactSealSha256 },
-      'after final-path artifact rebind',
-    );
+    const publicationPhase = {
+      analysisSha256: controllerAnalysisSha256,
+      artifactSealSha256: publishedArtifactSealSha256,
+      publishedProfileAttestation: publishedProfile.attestation,
+      publishedProfileAttestationSha256,
+      reportSha256: canonicalSha256(report),
+    };
     dependencies.afterProfilePublication?.({ publishedProfile, report });
-    verifyReportEvidenceDigests(
-      report,
-      { analysisSha256: controllerAnalysisSha256, artifactSealSha256: publishedArtifactSealSha256 },
-      'after profile publication hook',
-    );
+    verifyWholeReportPhase(report, publicationPhase, 'after profile publication hook');
     verifyReadyProfileControllerSource(authenticated, dependencies);
     verifyPrivateController(
       materialized.binding,
       dependencies.readStable ?? readBootstrapStableFile,
     );
     verifyProfileArtifactCustody(report, targets.profileDir);
+    verifyWholeReportPhase(report, publicationPhase, 'before head-stability attestation');
     report.controller.bootstrap.headStableThroughPublication = true;
-    verifyReportEvidenceDigests(
-      report,
-      { analysisSha256: controllerAnalysisSha256, artifactSealSha256: publishedArtifactSealSha256 },
-      'before report publication hook',
-    );
-    const finalBytes = Buffer.from(`${JSON.stringify(report, null, 2)}\n`);
+    const finalPhase = { ...publicationPhase, reportSha256: canonicalSha256(report) };
+    verifyWholeReportPhase(report, finalPhase, 'before report publication hook');
     dependencies.beforeReportPublication?.({ publishedProfile, report, targets });
-    verifyReportEvidenceDigests(
-      report,
-      { analysisSha256: controllerAnalysisSha256, artifactSealSha256: publishedArtifactSealSha256 },
-      'after report publication hook',
-    );
+    verifyWholeReportPhase(report, finalPhase, 'after before-report-publication hook');
+    const finalBytes = Buffer.from(`${JSON.stringify(report, null, 2)}\n`);
+    verifyWholeReportPhase(report, finalPhase, 'before report publication');
     publishedReport = writeExclusiveBootstrapFile(
       targets.out,
       finalBytes,
       MAX_REPORT_BYTES,
       'published diagnostic report',
     );
-    verifyReportEvidenceDigests(
-      report,
-      { analysisSha256: controllerAnalysisSha256, artifactSealSha256: publishedArtifactSealSha256 },
-      'after report publication',
-    );
+    verifyWholeReportPhase(report, finalPhase, 'after report publication');
     dependencies.afterReportPublication?.({ publishedProfile, publishedReport, report });
-    verifyReportEvidenceDigests(
-      report,
-      { analysisSha256: controllerAnalysisSha256, artifactSealSha256: publishedArtifactSealSha256 },
-      'after final report publication hook',
-    );
+    verifyWholeReportPhase(report, finalPhase, 'after final report publication hook');
     verifyReadyProfileControllerSource(authenticated, dependencies);
     verifyPrivateController(
       materialized.binding,
       dependencies.readStable ?? readBootstrapStableFile,
     );
     verifyProfileArtifactCustody(report, targets.profileDir);
+    verifyWholeReportPhase(report, finalPhase, 'during final report verification');
     const observedReport = readBootstrapStableFile(
       targets.out,
       MAX_REPORT_BYTES,
@@ -1283,6 +1275,23 @@ function verifyReportEvidenceDigests(report, expected, phase) {
   if (mismatches.length > 0) {
     throw new Error(`authenticated report ${mismatches.join(' and ')} changed ${phase}`);
   }
+}
+
+function verifyWholeReportPhase(report, expected, phase) {
+  verifyReportEvidenceDigests(report, expected, phase);
+  verifyCanonicalDigest(report, expected.reportSha256, 'authenticated whole report', phase);
+  if (expected.publishedProfileAttestation !== undefined) {
+    verifyCanonicalDigest(
+      expected.publishedProfileAttestation,
+      expected.publishedProfileAttestationSha256,
+      'published profile attestation',
+      phase,
+    );
+  }
+}
+
+function verifyCanonicalDigest(value, expected, label, phase) {
+  if (canonicalSha256(value) !== expected) throw new Error(`${label} changed ${phase}`);
 }
 
 function canonicalJson(value) {

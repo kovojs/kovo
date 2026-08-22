@@ -464,6 +464,40 @@ describe('immutable ready-profile controller bootstrap', () => {
     },
   );
 
+  it.each([
+    {
+      error: /authenticated whole report changed after prepublication verification/u,
+      hook: 'afterPrepublicationVerification',
+      mutate: ({ report }) => {
+        report.controller.bootstrap.controllerArtifactSealSha256 = alternateDigest(
+          report.controller.bootstrap.controllerArtifactSealSha256,
+        );
+      },
+    },
+    {
+      error: /published profile attestation changed after profile publication hook/u,
+      hook: 'afterProfilePublication',
+      mutate: ({ publishedProfile, report }) => {
+        const attachedSeal = report.controller.bootstrap.artifactPublication.controllerSealSha256;
+        publishedProfile.attestation.controllerSealSha256 = alternateDigest(
+          publishedProfile.attestation.controllerSealSha256,
+        );
+        expect(report.controller.bootstrap.artifactPublication.controllerSealSha256).toBe(
+          attachedSeal,
+        );
+      },
+    },
+  ])('rejects an attestation-only substitution at $hook', async ({ error, hook, mutate }) => {
+    const fixture = await bootstrapRunFixture();
+    fixture.dependencies[hook] = (context) => mutate(context);
+
+    await expect(runReadyProfileBootstrap(fixture.argv, fixture.dependencies)).rejects.toThrow(
+      error,
+    );
+    expect(existsSync(fixture.out)).toBe(false);
+    expect(existsSync(fixture.profileDir)).toBe(false);
+  });
+
   it('rejects commit/tree movement and committed-blob or filesystem-byte confusion', async () => {
     {
       const fixture = await sourceFixture();
@@ -854,6 +888,10 @@ function substitutedReadyAnalysis() {
 
 function canonicalDigest(value) {
   return `sha256:${createHash('sha256').update(canonicalJson(value)).digest('hex')}`;
+}
+
+function alternateDigest(value) {
+  return `${value.slice(0, -1)}${value.endsWith('0') ? '1' : '0'}`;
 }
 
 function canonicalJson(value) {
