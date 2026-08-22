@@ -154,7 +154,7 @@ const EXPECTED_PROFILE_FILES = Object.freeze(
   }).sort((left, right) => left.localeCompare(right)),
 );
 const READY_PROFILE_SEAL_CAPABILITY = Symbol('kovo.dev-ready-profile.seal-capability');
-const controllerRoot = fileURLToPath(new URL('..', import.meta.url));
+const controllerRoot = realpathSync(fileURLToPath(new URL('..', import.meta.url)));
 
 export function devReadyProfileSchedule(portBase = DEFAULT_DEV_PORT_BASE) {
   boundedPort(portBase, 'profile port base');
@@ -2026,7 +2026,7 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function controllerBindingFromEnvironment(environment = process.env) {
+export function controllerBindingFromEnvironment(environment = process.env) {
   const bindingPath = requiredString(
     environment.KOVO_DEV_READY_PROFILE_CONTROLLER_BINDING,
     'controller binding path',

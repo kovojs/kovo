@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
@@ -17,8 +17,6 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
-
-import { inspectDevPortAllocation } from '../benchmarks/harness/dev-port-allocation.mjs';
 
 import {
   authenticateReadyProfileControllerSource,
@@ -134,73 +132,100 @@ describe('immutable ready-profile controller bootstrap', () => {
     }
   });
 
-  it('materializes the controller and reaches real Git candidate authentication through the spike worktree', async () => {
+  it('spawns the archived controller and reaches real Git candidate authentication before pack', async () => {
     const controllerRoot = await realControllerRepository();
     const candidate = await realCandidateRepository();
     const authenticated = authenticateReadyProfileControllerSource({ root: controllerRoot });
     const materialized = materializeReadyProfileController(authenticated);
-    let candidateAuthenticated = false;
     try {
-      const nonce = Date.now().toString(36);
-      const controller = await import(
-        `${
-          pathToFileURL(path.join(materialized.privateRoot, 'scripts/perf-dev-ready-profile.mjs'))
-            .href
-        }?integration=${nonce}`
-      );
-      const generation = await import(
-        `${
-          pathToFileURL(
-            path.join(materialized.privateRoot, 'scripts/perf-dev-generation-spike.mjs'),
-          ).href
-        }?integration=${nonce}`
-      );
       const reportRoot = await temporaryRoot();
-      const state = (root) => ({
-        commit: gitText(root, ['rev-parse', 'HEAD']),
-        dirty: false,
-        dirtyPaths: [],
-        locks: {
-          'benchmarks/harness/pnpm-lock.yaml': `sha256:${'1'.repeat(64)}`,
-          'benchmarks/nextjs/pnpm-lock.yaml': `sha256:${'2'.repeat(64)}`,
-          'pnpm-lock.yaml': `sha256:${'3'.repeat(64)}`,
-        },
-        packageManager: authenticated.packageManager,
-        pnpmVersion: authenticated.pnpmVersion,
-      });
+      const controllerUrl = pathToFileURL(
+        path.join(materialized.privateRoot, 'scripts/perf-dev-ready-profile.mjs'),
+      ).href;
+      const generationUrl = pathToFileURL(
+        path.join(materialized.privateRoot, 'scripts/perf-dev-generation-spike.mjs'),
+      ).href;
+      const portAllocationUrl = pathToFileURL(
+        path.join(materialized.privateRoot, 'benchmarks/harness/dev-port-allocation.mjs'),
+      ).href;
+      const childSource = `
+        import { controllerBindingFromEnvironment, runDevReadyProfile } from ${JSON.stringify(controllerUrl)};
+        import { authenticateGenerationCandidateRoots } from ${JSON.stringify(generationUrl)};
+        import { inspectDevPortAllocation } from ${JSON.stringify(portAllocationUrl)};
 
-      await expect(
-        controller.runDevReadyProfile(
-          {
-            baselineRoot: candidate.baseline,
-            diagnose: true,
-            out: path.join(reportRoot, 'report.json'),
-            profileDir: path.join(reportRoot, 'profiles'),
-            spikeRoot: candidate.repository,
-          },
-          {
-            controllerBinding: materialized.binding,
-            createHostAdmission: () => quietHostAdmission(),
-            inspectPortAllocation: (options) => inspectDevPortAllocation(options),
-            preparationDependencies: {
-              authenticateRoots(options) {
-                expect(options.candidateRepository).toBe(candidate.repository);
-                const binding = generation.authenticateGenerationCandidateRoots({
-                  ...options,
-                  candidate: candidate.candidate,
-                });
-                candidateAuthenticated = true;
-                return binding;
-              },
-              collectState: state,
-              preparePackedLane: async () => {
-                throw new Error('integration-stop-after-real-candidate-auth');
+        const candidate = ${JSON.stringify(candidate.candidate)};
+        const expectedCandidateRepository = ${JSON.stringify(candidate.repository)};
+        const controllerBinding = controllerBindingFromEnvironment();
+        let authenticatedCandidate = null;
+        let packedLaneInvoked = false;
+        try {
+          await runDevReadyProfile(
+            {
+              baselineRoot: ${JSON.stringify(candidate.baseline)},
+              diagnose: true,
+              out: ${JSON.stringify(path.join(reportRoot, 'report.json'))},
+              profileDir: ${JSON.stringify(path.join(reportRoot, 'profiles'))},
+              spikeRoot: expectedCandidateRepository,
+            },
+            {
+              controllerBinding,
+              createHostAdmission: () => ({
+                async admit(label) { return { comparable: true, label }; },
+                markBenchmarkWork() {},
+              }),
+              inspectPortAllocation: (options) => inspectDevPortAllocation(options),
+              preparationDependencies: {
+                authenticateRoots(options) {
+                  if (options.candidateRepository !== expectedCandidateRepository) {
+                    throw new Error('candidate repository escaped the spike worktree');
+                  }
+                  authenticatedCandidate = authenticateGenerationCandidateRoots({
+                    ...options,
+                    candidate,
+                  });
+                  throw new Error('integration-stop-after-real-candidate-auth');
+                },
+                preparePackedLane() {
+                  packedLaneInvoked = true;
+                  throw new Error('pack must not run in the archived-child regression');
+                },
               },
             },
-          },
-        ),
-      ).rejects.toThrow(/integration-stop-after-real-candidate-auth/u);
-      expect(candidateAuthenticated).toBe(true);
+          );
+          throw new Error('archived-child regression unexpectedly completed');
+        } catch (error) {
+          if (error?.message !== 'integration-stop-after-real-candidate-auth') throw error;
+        }
+        process.stdout.write(JSON.stringify({
+          baselineRoot: authenticatedCandidate?.baseline?.root,
+          bindingPrivateRoot: controllerBinding.privateRoot,
+          candidateAuthenticated: authenticatedCandidate !== null,
+          packedLaneInvoked,
+          spikeRoot: authenticatedCandidate?.spike?.root,
+        }) + '\\n');
+      `;
+      const child = spawnSync(process.execPath, ['--input-type=module', '--eval', childSource], {
+        cwd: materialized.privateRoot,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          KOVO_DEV_READY_PROFILE_CONTROLLER_BINDING: materialized.bindingPath,
+          KOVO_DEV_READY_PROFILE_CONTROLLER_BINDING_SHA256: materialized.bindingSha256,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      expect(child).toMatchObject({ signal: null, status: 0 });
+      expect(child.stderr).toBe('');
+      expect(JSON.parse(child.stdout)).toEqual({
+        baselineRoot: candidate.baseline,
+        bindingPrivateRoot: materialized.privateRoot,
+        candidateAuthenticated: true,
+        packedLaneInvoked: false,
+        spikeRoot: candidate.repository,
+      });
+      expect(existsSync(path.join(reportRoot, 'report.json'))).toBe(false);
+      expect(existsSync(path.join(reportRoot, 'profiles'))).toBe(false);
     } finally {
       materialized.cleanup();
     }
@@ -602,15 +627,6 @@ async function realCandidateRepository() {
       tree,
     },
     repository: await realpath(repository),
-  };
-}
-
-function quietHostAdmission() {
-  return {
-    async admit(label) {
-      return { comparable: true, label };
-    },
-    markBenchmarkWork() {},
   };
 }
 

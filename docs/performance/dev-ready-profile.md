@@ -27,10 +27,12 @@ node scripts/perf-dev-ready-profile-bootstrap.mjs \
 The built-in-only bootstrap captures one controller commit, derives its tree and every named blob
 from that commit, compares stable no-follow filesystem reads to the committed blob bytes, guards
 HEAD/ref identity, and materializes a private read-only `git archive`. Only then does it import the
-controller. The final report is withheld until the child exits and the original HEAD/ref and source
-identities still match. Local checkout paths are capabilities used by the bootstrap, not report
-authority. Candidate preparation receives the authenticated spike worktree as its Git repository;
-the private archive is never treated as a repository.
+controller. The child canonicalizes its own module root and requires it to equal the archive root in
+the authenticated binding, including on hosts where temporary paths have lexical aliases. The final
+report is withheld until the child exits and the original HEAD/ref and source identities still match.
+Local checkout paths are capabilities used by the bootstrap, not report authority. Candidate
+preparation receives the authenticated spike worktree as its Git repository; the private archive is
+never treated as a repository.
 
 The report authenticates immutable controller commit/tree, lock digests, package-manager identity,
 and runtime script Git-blob/SHA-256/inode evidence before preparation and after all four cells.
