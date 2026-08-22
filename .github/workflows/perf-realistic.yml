@@ -58,7 +58,7 @@ on:
           - check-watch
           - loader
           - dev-generation
-          - build-source-trust
+          - build-package-snapshot
           - compressed-cache
           - cli-startup
           - runtime-diagnostics
@@ -730,15 +730,15 @@ jobs:
           path: ${{ runner.temp }}/kovo-perf/dev-generation-n${{ matrix.corpus }}
           retention-days: 30
 
-  build-source-trust-decision:
-    name: N=${{ matrix.corpus }} build source-trust candidate decision
+  build-package-snapshot-decision:
+    name: N=${{ matrix.corpus }} build package-snapshot candidate decision
     if: >-
       ${{ (github.event_name == 'workflow_dispatch' &&
       (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
-      (inputs.decision_focus == 'all' || inputs.decision_focus == 'build-source-trust')) ||
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'build-package-snapshot')) ||
       (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
       (github.event.label.name == 'perf-measure-decisions' ||
-      github.event.label.name == 'perf-measure-build-source-trust')) }}
+      github.event.label.name == 'perf-measure-build-package-snapshot')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
@@ -767,49 +767,52 @@ jobs:
           printf '%s\n' '#!/usr/bin/env bash' 'exec vp exec pnpm "$@"' > "$tool_bin/pnpm"
           chmod 755 "$tool_bin/pnpm"
           printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
-      - name: Prepare exact baseline and source-trust candidate worktrees
+      - name: Prepare exact package-snapshot parent and candidate worktrees
         env:
-          KOVO_BUILD_SOURCE_TRUST_CANDIDATE_COMMIT: c89e179a9e9b179dd75b0bebabd357f4aa9e36a6
-          KOVO_BUILD_SOURCE_TRUST_CANDIDATE_REF: refs/heads/perf-spike/build-source-trust-20260814
+          KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_COMMIT: ef242a30662b767fec6f44bd23dfeeb700bd5c66
+          KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_PARENT: 81742e2285dda9f5419bb4531ed83b5dbfe0bb1c
+          KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF: refs/heads/perf-spike/build-package-snapshot-sealed-20260822
           KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
         run: |
-          baseline_root="$RUNNER_TEMP/kovo-build-source-trust-n$KOVO_PERF_CORPUS_SIZE-baseline"
-          spike_root="$RUNNER_TEMP/kovo-build-source-trust-n$KOVO_PERF_CORPUS_SIZE-spike"
-          mkdir -p "$RUNNER_TEMP/kovo-perf/build-source-trust-n$KOVO_PERF_CORPUS_SIZE"
+          baseline_root="$RUNNER_TEMP/kovo-build-package-snapshot-n$KOVO_PERF_CORPUS_SIZE-baseline"
+          spike_root="$RUNNER_TEMP/kovo-build-package-snapshot-n$KOVO_PERF_CORPUS_SIZE-spike"
+          mkdir -p "$RUNNER_TEMP/kovo-perf/build-package-snapshot-n$KOVO_PERF_CORPUS_SIZE"
           git fetch --no-tags origin \
-            "+$KOVO_BUILD_SOURCE_TRUST_CANDIDATE_REF:refs/perf-evidence/build-source-trust-candidate"
-          resolved_candidate="$(git rev-parse --verify refs/perf-evidence/build-source-trust-candidate^{commit})"
-          test "$resolved_candidate" = "$KOVO_BUILD_SOURCE_TRUST_CANDIDATE_COMMIT"
-          git worktree add --detach "$baseline_root" "$KOVO_PERF_SOURCE_SHA"
-          git worktree add --detach "$spike_root" "$KOVO_PERF_SOURCE_SHA"
-          git -C "$spike_root" \
-            -c user.name='Kovo Performance CI' \
-            -c user.email='performance-ci@kovo.invalid' \
-            -c commit.gpgsign=false \
-            cherry-pick "$KOVO_BUILD_SOURCE_TRUST_CANDIDATE_COMMIT"
-          test "$(git -C "$spike_root" rev-parse HEAD^)" = "$KOVO_PERF_SOURCE_SHA"
-          test "$(git -C "$spike_root" rev-list --count "$KOVO_PERF_SOURCE_SHA..HEAD")" = 1
+            "+$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF:$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF" \
+            "+$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF:refs/perf-evidence/build-package-snapshot-candidate"
+          resolved_candidate="$(git rev-parse --verify refs/perf-evidence/build-package-snapshot-candidate^{commit})"
+          resolved_parent="$(git rev-parse --verify "$resolved_candidate^")"
+          test "$resolved_candidate" = "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_COMMIT"
+          test "$resolved_parent" = "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_PARENT"
+          test "$(git rev-parse --verify "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF^{commit}")" = "$resolved_candidate"
+          git worktree add --detach "$baseline_root" "$resolved_parent"
+          git worktree add --detach "$spike_root" "$resolved_candidate"
+          test "$(git -C "$baseline_root" rev-parse HEAD)" = "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_PARENT"
+          test "$(git -C "$spike_root" rev-parse HEAD)" = "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_COMMIT"
+          test "$(git -C "$spike_root" rev-parse HEAD^)" = "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_PARENT"
+          test "$(git -C "$spike_root" rev-list --count "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_PARENT..HEAD")" = 1
           test -z "$(git -C "$baseline_root" status --porcelain=v1 --untracked-files=all)"
           test -z "$(git -C "$spike_root" status --porcelain=v1 --untracked-files=all)"
+          test "$(git rev-parse --verify "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF^{commit}")" = "$resolved_candidate"
       - name: Run five serialized B,S,S,B clean-build repetitions
         env:
           KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
         run: >-
           vp exec node scripts/perf-build-source-trust-spike.mjs
-          --baseline-root "$RUNNER_TEMP/kovo-build-source-trust-n$KOVO_PERF_CORPUS_SIZE-baseline"
-          --spike-root "$RUNNER_TEMP/kovo-build-source-trust-n$KOVO_PERF_CORPUS_SIZE-spike"
+          --baseline-root "$RUNNER_TEMP/kovo-build-package-snapshot-n$KOVO_PERF_CORPUS_SIZE-baseline"
+          --spike-root "$RUNNER_TEMP/kovo-build-package-snapshot-n$KOVO_PERF_CORPUS_SIZE-spike"
           --size "$KOVO_PERF_CORPUS_SIZE"
           --repetitions 5
           --install-timeout-ms 600000
           --timeout-ms 1800000
           --measure
-          --out "$RUNNER_TEMP/kovo-perf/build-source-trust-n$KOVO_PERF_CORPUS_SIZE/report.json"
+          --out "$RUNNER_TEMP/kovo-perf/build-package-snapshot-n$KOVO_PERF_CORPUS_SIZE/report.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           if-no-files-found: warn
-          name: kovo-perf-build-source-trust-n${{ matrix.corpus }}
-          path: ${{ runner.temp }}/kovo-perf/build-source-trust-n${{ matrix.corpus }}
+          name: kovo-perf-build-package-snapshot-n${{ matrix.corpus }}
+          path: ${{ runner.temp }}/kovo-perf/build-package-snapshot-n${{ matrix.corpus }}
           retention-days: 30
 
   compressed-cache-decision:

@@ -100,52 +100,41 @@ describe('build source-trust candidate decision', () => {
     });
     expect(buildSourceTrustBoundaryPolicyFindings(BUILD_SOURCE_TRUST_BOUNDARY_POLICY)).toEqual([]);
     expect(BUILD_SOURCE_TRUST_CANDIDATE).toEqual({
-      commit: '20782ca320b7999d6a8e2f0c0226a39c3aa4e65d',
-      parent: '01b2c759468f41a3fc4739225eb13c8f5aa11406',
-      patchBytes: 144_432,
-      patchId: '0944365d5dcbf37f15d855f2973149c3316ef08c',
-      patchSha256: 'sha256:a36d58240f1786190af8ded6a21df3a3a5a8c9da7741176143e058015cacd995',
+      commit: 'ef242a30662b767fec6f44bd23dfeeb700bd5c66',
+      parent: '81742e2285dda9f5419bb4531ed83b5dbfe0bb1c',
+      patchBytes: 65_349,
+      patchId: '98c01cb77fde51a19fd23fbe5f8a7061bfc459c1',
+      patchSha256: 'sha256:e71178ed5d9ab24439331005b0f77c830a7ada2c77c8f6e10b552bd60cf18e65',
       pathChanges: [
         {
-          path: 'packages/cli/src/commands/build-compiler-facts-handoff.test.ts',
-          status: 'A',
+          path: 'packages/cli/src/capability-closure-packages.test.ts',
+          status: 'M',
         },
         {
-          path: 'packages/cli/src/commands/build-export-generated-query-source-snapshot.test.ts',
-          status: 'A',
+          path: 'packages/cli/src/capability-closure-packages.ts',
+          status: 'M',
         },
         { path: 'packages/cli/src/commands/build-export.ts', status: 'M' },
         {
-          path: 'packages/cli/src/commands/build-static-trust-worker.test.ts',
-          status: 'M',
-        },
-        { path: 'packages/compiler/src/app-contract-project.test.ts', status: 'M' },
-        { path: 'packages/compiler/src/app-contract-project.ts', status: 'M' },
-        { path: 'packages/compiler/src/compile.ts', status: 'M' },
-        { path: 'packages/compiler/src/emit/render-equivalence.ts', status: 'M' },
-        { path: 'packages/compiler/src/internal.ts', status: 'M' },
-        { path: 'packages/compiler/src/lower/structural-jsx.ts', status: 'M' },
-        { path: 'packages/compiler/src/lowering-pipeline.ts', status: 'M' },
-        { path: 'packages/compiler/src/scan/parse.ts', status: 'M' },
-        {
-          path: 'packages/compiler/src/scan/shared-snapshot-entry-parse.test.ts',
+          path: 'packages/cli/src/dependency-capability-loader.test.ts',
           status: 'M',
         },
         {
-          path: 'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
+          path: 'packages/cli/src/dependency-capability-loader.ts',
           status: 'M',
         },
-        { path: 'packages/core/src/internal/framework-identity.test.ts', status: 'M' },
-        { path: 'packages/core/src/internal/framework-identity.ts', status: 'M' },
-        { path: 'scripts/pack-security.files.json', status: 'M' },
+        {
+          path: 'scripts/check-spec-conformance-closure.mjs',
+          status: 'M',
+        },
+        { path: 'security/diagnostic-conformance-evidence.json', status: 'M' },
         {
           path: 'security/framework-public-runtime-export-posture.json',
           status: 'M',
         },
-        { path: 'security/kovo-certificate-policy-v1.json', status: 'M' },
-        { path: 'security/kovo-certificate-v1.json', status: 'M' },
       ],
-      tree: '8ab4b1cd0fd2f91d038ff117b757c0aa0e773705',
+      ref: 'refs/heads/perf-spike/build-package-snapshot-sealed-20260822',
+      tree: 'd8c1f334f3c6035b26c42ed017823f5c025b2a4d',
     });
   });
 
@@ -205,7 +194,7 @@ describe('build source-trust candidate decision', () => {
     });
   });
 
-  it('rejects dirty worktrees, non-direct ranges, patch drift and status/path drift', () => {
+  it('rejects dirty or non-direct roots, identity drift, patch drift and path drift', () => {
     const dirty = candidateFixture({ spikeStatus: ' M packages/compiler/src/scan/parse.ts' });
     expect(() =>
       authenticateBuildSourceTrustRoots(
@@ -257,6 +246,42 @@ describe('build source-trust candidate decision', () => {
         rangeDrift.dependencies,
       ),
     ).toThrow(/exactly one commit/u);
+
+    const headDrift = candidateFixture();
+    expect(() =>
+      authenticateBuildSourceTrustRoots(
+        {
+          baselineRoot: headDrift.baseline,
+          candidate: { ...headDrift.candidate, parent: 'x'.repeat(40) },
+          candidateRepository: headDrift.repository,
+          spikeRoot: headDrift.spike,
+        },
+        headDrift.dependencies,
+      ),
+    ).toThrow(/sealed candidate parent\/commit pair/u);
+
+    const refDrift = candidateFixture();
+    let refReads = 0;
+    expect(() =>
+      authenticateBuildSourceTrustRoots(
+        {
+          baselineRoot: refDrift.baseline,
+          candidate: refDrift.candidate,
+          candidateRepository: refDrift.repository,
+          spikeRoot: refDrift.spike,
+        },
+        {
+          ...refDrift.dependencies,
+          git(root, args) {
+            if (args.join(' ') === `rev-parse ${refDrift.candidate.ref}^{commit}`) {
+              refReads += 1;
+              return refReads === 1 ? refDrift.candidate.commit : 'd'.repeat(40);
+            }
+            return refDrift.dependencies.git(root, args);
+          },
+        },
+      ),
+    ).toThrow(/durable ref moved/u);
   });
 
   it('derives patch IDs from binary bytes without allowing external diff drivers', () => {
@@ -1506,10 +1531,10 @@ function candidateFixture({ pathStatus, rangeCount = '1', spikeStatus = '' } = {
   const baseline = path.join(container, 'baseline');
   const spike = path.join(container, 'spike');
   for (const root of [repository, baseline, spike]) mkdirSync(root);
-  const baselineCommit = 'b'.repeat(40);
-  const spikeCommit = 's'.repeat(40);
   const commit = 'c'.repeat(40);
   const parent = 'p'.repeat(40);
+  const baselineCommit = parent;
+  const spikeCommit = commit;
   const tree = 't'.repeat(40);
   const patch = Buffer.from('exact binary full-index patch');
   const patchId = 'i'.repeat(40);
@@ -1524,6 +1549,7 @@ function candidateFixture({ pathStatus, rangeCount = '1', spikeStatus = '' } = {
     patchId,
     patchSha256: sha256(patch),
     pathChanges,
+    ref: 'refs/heads/perf-spike/test-package-snapshot',
     tree,
   };
   const roots = new Map([
@@ -1545,6 +1571,7 @@ function candidateFixture({ pathStatus, rangeCount = '1', spikeStatus = '' } = {
     if (command === `rev-parse ${commit}^{commit}`) return commit;
     if (command === `rev-parse ${commit}^`) return parent;
     if (command === `rev-parse ${commit}^{tree}`) return tree;
+    if (command === `rev-parse ${candidate.ref}^{commit}`) return commit;
     if (command === `diff --name-status --no-renames ${baselineCommit} ${spikeCommit}`) {
       return pathStatus ?? pathChanges.map((entry) => `${entry.status}\t${entry.path}`).join('\n');
     }

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Authenticated hosted A/B decision for the compiler-facts build candidate.
+ * Authenticated hosted A/B decision for the package-snapshot build candidate.
  *
  * This runner measures only clean Kovo product builds. Each arm is a clean committed worktree,
  * builds and freezes its own packed release closure, and runs an externally rooted corpus whose
- * actual `kovo` command resolves into that packed consumer. The candidate is reapplied as one exact
- * direct commit over the measurement source; neither workspace source loading nor bundle proxies
- * can enter the acceptance decision.
+ * actual `kovo` command resolves into that packed consumer. Baseline and candidate are the exact
+ * committed direct-parent pair named below; neither patch replay, workspace source loading, nor
+ * bundle proxies can enter the acceptance decision.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -67,55 +67,44 @@ export const BUILD_SOURCE_TRUST_BOUNDARY_POLICY = Object.freeze({
   timedWarmups: 0,
 });
 export const BUILD_SOURCE_TRUST_CANDIDATE = Object.freeze({
-  commit: '20782ca320b7999d6a8e2f0c0226a39c3aa4e65d',
-  parent: '01b2c759468f41a3fc4739225eb13c8f5aa11406',
-  patchBytes: 144_432,
-  patchId: '0944365d5dcbf37f15d855f2973149c3316ef08c',
-  patchSha256: 'sha256:a36d58240f1786190af8ded6a21df3a3a5a8c9da7741176143e058015cacd995',
+  commit: 'ef242a30662b767fec6f44bd23dfeeb700bd5c66',
+  parent: '81742e2285dda9f5419bb4531ed83b5dbfe0bb1c',
+  patchBytes: 65_349,
+  patchId: '98c01cb77fde51a19fd23fbe5f8a7061bfc459c1',
+  patchSha256: 'sha256:e71178ed5d9ab24439331005b0f77c830a7ada2c77c8f6e10b552bd60cf18e65',
   pathChanges: Object.freeze([
     Object.freeze({
-      path: 'packages/cli/src/commands/build-compiler-facts-handoff.test.ts',
-      status: 'A',
+      path: 'packages/cli/src/capability-closure-packages.test.ts',
+      status: 'M',
     }),
     Object.freeze({
-      path: 'packages/cli/src/commands/build-export-generated-query-source-snapshot.test.ts',
-      status: 'A',
+      path: 'packages/cli/src/capability-closure-packages.ts',
+      status: 'M',
     }),
     Object.freeze({ path: 'packages/cli/src/commands/build-export.ts', status: 'M' }),
     Object.freeze({
-      path: 'packages/cli/src/commands/build-static-trust-worker.test.ts',
-      status: 'M',
-    }),
-    Object.freeze({ path: 'packages/compiler/src/app-contract-project.test.ts', status: 'M' }),
-    Object.freeze({ path: 'packages/compiler/src/app-contract-project.ts', status: 'M' }),
-    Object.freeze({ path: 'packages/compiler/src/compile.ts', status: 'M' }),
-    Object.freeze({ path: 'packages/compiler/src/emit/render-equivalence.ts', status: 'M' }),
-    Object.freeze({ path: 'packages/compiler/src/internal.ts', status: 'M' }),
-    Object.freeze({ path: 'packages/compiler/src/lower/structural-jsx.ts', status: 'M' }),
-    Object.freeze({ path: 'packages/compiler/src/lowering-pipeline.ts', status: 'M' }),
-    Object.freeze({ path: 'packages/compiler/src/scan/parse.ts', status: 'M' }),
-    Object.freeze({
-      path: 'packages/compiler/src/scan/shared-snapshot-entry-parse.test.ts',
+      path: 'packages/cli/src/dependency-capability-loader.test.ts',
       status: 'M',
     }),
     Object.freeze({
-      path: 'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
+      path: 'packages/cli/src/dependency-capability-loader.ts',
       status: 'M',
     }),
     Object.freeze({
-      path: 'packages/core/src/internal/framework-identity.test.ts',
+      path: 'scripts/check-spec-conformance-closure.mjs',
       status: 'M',
     }),
-    Object.freeze({ path: 'packages/core/src/internal/framework-identity.ts', status: 'M' }),
-    Object.freeze({ path: 'scripts/pack-security.files.json', status: 'M' }),
+    Object.freeze({
+      path: 'security/diagnostic-conformance-evidence.json',
+      status: 'M',
+    }),
     Object.freeze({
       path: 'security/framework-public-runtime-export-posture.json',
       status: 'M',
     }),
-    Object.freeze({ path: 'security/kovo-certificate-policy-v1.json', status: 'M' }),
-    Object.freeze({ path: 'security/kovo-certificate-v1.json', status: 'M' }),
   ]),
-  tree: '8ab4b1cd0fd2f91d038ff117b757c0aa0e773705',
+  ref: 'refs/heads/perf-spike/build-package-snapshot-sealed-20260822',
+  tree: 'd8c1f334f3c6035b26c42ed017823f5c025b2a4d',
 });
 
 const BUILD_ADAPTER_SCHEMA = 'kovo-build-benchmark/v1';
@@ -256,6 +245,9 @@ export function authenticateBuildSourceTrustRoots(options, dependencies = {}) {
       )} spike=${JSON.stringify(spikeDirtyPaths)}`,
     );
   }
+  if (baselineCommit !== candidate.parent || spikeCommit !== candidate.commit) {
+    throw new Error('baseline and spike HEADs must equal the sealed candidate parent/commit pair');
+  }
   if (git(spikeRoot, ['rev-parse', 'HEAD^']) !== baselineCommit) {
     throw new Error('spike HEAD must be one direct commit atop baseline HEAD');
   }
@@ -269,10 +261,12 @@ export function authenticateBuildSourceTrustRoots(options, dependencies = {}) {
   const candidateCommit = git(candidateRepository, ['rev-parse', `${candidate.commit}^{commit}`]);
   const candidateParent = git(candidateRepository, ['rev-parse', `${candidate.commit}^`]);
   const candidateTree = git(candidateRepository, ['rev-parse', `${candidate.commit}^{tree}`]);
+  const candidateRef = git(candidateRepository, ['rev-parse', `${candidate.ref}^{commit}`]);
   if (
     candidateCommit !== candidate.commit ||
     candidateParent !== candidate.parent ||
-    candidateTree !== candidate.tree
+    candidateTree !== candidate.tree ||
+    candidateRef !== candidate.commit
   ) {
     throw new Error('source-trust candidate object identity is unavailable or unexpected');
   }
@@ -302,6 +296,9 @@ export function authenticateBuildSourceTrustRoots(options, dependencies = {}) {
       `spike path census differs from source-trust candidate: ${canonicalJson(observedPathChanges)}`,
     );
   }
+  if (git(candidateRepository, ['rev-parse', `${candidate.ref}^{commit}`]) !== candidate.commit) {
+    throw new Error('source-trust candidate durable ref moved during authentication');
+  }
   return {
     baseline: { commit: baselineCommit, root: baselineRoot },
     candidate: {
@@ -311,6 +308,7 @@ export function authenticateBuildSourceTrustRoots(options, dependencies = {}) {
       patchId: candidate.patchId,
       patchSha256: candidate.patchSha256,
       pathChanges: candidate.pathChanges.map((entry) => ({ ...entry })),
+      ref: candidate.ref,
       tree: candidate.tree,
     },
     schema: BUILD_SOURCE_TRUST_CANDIDATE_BINDING_SCHEMA,

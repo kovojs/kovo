@@ -62,7 +62,7 @@ const decisionDispatchScope = [
 const decisionFocusByJob = new Map([
   ['check-watch-decision', 'check-watch'],
   ['dev-generation-decision', 'dev-generation'],
-  ['build-source-trust-decision', 'build-source-trust'],
+  ['build-package-snapshot-decision', 'build-package-snapshot'],
   ['compressed-cache-decision', 'compressed-cache'],
   ['cli-startup-decision', 'cli-startup'],
   ['runtime-diagnostics', 'runtime-diagnostics'],
@@ -710,32 +710,41 @@ describe('realistic performance CI policy', () => {
     expectRawArtifact(source, 'kovo-perf-dev-generation-n${{ matrix.corpus }}');
   });
 
-  it('runs the exact packed-product build source-trust decision on both corpora', () => {
-    const source = decisionJob('build-source-trust-decision');
+  it('runs the exact packed-product build package-snapshot decision on both corpora', () => {
+    const source = decisionJob('build-package-snapshot-decision');
     expect(source).toContain('corpus: [24, 216]');
     expect(source).toContain('fetch-depth: 0');
     expect(source).not.toContain('playwright-install');
     expectPnpmBridge(source);
     expect(source).toContain(
-      'KOVO_BUILD_SOURCE_TRUST_CANDIDATE_COMMIT: c89e179a9e9b179dd75b0bebabd357f4aa9e36a6',
+      'KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_COMMIT: ef242a30662b767fec6f44bd23dfeeb700bd5c66',
     );
     expect(source).toContain(
-      'KOVO_BUILD_SOURCE_TRUST_CANDIDATE_REF: refs/heads/perf-spike/build-source-trust-20260814',
+      'KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_PARENT: 81742e2285dda9f5419bb4531ed83b5dbfe0bb1c',
+    );
+    expect(source).toContain(
+      'KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF: refs/heads/perf-spike/build-package-snapshot-sealed-20260822',
     );
     expect(source).toContain('git fetch --no-tags origin');
     expect(source).toContain(
-      '"+$KOVO_BUILD_SOURCE_TRUST_CANDIDATE_REF:refs/perf-evidence/build-source-trust-candidate"',
+      '"+$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF:$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF"',
     );
     expect(source).toContain(
-      'test "$resolved_candidate" = "$KOVO_BUILD_SOURCE_TRUST_CANDIDATE_COMMIT"',
+      '"+$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF:refs/perf-evidence/build-package-snapshot-candidate"',
+    );
+    expect(source).toContain(
+      'test "$resolved_candidate" = "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_COMMIT"',
     );
     expect(count(source, 'git worktree add --detach')).toBe(2);
-    expect(source).toContain('git worktree add --detach "$baseline_root" "$KOVO_PERF_SOURCE_SHA"');
-    expect(source).toContain('git worktree add --detach "$spike_root" "$KOVO_PERF_SOURCE_SHA"');
-    expect(source).toContain("-c user.name='Kovo Performance CI'");
-    expect(source).toContain('cherry-pick "$KOVO_BUILD_SOURCE_TRUST_CANDIDATE_COMMIT"');
+    expect(source).toContain('git worktree add --detach "$baseline_root" "$resolved_parent"');
+    expect(source).toContain('git worktree add --detach "$spike_root" "$resolved_candidate"');
+    expect(source).not.toContain('cherry-pick');
+    expect(source).toContain('git -C "$baseline_root" rev-parse HEAD');
+    expect(source).toContain('git -C "$spike_root" rev-parse HEAD');
     expect(source).toContain('git -C "$spike_root" rev-parse HEAD^');
-    expect(source).toContain('git -C "$spike_root" rev-list --count "$KOVO_PERF_SOURCE_SHA..HEAD"');
+    expect(source).toContain(
+      'git -C "$spike_root" rev-list --count "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_PARENT..HEAD"',
+    );
     expect(source).toContain('git -C "$baseline_root" status --porcelain=v1 --untracked-files=all');
     expect(source).toContain('git -C "$spike_root" status --porcelain=v1 --untracked-files=all');
     expect(source).toContain('scripts/perf-build-source-trust-spike.mjs');
@@ -749,7 +758,7 @@ describe('realistic performance CI policy', () => {
       expect(source).toContain(token);
     }
     expect(source).not.toContain('--warmups');
-    expectRawArtifact(source, 'kovo-perf-build-source-trust-n${{ matrix.corpus }}');
+    expectRawArtifact(source, 'kovo-perf-build-package-snapshot-n${{ matrix.corpus }}');
   });
 
   it('keeps the remaining decision measurements full-policy, parallel, and raw', async () => {
