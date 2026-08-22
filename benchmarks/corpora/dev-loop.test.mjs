@@ -996,6 +996,7 @@ describe('single-entrant developer-loop adapter', () => {
     );
     expect(supported.handoff.complete).toBe(true);
     expect(startSession).toHaveBeenCalledOnce();
+    expect(typeof startSession.mock.calls[0][0].spawnProcess).toBe('function');
 
     startSession.mockClear();
     const failed = await launchDevSessionAfterHandoff(

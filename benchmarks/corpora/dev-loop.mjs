@@ -1495,7 +1495,7 @@ export async function launchDevSessionAfterHandoff(options, dependencies = {}) {
     command: options.command,
     inspectorPort: options.inspectorPort ?? null,
     inspectorPauseOnStart: options.inspectorPauseOnStart ?? false,
-    spawnProcess: options.spawnProcess,
+    spawnProcess: options.spawnProcess ?? spawn,
   });
   return { handoff, session, started };
 }
