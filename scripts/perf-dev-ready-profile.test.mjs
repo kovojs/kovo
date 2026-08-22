@@ -27,6 +27,7 @@ import {
   DEV_READY_PROFILE_SCHEDULE,
   DEV_READY_PROFILE_SCHEMA,
   DEV_READY_PROFILE_WINDOW_SCHEMA,
+  devReadyProfileFailureDiagnostic,
   devReadyProfileSchedule,
   exactReadyCallEvidence,
   parseDevReadyProfileArgs,
@@ -87,6 +88,22 @@ afterEach(async () => {
 });
 
 describe('authenticated cold-first-ready diagnostic', () => {
+  it('emits a bounded actionable diagnostic when an authenticated child is unproven', () => {
+    expect(
+      devReadyProfileFailureDiagnostic({
+        verdict: { reasons: ['block 0 baseline: inspector disconnected'], status: 'unproven' },
+      }),
+    ).toBe(
+      'fresh-ready diagnostic did not complete: {"reasons":["block 0 baseline: inspector disconnected"],"status":"unproven"}',
+    );
+    expect(
+      devReadyProfileFailureDiagnostic({
+        verdict: { reasons: ['x'.repeat(20_000)], status: 'unproven' },
+      }).length,
+    ).toBeLessThanOrEqual(8192);
+    expect(devReadyProfileFailureDiagnostic({ verdict: { status: 'diagnostic-only' } })).toBeNull();
+  });
+
   it('fixes one N=216 first-ready window in exact B,S,S,B order', () => {
     expect(DEV_READY_PROFILE_SCHEMA).toBe('kovo-dev-ready-profile/v1');
     expect(DEV_READY_PROFILE_SCHEDULE).toEqual([

@@ -2052,6 +2052,20 @@ export function controllerBindingFromEnvironment(environment = process.env) {
   return binding;
 }
 
+export function devReadyProfileFailureDiagnostic(report) {
+  if (report?.verdict?.status === 'diagnostic-only') return null;
+  const reasons = Array.isArray(report?.verdict?.reasons)
+    ? report.verdict.reasons
+        .filter((reason) => typeof reason === 'string')
+        .slice(0, 16)
+        .map((reason) => reason.slice(0, 512))
+    : [];
+  return `fresh-ready diagnostic did not complete: ${JSON.stringify({
+    reasons,
+    status: report?.verdict?.status ?? 'missing',
+  })}`.slice(0, 8192);
+}
+
 export async function main(argv = process.argv.slice(2)) {
   const parsed = parseDevReadyProfileArgs(argv);
   const controllerBinding = controllerBindingFromEnvironment();
@@ -2059,6 +2073,8 @@ export async function main(argv = process.argv.slice(2)) {
   const serialized = `${JSON.stringify(report, null, 2)}\n`;
   writeFileSync(path.resolve(parsed.out), serialized, { flag: 'wx', mode: 0o600 });
   process.stdout.write(serialized);
+  const failureDiagnostic = devReadyProfileFailureDiagnostic(report);
+  if (failureDiagnostic !== null) process.stderr.write(`${failureDiagnostic}\n`);
   return report.verdict.status === 'diagnostic-only' ? 0 : 1;
 }
 
