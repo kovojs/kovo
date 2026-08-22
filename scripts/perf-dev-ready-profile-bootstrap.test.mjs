@@ -401,6 +401,28 @@ describe('immutable ready-profile controller bootstrap', () => {
     expect(existsSync(fixture.profileDir)).toBe(false);
   });
 
+  it('does not delete a colliding staging root that it never owned', async () => {
+    const fixture = await bootstrapRunFixture();
+    let foreignStageRoot = '';
+    fixture.dependencies.beforeStageRootCreate = ({ stageRoot }) => {
+      foreignStageRoot = stageRoot;
+      mkdirSync(stageRoot, { mode: 0o700 });
+      writeFileSync(path.join(stageRoot, 'sentinel.txt'), 'foreign owner\n', {
+        flag: 'wx',
+        mode: 0o600,
+      });
+    };
+
+    await expect(runReadyProfileBootstrap(fixture.argv, fixture.dependencies)).rejects.toThrow(
+      'diagnostic staging root already exists; refusing foreign ownership',
+    );
+    expect(readFileSync(path.join(foreignStageRoot, 'sentinel.txt'), 'utf8')).toBe(
+      'foreign owner\n',
+    );
+    expect(existsSync(fixture.out)).toBe(false);
+    expect(existsSync(fixture.profileDir)).toBe(false);
+  });
+
   it('fails closed and rolls back when source or artifacts change across publication', async () => {
     const mutations = [
       {

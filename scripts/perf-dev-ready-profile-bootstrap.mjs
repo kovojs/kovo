@@ -278,28 +278,44 @@ export async function runReadyProfileBootstrap(argv = process.argv.slice(2), dep
     dependencies,
   );
   const materialized = materializeReadyProfileController(authenticated, dependencies);
-  const bindingDigest = /^sha256:([0-9a-f]{64})$/u.exec(materialized.bindingSha256)?.[1];
-  if (bindingDigest === undefined) {
-    throw new Error('materialized controller binding digest is malformed');
-  }
-  // The private controller root is already created exclusively by mkdtemp and is part of this
-  // authenticated binding. Its digest supplies a run-unique staging suffix without adding a
-  // second crypto-authority acquisition; exclusive publication still owns collision safety.
-  const nonce = bindingDigest.slice(0, 24);
-  const stagedOut = path.join(
-    path.dirname(targets.out),
-    `.${path.basename(targets.out)}.${nonce}.controller-stage`,
-  );
-  const stagedProfiles = path.join(
-    path.dirname(targets.profileDir),
-    `.${path.basename(targets.profileDir)}.${nonce}.controller-stage`,
-  );
-  const childArgv = rewriteEvidenceTargets(argv, stagedOut, stagedProfiles);
+  let stageRoot = null;
+  let stageRootOwnership = null;
+  let stagedOut = null;
+  let stagedProfiles = null;
   let completed = false;
   let publishedProfile = null;
   let publishedReport = null;
   let report = null;
   try {
+    const bindingDigest = /^sha256:([0-9a-f]{64})$/u.exec(materialized.bindingSha256)?.[1];
+    if (bindingDigest === undefined) {
+      throw new Error('materialized controller binding digest is malformed');
+    }
+    // The suffix identifies this already-exclusive materialization, while mkdir owns collision
+    // safety. Both child targets remain beneath one same-filesystem root so publication can retain
+    // the raw profile inodes through hard links without ever cleaning a colliding run's path.
+    const nonce = bindingDigest.slice(0, 24);
+    stageRoot = path.join(
+      path.dirname(targets.profileDir),
+      `.${path.basename(targets.profileDir)}.${nonce}.controller-stage`,
+    );
+    dependencies.beforeStageRootCreate?.({ stageRoot });
+    try {
+      mkdirSync(stageRoot, { mode: 0o700, recursive: false });
+    } catch (error) {
+      if (error?.code === 'EEXIST') {
+        throw new Error('diagnostic staging root already exists; refusing foreign ownership');
+      }
+      throw error;
+    }
+    const stageRootStat = lstatSync(stageRoot, { bigint: true });
+    if (!stageRootStat.isDirectory() || stageRootStat.isSymbolicLink()) {
+      throw new Error('diagnostic staging root is not an owned non-symlink directory');
+    }
+    stageRootOwnership = directoryOwnership(stageRootStat);
+    stagedOut = path.join(stageRoot, 'report.json');
+    stagedProfiles = path.join(stageRoot, 'profiles');
+    const childArgv = rewriteEvidenceTargets(argv, stagedOut, stagedProfiles);
     const controllerEnvironment = { ...(dependencies.environment ?? process.env) };
     delete controllerEnvironment.NODE_OPTIONS;
     delete controllerEnvironment.NODE_PATH;
@@ -448,8 +464,7 @@ export async function runReadyProfileBootstrap(argv = process.argv.slice(2), dep
         rollbackPublishedProfile(report, targets.profileDir);
       }
     }
-    rmSync(stagedOut, { force: true });
-    rmSync(stagedProfiles, { force: true, recursive: true });
+    rollbackOwnedStageRoot(stageRoot, stageRootOwnership);
     materialized.cleanup();
   }
 }
@@ -935,6 +950,28 @@ function rollbackPublishedProfile(report, profileDir) {
     }
     for (const file of expectedFiles) unlinkSync(path.join(profileDir, file));
     rmdirSync(profileDir);
+  } catch {}
+}
+
+function directoryOwnership(stat) {
+  return { dev: String(stat.dev), ino: String(stat.ino), mode: String(stat.mode) };
+}
+
+function rollbackOwnedStageRoot(root, ownership) {
+  if (typeof root !== 'string' || ownership === null) return;
+  try {
+    const current = lstatSync(root, { bigint: true });
+    const observed = directoryOwnership(current);
+    if (
+      current.isSymbolicLink() ||
+      !current.isDirectory() ||
+      observed.dev !== ownership.dev ||
+      observed.ino !== ownership.ino ||
+      observed.mode !== ownership.mode
+    ) {
+      return;
+    }
+    rmSync(root, { force: true, recursive: true });
   } catch {}
 }
 
