@@ -20,6 +20,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   capabilityPackageResolvedTargetMatches,
   capabilityManifestFingerprint,
+  createCapabilityPackageImportSession,
   readCapabilityPackageSummaries,
   resolveCapabilityPackages,
 } from './capability-closure-packages.js';
@@ -332,6 +333,132 @@ describe('capability package resolution', () => {
     expect(thirdPartyFact).not.toHaveProperty('implementationDigest');
     expect(thirdPartyWalks).toEqual([]);
   });
+
+  it('shares one phase-local implementation snapshot, pins loaded bytes, and revalidates once', () => {
+    const fixture = firstPartyImplementationFixture('workspace-source');
+    const walks: string[] = [];
+    const session = createCapabilityPackageImportSession({
+      onImplementationTreeWalk(packageRoot, layout) {
+        walks.push(`${packageRoot}:${layout}`);
+      },
+    });
+
+    const first = session.resolve('@kovojs/style', fixture.importer);
+    const second = session.resolve('@kovojs/style/internal', fixture.importer);
+    expect(first?.implementationDigest).toBe(second?.implementationDigest);
+    expect(walks).toHaveLength(1);
+
+    const implementation = fixture.implementationFiles[0]!;
+    session.assertPinnedSource(
+      implementation.fileName,
+      readFileSync(implementation.fileName, 'utf8'),
+    );
+    session.finalize();
+    expect(walks).toHaveLength(2);
+    expect(() => session.resolve('@kovojs/style', fixture.importer)).toThrow(/finalized/u);
+    expect(() =>
+      session.assertPinnedSource(
+        implementation.fileName,
+        readFileSync(implementation.fileName, 'utf8'),
+      ),
+    ).toThrow(/finalized.*no further source may load/u);
+    session.revoke();
+    expect(() => session.finalize()).toThrow(/revoked/u);
+    expect(() =>
+      session.assertPinnedSource(
+        implementation.fileName,
+        readFileSync(implementation.fileName, 'utf8'),
+      ),
+    ).toThrow(/revoked.*no further source may load/u);
+  });
+
+  it('revokes the phase before evaluation when Vite-provided framework bytes differ', () => {
+    const fixture = firstPartyImplementationFixture('workspace-source');
+    const session = createCapabilityPackageImportSession();
+    expect(session.resolve('@kovojs/style', fixture.importer)?.implementationDigest).toMatch(
+      /^kovo-source-tree-sha256:[0-9a-f]{64}$/u,
+    );
+    const implementation = fixture.implementationFiles[0]!;
+    const source = readFileSync(implementation.fileName, 'utf8');
+    expect(() =>
+      session.assertPinnedSource(
+        implementation.fileName,
+        `${source}\nglobalThis.__must_not_execute = true;\n`,
+      ),
+    ).toThrow(/changed before Vite evaluation/u);
+    expect(() => session.finalize()).toThrow(/revoked/u);
+  });
+
+  it('revokes before evaluation when a newly added implementation path is presented to Vite', () => {
+    const fixture = firstPartyImplementationFixture('workspace-source');
+    const session = createCapabilityPackageImportSession();
+    expect(session.resolve('@kovojs/style', fixture.importer)?.implementationDigest).toBeDefined();
+    const added = join(fixture.packageRoot, 'src/session-added-after-snapshot.ts');
+    const source = 'export const added = true;\n';
+    writeFileSync(added, source);
+
+    expect(() => session.assertPinnedSource(added, source)).toThrow(
+      /appeared outside the phase snapshot before Vite evaluation/u,
+    );
+    expect(() => session.finalize()).toThrow(/revoked/u);
+  });
+
+  it.each(['mutate', 'add', 'remove', 'rename', 'symlink'] as const)(
+    'rejects %s drift in an unloaded framework implementation sibling at phase finalization',
+    (kind) => {
+      const fixture = firstPartyImplementationFixture('workspace-source');
+      const sibling = join(fixture.packageRoot, 'src/session-unloaded.ts');
+      writeFileSync(sibling, 'export const unloaded = 1;\n');
+      const session = createCapabilityPackageImportSession();
+      expect(
+        session.resolve('@kovojs/style', fixture.importer)?.implementationDigest,
+      ).toBeDefined();
+
+      if (kind === 'mutate') writeFileSync(sibling, 'export const unloaded = 2;\n');
+      if (kind === 'add') {
+        writeFileSync(
+          join(fixture.packageRoot, 'src/session-added.ts'),
+          'export const added = 1;\n',
+        );
+      }
+      if (kind === 'remove') rmSync(sibling);
+      if (kind === 'rename') renameSync(sibling, `${sibling}.renamed`);
+      if (kind === 'symlink') {
+        symlinkSync(sibling, join(fixture.packageRoot, 'src/session-link.ts'));
+      }
+
+      expect(() => session.finalize()).toThrow(/changed before build-phase publication/u);
+      expect(() => session.resolve('@kovojs/style', fixture.importer)).toThrow(/revoked/u);
+    },
+  );
+
+  it.each(['version', 'export target'] as const)(
+    're-resolves fresh %s identity on every edge despite implementation memoization',
+    (kind) => {
+      const fixture = firstPartyImplementationFixture('workspace-source');
+      const session = createCapabilityPackageImportSession();
+      expect(
+        session.resolve('@kovojs/style', fixture.importer)?.implementationDigest,
+      ).toBeDefined();
+      const manifest = JSON.parse(readFileSync(fixture.manifestPath, 'utf8')) as Record<
+        string,
+        unknown
+      >;
+      if (kind === 'version') {
+        manifest.version = '999.0.0';
+      } else {
+        const alternate = join(fixture.packageRoot, 'src/session-alternate.ts');
+        writeFileSync(alternate, 'export const alternate = true;\n');
+        manifest.exports = { '.': './src/session-alternate.ts' };
+      }
+      writeFileSync(fixture.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+      expect(() => session.resolve('@kovojs/style', fixture.importer)).toThrow(
+        /changed during import resolution/u,
+      );
+      expect(() => session.finalize()).toThrow(/revoked/u);
+    },
+  );
 
   it.each(['source', 'packed'] as const)(
     'resolves zero-public compiler metadata without walking or hashing its installed %s tree',

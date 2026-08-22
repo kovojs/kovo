@@ -15,7 +15,8 @@ import type { Plugin } from 'vite-plus';
 
 import {
   capabilityPackageResolvedTargetRoot,
-  resolveCapabilityPackageImport,
+  createCapabilityPackageImportSession,
+  type CapabilityPackageImportSession,
 } from './capability-closure-packages.js';
 
 export type { AppDependencyCapabilityManifest } from '@kovojs/compiler/internal';
@@ -121,6 +122,13 @@ interface ReviewedThirdPartyModule {
   readonly root: string;
 }
 
+/** One phase-local loader plus the explicit lifecycle required by runnable SSR lanes. @internal */
+export interface DependencyCapabilityLoaderViteSession {
+  readonly finalize: () => void;
+  readonly plugin: Plugin;
+  readonly revoke: () => void;
+}
+
 /**
  * Return the exact external module entries selected by a client HTML document.
  *
@@ -171,6 +179,23 @@ export function dependencyCapabilityLoaderVitePlugin(
   lane: DependencyCapabilityLoaderLane = 'test',
   options: DependencyCapabilityLoaderOptions = {},
 ): Plugin {
+  return createDependencyCapabilityLoaderViteSession(
+    appModulePath,
+    approvedSourceFiles,
+    manifest,
+    lane,
+    options,
+  ).plugin;
+}
+
+/** Create the loader with an explicit finalizer for Vite runnable environments. @internal */
+export function createDependencyCapabilityLoaderViteSession(
+  appModulePath: string,
+  approvedSourceFiles: readonly ApprovedDependencySource[],
+  manifest: AppDependencyCapabilityManifest,
+  lane: DependencyCapabilityLoaderLane = 'test',
+  options: DependencyCapabilityLoaderOptions = {},
+): DependencyCapabilityLoaderViteSession {
   assertDependencyCapabilityManifestShape(manifest);
   const sourceRoot = options.sourceRoot ?? dirname(appModulePath);
   const approvedPaths = new Map<string, string>();
@@ -203,6 +228,7 @@ export function dependencyCapabilityLoaderVitePlugin(
   const reviewedThirdPartyModules = new Map<string, ReviewedThirdPartyModule>();
   const approvedPackageEntryModules = new Set<string>();
   const loadedHtmlPaths = new Set<string>();
+  const packageImportSession = createCapabilityPackageImportSession();
   let configuredRoot = sourceRoot;
   let configuredPublicDir: string | undefined;
   let configuredAliases: readonly { find: string | RegExp; replacement: string }[] = [];
@@ -214,7 +240,13 @@ export function dependencyCapabilityLoaderVitePlugin(
     }
   };
 
-  return {
+  const plugin: Plugin = {
+    buildEnd(error) {
+      if (error !== undefined) packageImportSession.revoke();
+    },
+    closeBundle() {
+      packageImportSession.revoke();
+    },
     configResolved(config) {
       configuredRoot = canonicalSourcePath(config.root);
       configuredPublicDir =
@@ -284,7 +316,11 @@ export function dependencyCapabilityLoaderVitePlugin(
           'inline HTML module is outside the immutable approved-source snapshot',
         );
       }
+      const lexicalSourcePath = viteLexicalSourcePath(id);
       const sourcePath = viteSourcePath(id);
+      if (lexicalSourcePath !== undefined) {
+        packageImportSession.assertPinnedSource(lexicalSourcePath, source);
+      }
       if (lane === 'build-client' && sourcePath !== undefined && isHtmlSourcePath(sourcePath)) {
         assertHtmlExecutableSources(
           source,
@@ -376,6 +412,7 @@ export function dependencyCapabilityLoaderVitePlugin(
               admittedSpecifiers,
               configuredAliases,
               manifest,
+              packageImportSession,
             );
       if (importerName !== undefined && specifierHasUnsupportedSubgraphSuffix(specifier)) {
         throw dependencyCapabilityError(
@@ -408,8 +445,8 @@ export function dependencyCapabilityLoaderVitePlugin(
             `approved app source ${importerName} authored an unadmitted edge to a configured package-alias target`,
           );
         }
-        const installed = resolveCapabilityPackageImport(aliasedPackageSpecifier, importerPath);
-        const dependency = assertDependencyCapabilityImport(
+        const installed = packageImportSession.resolve(aliasedPackageSpecifier, importerPath);
+        assertDependencyCapabilityImport(
           manifest,
           aliasedPackageSpecifier,
           installed,
@@ -421,6 +458,10 @@ export function dependencyCapabilityLoaderVitePlugin(
         // Returning the raw replacement here bypasses that metadata and can retain the whole server
         // barrel, making the post-bundle carrier census grow exponentially instead of tree-shaking.
         const resolved = await this.resolve(specifier, importer, { skipSelf: true });
+        const resolvedLexicalPath =
+          resolved === null || resolved.external === true
+            ? undefined
+            : viteLexicalSourcePath(resolved.id);
         const resolvedPath =
           resolved === null || resolved.external === true ? undefined : viteSourcePath(resolved.id);
         const packageRoot = capabilityPackageResolvedTargetRoot(
@@ -440,12 +481,20 @@ export function dependencyCapabilityLoaderVitePlugin(
             `${aliasedPackageSpecifier} alias no longer names its exact reviewed package export target in ${lane}`,
           );
         }
+        const confirmedDependency = assertDependencyCapabilityImport(
+          manifest,
+          aliasedPackageSpecifier,
+          packageImportSession.resolve(aliasedPackageSpecifier, importerPath),
+          importerName,
+        );
         approvedPackageEntryModules.add(resolvedPath);
-        if (dependency.implementationDigest === undefined) {
+        if (confirmedDependency.implementationDigest === undefined) {
           reviewedThirdPartyModules.set(resolvedPath, {
-            packageName: dependency.packageName,
+            packageName: confirmedDependency.packageName,
             root: packageRoot,
           });
+        } else {
+          packageImportSession.pinResolvedSource(resolvedLexicalPath ?? resolvedPath);
         }
         // Return Vite's canonical resolution to terminate the outer alias resolution while keeping
         // its side-effect and package metadata intact.
@@ -540,7 +589,7 @@ export function dependencyCapabilityLoaderVitePlugin(
         }
         return null;
       }
-      const installed = resolveCapabilityPackageImport(specifier, importerPath);
+      const installed = packageImportSession.resolve(specifier, importerPath);
       assertDependencyCapabilityImport(manifest, specifier, installed, importerName);
       const resolved = await this.resolve(specifier, importer, { skipSelf: true });
       const resolvedLexicalPath =
@@ -582,11 +631,20 @@ export function dependencyCapabilityLoaderVitePlugin(
           `${specifier} resolved outside its exact package export target in ${lane}`,
         );
       }
-      if (installed?.implementationDigest === undefined) {
+      const confirmedInstalled = packageImportSession.resolve(specifier, importerPath);
+      const confirmedDependency = assertDependencyCapabilityImport(
+        manifest,
+        specifier,
+        confirmedInstalled,
+        importerName,
+      );
+      if (confirmedInstalled?.implementationDigest === undefined) {
         reviewedThirdPartyModules.set(resolvedPath, {
-          packageName: installed?.packageName ?? specifier,
+          packageName: confirmedInstalled?.packageName ?? confirmedDependency.packageName,
           root: packageRoot,
         });
+      } else {
+        packageImportSession.pinResolvedSource(resolvedLexicalPath ?? resolvedPath);
       }
       approvedPackageEntryModules.add(resolvedPath);
       // Classify and pin: Vite consumes the exact resolution checked above rather than running a
@@ -598,7 +656,10 @@ export function dependencyCapabilityLoaderVitePlugin(
       // compiler plugin's in-memory client-module facts, and deletes every emitted byte. Source
       // resolution above still closes app/package edges before Rollup loads them; retained-edge
       // checks belong only to artifacts that can execute or ship (SPEC §5.2/§6.6).
-      if (lane === 'component-scan') return;
+      if (lane === 'component-scan') {
+        packageImportSession.finalize();
+        return;
+      }
       const bundleOwnedChunkFileNames = new Set(
         Object.values(bundle).flatMap((output) =>
           output.type === 'chunk' ? [output.fileName] : [],
@@ -744,8 +805,14 @@ export function dependencyCapabilityLoaderVitePlugin(
           );
         }
       }
+      packageImportSession.finalize();
     },
   };
+  return Object.freeze({
+    finalize: packageImportSession.finalize,
+    plugin,
+    revoke: packageImportSession.revoke,
+  });
 }
 
 function approvedAliasedPackageSpecifier(
@@ -755,13 +822,14 @@ function approvedAliasedPackageSpecifier(
   admittedSpecifiers: ReadonlySet<string>,
   configuredAliases: readonly { find: string | RegExp; replacement: string }[],
   manifest: AppDependencyCapabilityManifest,
+  packageImportSession: CapabilityPackageImportSession,
 ): string | undefined {
   const matches = new Set<string>();
   for (const candidate of admittedSpecifiers) {
     for (const alias of configuredAliases) {
       const replacement = aliasReplacementFor(candidate, alias.find, alias.replacement);
       if (replacement !== resolvedSpecifier) continue;
-      const installed = resolveCapabilityPackageImport(candidate, importerPath);
+      const installed = packageImportSession.resolve(candidate, importerPath);
       assertDependencyCapabilityImport(manifest, candidate, installed, importerName);
       if (
         capabilityPackageResolvedTargetRoot(candidate, importerPath, resolvedSpecifier) ===

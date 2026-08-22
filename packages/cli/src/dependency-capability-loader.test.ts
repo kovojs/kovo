@@ -13,10 +13,17 @@ import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
-import { build as viteBuild, createServer as createViteServer } from 'vite-plus';
+import {
+  build as viteBuild,
+  createRunnableDevEnvironment,
+  createServer as createViteServer,
+  resolveConfig as resolveViteConfig,
+  type Plugin,
+} from 'vite-plus';
 
 import {
   assertDependencyCapabilityImport,
+  createDependencyCapabilityLoaderViteSession,
   dependencyCapabilityLoaderVitePlugin,
   type AppDependencyCapabilityManifest,
 } from './dependency-capability-loader.js';
@@ -238,6 +245,84 @@ async function buildReviewedBrowserPackageArtifact(
   }
 }
 
+const manifestRetargetSentinel = '__kovoFirstPartyManifestRetargetExecuted';
+
+function firstPartyPackageLoaderFixture(): {
+  readonly appModulePath: string;
+  readonly appSource: string;
+  readonly entryPath: string;
+  readonly manifest: AppDependencyCapabilityManifest;
+  readonly manifestPath: string;
+  readonly root: string;
+  readonly siblingPath: string;
+} {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-first-party-loader-session-')));
+  const appModulePath = join(root, 'app.mjs');
+  const packageRoot = join(root, 'node_modules/@kovojs/style');
+  const entryPath = join(packageRoot, 'src/index.ts');
+  const alternatePath = join(packageRoot, 'src/alternate.ts');
+  const siblingPath = join(packageRoot, 'src/unloaded.ts');
+  const manifestPath = join(packageRoot, 'package.json');
+  const appSource = "import { marker } from '@kovojs/style'; export const result = marker;\n";
+  mkdirSync(dirname(entryPath), { recursive: true });
+  writeFileSync(appModulePath, appSource);
+  writeFileSync(join(root, 'package.json'), '{"private":true,"type":"module"}\n');
+  writeFileSync(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        exports: { '.': './src/index.ts' },
+        name: '@kovojs/style',
+        type: 'module',
+        version: '0.0.0-session-fixture',
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  writeFileSync(entryPath, 'export const marker = 1;\n');
+  writeFileSync(
+    alternatePath,
+    `globalThis.${manifestRetargetSentinel} = true; export const marker = 2;\n`,
+  );
+  writeFileSync(siblingPath, 'export const unloaded = 1;\n');
+  const installed = resolveCapabilityPackageImport('@kovojs/style', appModulePath);
+  if (installed?.implementationDigest === undefined) {
+    throw new Error('first-party loader fixture did not produce an implementation digest');
+  }
+  return {
+    appModulePath,
+    appSource,
+    entryPath,
+    manifest: {
+      dependencies: [
+        {
+          entries: [
+            {
+              conditions: installed.conditions,
+              importers: ['app.mjs'],
+              imports: [{ capabilities: [], disposition: 'pure', name: 'marker' }],
+              rootKinds: ['route'],
+              sites: ['app.mjs:1:1'],
+              specifier: '@kovojs/style',
+            },
+          ],
+          implementationDigest: installed.implementationDigest,
+          manifestFingerprint: installed.manifestFingerprint,
+          packageName: installed.packageName,
+          packageVersion: installed.packageVersion,
+          summaryVersion: 'kovo-first-party-session-test/1',
+          verdict: 'open',
+        },
+      ],
+      schema: 'kovo-app-dependency-capabilities/v1',
+    },
+    manifestPath,
+    root,
+    siblingPath,
+  };
+}
+
 describe('SPEC §6.6 app dependency loader attenuation', () => {
   // @kovo-security-certifies C13 dependency-complete-ssr-wiring
   it('forces complete dependency traversal in both supported SSR app-evaluation lanes', () => {
@@ -347,6 +432,265 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           malformed,
         ),
       ).toThrow(/KV448.*manifest dependency\[0\] entry\[0\] is malformed/u);
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-first-party-byte-pin-before-runnable-evaluation
+  it.each(['bytes', 'symlink retarget'] as const)(
+    'rejects first-party %s in the real runnable SSR transform before evaluation',
+    async (mutation) => {
+      const fixture = firstPartyPackageLoaderFixture();
+      const sentinel = '__kovoFirstPartySnapshotExecuted';
+      const globals = globalThis as unknown as Record<string, unknown>;
+      delete globals[sentinel];
+      const loader = createDependencyCapabilityLoaderViteSession(
+        fixture.appModulePath,
+        [{ fileName: 'app.mjs', source: fixture.appSource }],
+        fixture.manifest,
+        'build-app',
+        { sourceRoot: fixture.root },
+      );
+      const mutateBeforeRead: Plugin = {
+        load(id) {
+          if ((id.split(/[?#]/u, 1)[0] ?? id) === fixture.entryPath) {
+            const changedSource = `globalThis.${sentinel} = true; export const marker = 2;\n`;
+            if (mutation === 'bytes') {
+              writeFileSync(fixture.entryPath, changedSource);
+            } else {
+              const outsideTarget = join(fixture.root, 'retargeted-framework-entry.ts');
+              writeFileSync(outsideTarget, changedSource);
+              rmSync(fixture.entryPath);
+              symlinkSync(outsideTarget, fixture.entryPath);
+            }
+          }
+          return null;
+        },
+        name: 'kovo-test-mutate-first-party-before-read',
+      };
+      const config = await resolveViteConfig(
+        {
+          appType: 'custom',
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [loader.plugin, mutateBeforeRead],
+          root: fixture.root,
+          server: { hmr: false },
+          ssr: { noExternal: true },
+        },
+        'serve',
+      );
+      const environment = createRunnableDevEnvironment('ssr', config, {
+        hot: false,
+        runnerOptions: { hmr: false, sourcemapInterceptor: false },
+      });
+      try {
+        await environment.init();
+        await expect(environment.runner.import(fixture.appModulePath)).rejects.toThrow(
+          /changed(?: identity)? before Vite evaluation/u,
+        );
+        expect(globals[sentinel]).toBeUndefined();
+        expect(() => loader.finalize()).toThrow(/revoked/u);
+      } finally {
+        loader.revoke();
+        await environment.close();
+        delete globals[sentinel];
+        rmSync(fixture.root, { force: true, recursive: true });
+      }
+    },
+  );
+
+  // @kovo-security-certifies C13 dependency-package-session-revoked-transform-poison
+  it('rejects every real runnable transform after the package session is revoked', async () => {
+    const fixture = firstPartyPackageLoaderFixture();
+    const sentinel = '__kovoRevokedPackageSessionExecuted';
+    const globals = globalThis as unknown as Record<string, unknown>;
+    const appSource = `globalThis.${sentinel} = true;\n${fixture.appSource}`;
+    delete globals[sentinel];
+    writeFileSync(fixture.appModulePath, appSource);
+    const loader = createDependencyCapabilityLoaderViteSession(
+      fixture.appModulePath,
+      [{ fileName: 'app.mjs', source: appSource }],
+      fixture.manifest,
+      'build-app',
+      { sourceRoot: fixture.root },
+    );
+    const config = await resolveViteConfig(
+      {
+        appType: 'custom',
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [loader.plugin],
+        root: fixture.root,
+        server: { hmr: false },
+        ssr: { noExternal: true },
+      },
+      'serve',
+    );
+    const environment = createRunnableDevEnvironment('ssr', config, {
+      hot: false,
+      runnerOptions: { hmr: false, sourcemapInterceptor: false },
+    });
+    try {
+      await environment.init();
+      loader.revoke();
+      await expect(environment.runner.import(fixture.appModulePath)).rejects.toThrow(
+        /revoked.*no further source may load/u,
+      );
+      expect(globals[sentinel]).toBeUndefined();
+      expect(() => loader.finalize()).toThrow(/revoked/u);
+    } finally {
+      loader.revoke();
+      await environment.close();
+      delete globals[sentinel];
+      rmSync(fixture.root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-first-party-export-retarget-before-runnable-evaluation
+  it('re-resolves manifest exports after Vite resolution and rejects retargeting before evaluation', async () => {
+    const fixture = firstPartyPackageLoaderFixture();
+    const globals = globalThis as unknown as Record<string, unknown>;
+    delete globals[manifestRetargetSentinel];
+    const loader = createDependencyCapabilityLoaderViteSession(
+      fixture.appModulePath,
+      [{ fileName: 'app.mjs', source: fixture.appSource }],
+      fixture.manifest,
+      'build-app',
+      { sourceRoot: fixture.root },
+    );
+    let retargeted = false;
+    const retargetDuringResolution: Plugin = {
+      enforce: 'pre',
+      name: 'kovo-test-retarget-first-party-export-during-resolution',
+      resolveId(specifier, importer) {
+        if (
+          !retargeted &&
+          specifier === '@kovojs/style' &&
+          importer?.endsWith('/app.mjs') === true
+        ) {
+          const packageManifest = JSON.parse(readFileSync(fixture.manifestPath, 'utf8')) as Record<
+            string,
+            unknown
+          >;
+          packageManifest.exports = { '.': './src/alternate.ts' };
+          writeFileSync(fixture.manifestPath, `${JSON.stringify(packageManifest, null, 2)}\n`);
+          retargeted = true;
+        }
+        return null;
+      },
+    };
+    const config = await resolveViteConfig(
+      {
+        appType: 'custom',
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [loader.plugin, retargetDuringResolution],
+        root: fixture.root,
+        server: { hmr: false },
+        ssr: { noExternal: true },
+      },
+      'serve',
+    );
+    const environment = createRunnableDevEnvironment('ssr', config, {
+      hot: false,
+      runnerOptions: { hmr: false, sourcemapInterceptor: false },
+    });
+    try {
+      await environment.init();
+      await expect(environment.runner.import(fixture.appModulePath)).rejects.toThrow(
+        /changed during import resolution/u,
+      );
+      expect(retargeted).toBe(true);
+      expect(globals[manifestRetargetSentinel]).toBeUndefined();
+      expect(() => loader.finalize()).toThrow(/revoked/u);
+    } finally {
+      loader.revoke();
+      await environment.close();
+      delete globals[manifestRetargetSentinel];
+      rmSync(fixture.root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-component-scan-final-package-recensus
+  it('re-censuses unloaded first-party siblings before the component-scan lane can finish', async () => {
+    const fixture = firstPartyPackageLoaderFixture();
+    const loader = createDependencyCapabilityLoaderViteSession(
+      fixture.appModulePath,
+      [{ fileName: 'app.mjs', source: fixture.appSource }],
+      fixture.manifest,
+      'component-scan',
+      { sourceRoot: fixture.root },
+    );
+    const mutateBeforeFinalization: Plugin = {
+      enforce: 'pre',
+      generateBundle: {
+        handler() {
+          writeFileSync(fixture.siblingPath, 'export const unloaded = 2;\n');
+        },
+        order: 'pre',
+      },
+      name: 'kovo-test-mutate-before-component-scan-finalization',
+    };
+    try {
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir: join(fixture.root, 'dist'),
+            rollupOptions: { input: fixture.appModulePath },
+            ssr: true,
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [mutateBeforeFinalization, loader.plugin],
+          root: fixture.root,
+        }),
+      ).rejects.toThrow(/changed before build-phase publication/u);
+      expect(() => loader.finalize()).toThrow(/revoked/u);
+    } finally {
+      loader.revoke();
+      rmSync(fixture.root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-package-session-abort-revocation
+  it('revokes phase-local package snapshots when Rollup aborts before publication', async () => {
+    const fixture = firstPartyPackageLoaderFixture();
+    const loader = createDependencyCapabilityLoaderViteSession(
+      fixture.appModulePath,
+      [{ fileName: 'app.mjs', source: fixture.appSource }],
+      fixture.manifest,
+      'build-server',
+      { sourceRoot: fixture.root },
+    );
+    try {
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir: join(fixture.root, 'dist'),
+            rollupOptions: { input: fixture.appModulePath },
+            ssr: true,
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            {
+              buildStart() {
+                throw new Error('intentional package-session abort');
+              },
+              enforce: 'pre',
+              name: 'kovo-test-abort-package-session',
+            },
+            loader.plugin,
+          ],
+          root: fixture.root,
+        }),
+      ).rejects.toThrow(/intentional package-session abort/u);
+      expect(() => loader.finalize()).toThrow(/revoked/u);
+    } finally {
+      loader.revoke();
+      rmSync(fixture.root, { force: true, recursive: true });
     }
   });
 

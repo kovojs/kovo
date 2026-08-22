@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  'e96c17968b69b651f3cbd3615ae6de6262023d70bb25b30129cbfcfcafe6fd91';
+  'e535e8ba70d328c1306198ba528238adb9a795db0f2dea3d0e7bca90f054d478';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  'a85bec31f15e262300a8596583c31f45a88ae8e7f67c0e0a4c6d75072d83af39';
+  '30f337a1a48afe901186551288f4bc929c0513961d6d4e317f9ce22e40b3271e';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -131,12 +131,12 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/capability-closure-packages.ts',
-    'e27f8372435ccd68c5ad554bfc52579bf105ab8dde2cac1101e037b3f203f978',
+    '6e76e1c8c9e074d4f4eec795aedc09a50c34d3062f63b8df9d055b14f5af3ca7',
   ],
   ['packages/cli/src/bin.ts', 'a5e27897ba54f7a2234b9323f235d3976b3766cff86a22a5a7470436123c9555'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '3c9b4ef10d7b1fb9190e16f065eaa129968886b2863be3b5310c60387497348c',
+    'bdb6245fae0a19fe175bed6b82f915c9e9c41a2098ded01315de382018b370e3',
   ],
   [
     'packages/cli/src/commands/check-session-reuse.ts',
@@ -164,7 +164,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/dependency-capability-loader.ts',
-    'f4525488d63ef1ed80666d248f5267be72b8e1d6b24c64e6730ab10b9d544cbd',
+    '2e7063c5fa426063147e319feec43a2ba99dbede79d3cc34dbcd5b4d3783530d',
   ],
   [
     'packages/compiler/src/ts-api.ts',

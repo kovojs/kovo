@@ -1,8 +1,13 @@
+import { Buffer as NativeBuffer } from 'node:buffer';
 import { createHash as builtinCreateHash } from 'node:crypto';
 import {
+  closeSync as builtinCloseSync,
   existsSync as builtinExistsSync,
+  fstatSync as builtinFstatSync,
   lstatSync as builtinLstatSync,
+  openSync as builtinOpenSync,
   readFileSync as builtinReadFileSync,
+  readSync as builtinReadSync,
   readdirSync as builtinReaddirSync,
   realpathSync as builtinRealpathSync,
 } from 'node:fs';
@@ -34,6 +39,11 @@ const nativeImportMetaResolve = (specifier: string, parent: string): string =>
   import.meta.resolve(specifier, parent);
 const frameworkSourceImplementationPrefix = 'kovo-source-tree-sha256:';
 const frameworkPackedImplementationPrefix = 'kovo-packed-tree-sha256:';
+const builtinBufferAllocUnsafe = NativeBuffer.allocUnsafe.bind(NativeBuffer);
+const builtinBufferByteLength = NativeBuffer.byteLength.bind(NativeBuffer);
+const builtinBufferFrom = NativeBuffer.from.bind(NativeBuffer);
+const builtinBigInt = globalThis.BigInt;
+const builtinNumber = globalThis.Number;
 
 const capabilityKinds = new Set<RawCapabilityKind>([
   'crypto-acquisition',
@@ -56,6 +66,41 @@ const dispositions = new Set<PackageCapabilitySummaryExport['disposition']>([
 interface CapabilityPackageResolutionOptions {
   /** @internal Test/performance observer; never supplies or alters identity. */
   readonly onImplementationTreeWalk?: (packageRoot: string, layout: 'packed' | 'source') => void;
+  /** @internal Invocation-local byte-pin metadata; never crosses a build phase. */
+  readonly onImplementationSnapshot?: (snapshot: FrameworkImplementationSnapshot) => void;
+}
+
+interface FrameworkImplementationFileSnapshot {
+  readonly canonicalPath: string;
+  readonly contentDigest: string;
+  readonly lexicalPath: string;
+  readonly relativePath: string;
+  readonly size: number;
+}
+
+interface FrameworkImplementationSnapshot {
+  readonly canonicalImplementationRoot: string;
+  readonly files: readonly FrameworkImplementationFileSnapshot[];
+  readonly implementationDigest: string;
+  readonly implementationRoot: string;
+  readonly layout: 'packed' | 'source';
+  readonly packageRoot: string;
+}
+
+const frameworkImplementationMaxFiles = 10_000;
+const frameworkImplementationMaxBytes = 512 * 1024 * 1024;
+const frameworkImplementationMaxDepth = 64;
+
+/** Invocation-confined package resolver with exact source-byte pinning and final recensus. */
+export interface CapabilityPackageImportSession {
+  readonly assertPinnedSource: (sourcePath: string, source: string) => void;
+  readonly finalize: () => void;
+  readonly pinResolvedSource: (sourcePath: string) => void;
+  readonly resolve: (
+    specifier: string,
+    importerPath: string,
+  ) => ResolvedCapabilityPackage | undefined;
+  readonly revoke: () => void;
 }
 
 /** Resolve exact package identity/conditional-export facts without evaluating package code. */
@@ -94,6 +139,215 @@ export function resolveCapabilityPackageImport(
   importerPath: string,
 ): ResolvedCapabilityPackage | undefined {
   return resolveCapabilityPackage(specifier, importerPath, new Map(), {});
+}
+
+/**
+ * Share only one authenticated implementation-tree snapshot within one Vite plugin invocation.
+ * Package manifests, exports, roots, versions, and conditions are still re-resolved for every
+ * edge. Loaded framework source is checked against the snapshot before downstream transforms can
+ * evaluate it, and a fresh whole-tree census is required before results escape (SPEC §5.2 rule 9
+ * / §6.6).
+ *
+ * @internal
+ */
+export function createCapabilityPackageImportSession(
+  options: CapabilityPackageResolutionOptions = {},
+): CapabilityPackageImportSession {
+  const implementationDigestCache = new Map<string, string | undefined>();
+  const implementationFiles = new Map<string, FrameworkImplementationFileSnapshot>();
+  const implementationRoots: string[] = [];
+  const observations = new Map<string, number>();
+  const observationList: Array<{
+    readonly fact: ResolvedCapabilityPackage | undefined;
+    readonly importerPath: string;
+    readonly specifier: string;
+  }> = [];
+  let state: 'finalized' | 'open' | 'revoked' = 'open';
+
+  const revoke = (): void => {
+    state = 'revoked';
+    implementationDigestCache.clear();
+    implementationFiles.clear();
+    implementationRoots.length = 0;
+    observations.clear();
+    observationList.length = 0;
+  };
+  const resolutionOptions: CapabilityPackageResolutionOptions = {
+    onImplementationSnapshot(snapshot) {
+      for (const implementationRoot of [
+        snapshot.implementationRoot,
+        snapshot.canonicalImplementationRoot,
+      ]) {
+        if (!implementationRoots.includes(implementationRoot)) {
+          implementationRoots.push(implementationRoot);
+        }
+      }
+      for (let index = 0; index < snapshot.files.length; index += 1) {
+        const file = snapshot.files[index]!;
+        for (const identityPath of [file.lexicalPath, file.canonicalPath]) {
+          const previous = implementationFiles.get(identityPath);
+          if (previous !== undefined && canonicalJson(previous) !== canonicalJson(file)) {
+            throw new TypeError(
+              `Kovo framework implementation file ${file.relativePath} has conflicting invocation snapshots.`,
+            );
+          }
+          implementationFiles.set(identityPath, file);
+        }
+      }
+    },
+    ...(options.onImplementationTreeWalk === undefined
+      ? {}
+      : { onImplementationTreeWalk: options.onImplementationTreeWalk }),
+  };
+
+  return Object.freeze({
+    assertPinnedSource(sourcePath: string, source: string) {
+      if (state !== 'open') {
+        throw new TypeError(
+          `Kovo capability package import session is ${state}; no further source may load.`,
+        );
+      }
+      const lexicalPath = builtinResolve(sourcePath);
+      let canonicalPath: string | undefined;
+      let isRegularFile = false;
+      try {
+        isRegularFile = builtinLstatSync(lexicalPath).isFile();
+        canonicalPath = builtinRealpathSync(lexicalPath);
+      } catch {
+        // The exact snapshotted lexical identity check below owns the diagnostic.
+      }
+      const expected =
+        implementationFiles.get(lexicalPath) ??
+        (canonicalPath === undefined ? undefined : implementationFiles.get(canonicalPath));
+      if (expected === undefined) {
+        for (let index = 0; index < implementationRoots.length; index += 1) {
+          const implementationRoot = implementationRoots[index]!;
+          if (
+            pathIsStrictlyWithin(implementationRoot, lexicalPath) ||
+            (canonicalPath !== undefined && pathIsStrictlyWithin(implementationRoot, canonicalPath))
+          ) {
+            revoke();
+            throw new TypeError(
+              `Kovo framework implementation file ${lexicalPath} appeared outside the phase snapshot before Vite evaluation.`,
+            );
+          }
+        }
+        return;
+      }
+      if (!isRegularFile || canonicalPath === undefined) {
+        revoke();
+        throw new TypeError(
+          `Kovo framework implementation file ${expected.relativePath} changed identity before Vite evaluation.`,
+        );
+      }
+      if (canonicalPath !== expected.canonicalPath) {
+        revoke();
+        throw new TypeError(
+          `Kovo framework implementation file ${expected.relativePath} changed identity before Vite evaluation.`,
+        );
+      }
+      const size = builtinBufferByteLength(source, 'utf8');
+      const contentDigest = `sha256:${builtinCreateHash('sha256').update(source, 'utf8').digest('hex')}`;
+      if (size !== expected.size || contentDigest !== expected.contentDigest) {
+        revoke();
+        throw new TypeError(
+          `Kovo framework implementation file ${expected.relativePath} changed before Vite evaluation.`,
+        );
+      }
+    },
+    finalize() {
+      if (state === 'finalized') return;
+      if (state === 'revoked') {
+        throw new TypeError('Kovo capability package import session is revoked.');
+      }
+      try {
+        const finalDigestCache = new Map<string, string | undefined>();
+        const finalOptions: CapabilityPackageResolutionOptions =
+          options.onImplementationTreeWalk === undefined
+            ? {}
+            : { onImplementationTreeWalk: options.onImplementationTreeWalk };
+        for (let index = 0; index < observationList.length; index += 1) {
+          const observation = observationList[index]!;
+          const current = resolveCapabilityPackage(
+            observation.specifier,
+            observation.importerPath,
+            finalDigestCache,
+            finalOptions,
+          );
+          if (canonicalJson(current) !== canonicalJson(observation.fact)) {
+            throw new TypeError(
+              `Kovo capability package ${observation.specifier} changed before build-phase publication.`,
+            );
+          }
+        }
+        state = 'finalized';
+      } catch (error) {
+        revoke();
+        throw error;
+      }
+    },
+    pinResolvedSource(sourcePath: string) {
+      if (state !== 'open') {
+        throw new TypeError(`Kovo capability package import session is ${state}.`);
+      }
+      const lexicalPath = builtinResolve(sourcePath);
+      let canonicalPath: string;
+      try {
+        if (!builtinLstatSync(lexicalPath).isFile()) {
+          throw new TypeError('resolved framework implementation is not a regular file');
+        }
+        canonicalPath = builtinRealpathSync(lexicalPath);
+      } catch {
+        revoke();
+        throw new TypeError(
+          'Kovo resolved framework implementation changed identity before source pinning.',
+        );
+      }
+      const expected =
+        implementationFiles.get(lexicalPath) ?? implementationFiles.get(canonicalPath);
+      if (expected === undefined || canonicalPath !== expected.canonicalPath) {
+        revoke();
+        throw new TypeError(
+          'Kovo resolved framework implementation is outside the authenticated phase snapshot.',
+        );
+      }
+      implementationFiles.set(lexicalPath, expected);
+      let lexicalImplementationRoot = lexicalPath;
+      const relativeSegments = expected.relativePath.split('/');
+      for (let index = 0; index < relativeSegments.length; index += 1) {
+        lexicalImplementationRoot = builtinDirname(lexicalImplementationRoot);
+      }
+      if (!implementationRoots.includes(lexicalImplementationRoot)) {
+        implementationRoots.push(lexicalImplementationRoot);
+      }
+    },
+    resolve(specifier: string, importerPath: string) {
+      if (state !== 'open') {
+        throw new TypeError(`Kovo capability package import session is ${state}.`);
+      }
+      const fact = resolveCapabilityPackage(
+        specifier,
+        importerPath,
+        implementationDigestCache,
+        resolutionOptions,
+      );
+      const key = canonicalJson([specifier, importerPath]);
+      const previousIndex = observations.get(key);
+      const previous = previousIndex === undefined ? undefined : observationList[previousIndex];
+      if (previous !== undefined && canonicalJson(previous.fact) !== canonicalJson(fact)) {
+        revoke();
+        throw new TypeError(
+          `Kovo capability package ${specifier} changed during import resolution.`,
+        );
+      }
+      if (previous === undefined) {
+        observations.set(key, observationList.length);
+        observationList.push({ fact, importerPath, specifier });
+      }
+      return fact;
+    },
+    revoke,
+  });
 }
 
 /**
@@ -464,10 +718,31 @@ function installedFrameworkImplementationDigest(
     const cacheKey = `${realPackageRoot}\0${layout}`;
     if (cache.has(cacheKey)) return cache.get(cacheKey);
     options.onImplementationTreeWalk?.(realPackageRoot, layout);
-    const digest =
-      layout === 'source' ? sourceTreeSha256(realPackageRoot) : packedTreeSha256(realPackageRoot);
-    const implementationDigest = `${layout === 'source' ? frameworkSourceImplementationPrefix : frameworkPackedImplementationPrefix}${digest}`;
+    const identity = frameworkImplementationTreeIdentity(
+      realPackageRoot,
+      layout,
+      options.onImplementationSnapshot !== undefined,
+    );
+    const implementationDigest = `${layout === 'source' ? frameworkSourceImplementationPrefix : frameworkPackedImplementationPrefix}${identity.digest}`;
     cache.set(cacheKey, implementationDigest);
+    if (identity.files !== undefined) {
+      const lexicalPackageRoot = builtinResolve(packageRoot);
+      options.onImplementationSnapshot?.({
+        canonicalImplementationRoot: identity.implementationRoot,
+        files: Object.freeze(
+          identity.files.map((file) =>
+            Object.freeze({
+              ...file,
+              lexicalPath: builtinResolve(lexicalPackageRoot, file.relativePath),
+            }),
+          ),
+        ),
+        implementationDigest,
+        implementationRoot: builtinJoin(lexicalPackageRoot, layout === 'source' ? 'src' : 'dist'),
+        layout,
+        packageRoot: realPackageRoot,
+      });
+    }
     return implementationDigest;
   } catch {
     // A missing, escaping, symlinked, or structurally unexpected implementation is not identity.
@@ -512,48 +787,152 @@ function implementationLayout(
   return layout;
 }
 
-function sourceTreeSha256(packageRoot: string): string {
-  const sourceRoot = builtinJoin(packageRoot, 'src');
-  if (!builtinExistsSync(sourceRoot)) throw new Error('source implementation is missing');
-  if (!builtinLstatSync(sourceRoot).isDirectory()) {
-    throw new Error('source implementation root is not a directory');
+function frameworkImplementationTreeIdentity(
+  packageRoot: string,
+  layout: 'packed' | 'source',
+  retainFiles: boolean,
+): {
+  readonly digest: string;
+  readonly files?: readonly FrameworkImplementationFileSnapshot[];
+  readonly implementationRoot: string;
+} {
+  const implementationRoot = builtinJoin(packageRoot, layout === 'source' ? 'src' : 'dist');
+  if (!builtinExistsSync(implementationRoot)) {
+    throw new Error('framework implementation is missing');
+  }
+  if (!builtinLstatSync(implementationRoot).isDirectory()) {
+    throw new Error('framework implementation root is not a directory');
   }
   const files: string[] = [];
-  visitImplementationTree(sourceRoot, (fileName) => files.push(fileName));
-  return digestFiles(packageRoot, files, (fileName) => {
-    const bytes = Buffer.from(builtinReadFileSync(fileName));
-    if (countFrameworkDigestMarkers(bytes) > 0) {
-      throw new Error('framework digest is embedded in production source');
+  visitImplementationTree(implementationRoot, (fileName) => {
+    if (files.length >= frameworkImplementationMaxFiles) {
+      throw new Error('framework implementation exceeds the file-count bound');
     }
-    return bytes;
+    files.push(fileName);
   });
+  const hash = builtinCreateHash('sha256');
+  const snapshots: FrameworkImplementationFileSnapshot[] = [];
+  let totalBytes = 0;
+  for (const fileName of [...files].sort(compareStrings)) {
+    const relativePath = slashPath(builtinRelative(packageRoot, fileName));
+    const lexicalPath = builtinResolve(fileName);
+    const { bytes, canonicalPath } = readStableImplementationFile(
+      lexicalPath,
+      frameworkImplementationMaxBytes - totalBytes,
+    );
+    if (canonicalPath !== fileName) {
+      throw new Error('framework implementation file does not have one canonical path');
+    }
+    const byteLength = builtinBufferByteLength(bytes);
+    totalBytes += byteLength;
+    if (totalBytes > frameworkImplementationMaxBytes) {
+      throw new Error('framework implementation exceeds the byte bound');
+    }
+    if (countFrameworkDigestMarkers(bytes) > 0) {
+      throw new Error('framework digest is embedded in the implementation tree');
+    }
+    hash.update(relativePath);
+    hash.update('\0');
+    hash.update(bytes);
+    hash.update('\0');
+    if (retainFiles) {
+      snapshots.push(
+        Object.freeze({
+          canonicalPath,
+          contentDigest: `sha256:${builtinCreateHash('sha256').update(bytes).digest('hex')}`,
+          lexicalPath,
+          relativePath,
+          size: byteLength,
+        }),
+      );
+    }
+  }
+  return {
+    digest: hash.digest('hex'),
+    ...(retainFiles ? { files: Object.freeze(snapshots) } : {}),
+    implementationRoot,
+  };
 }
 
-function packedTreeSha256(packageRoot: string): string {
-  const distRoot = builtinJoin(packageRoot, 'dist');
-  if (!builtinExistsSync(distRoot)) throw new Error('packed implementation is missing');
-  if (!builtinLstatSync(distRoot).isDirectory()) {
-    throw new Error('packed implementation root is not a directory');
+function readStableImplementationFile(
+  fileName: string,
+  maxBytes: number,
+): { readonly bytes: NativeBuffer; readonly canonicalPath: string } {
+  const lexicalBefore = builtinLstatSync(fileName, { bigint: true });
+  if (!lexicalBefore.isFile()) {
+    throw new Error('framework implementation tree contains a non-file entry');
   }
-  const files: string[] = [];
-  visitImplementationTree(distRoot, (fileName) => files.push(fileName));
-  return digestFiles(packageRoot, files, (fileName) => {
-    const bytes = Buffer.from(builtinReadFileSync(fileName));
-    if (countFrameworkDigestMarkers(bytes) > 0) {
-      throw new Error('framework digest is embedded in packed implementation');
+  const canonicalBefore = builtinRealpathSync(fileName);
+  const descriptor = builtinOpenSync(fileName, 'r');
+  let bytes: NativeBuffer;
+  let descriptorBefore: ReturnType<typeof builtinFstatSync>;
+  let descriptorAfter: ReturnType<typeof builtinFstatSync>;
+  try {
+    descriptorBefore = builtinFstatSync(descriptor, { bigint: true });
+    if (descriptorBefore.size > builtinBigInt(maxBytes)) {
+      throw new Error('framework implementation exceeds the byte bound');
     }
-    return bytes;
-  });
+    const expectedBytes = builtinNumber(descriptorBefore.size);
+    bytes = builtinBufferAllocUnsafe(expectedBytes);
+    let offset = 0;
+    while (offset < expectedBytes) {
+      const count = builtinReadSync(descriptor, bytes, offset, expectedBytes - offset, offset);
+      if (count === 0) break;
+      offset += count;
+    }
+    const overflow = builtinBufferAllocUnsafe(1);
+    const overflowBytes = builtinReadSync(descriptor, overflow, 0, 1, expectedBytes);
+    if (offset !== expectedBytes || overflowBytes !== 0) {
+      throw new Error('framework implementation file changed size during its authenticated read');
+    }
+    descriptorAfter = builtinFstatSync(descriptor, { bigint: true });
+  } finally {
+    builtinCloseSync(descriptor);
+  }
+  const lexicalAfter = builtinLstatSync(fileName, { bigint: true });
+  const canonicalAfter = builtinRealpathSync(fileName);
+  if (
+    !descriptorBefore.isFile() ||
+    !descriptorAfter.isFile() ||
+    lexicalBefore.dev !== descriptorBefore.dev ||
+    lexicalBefore.ino !== descriptorBefore.ino ||
+    lexicalAfter.dev !== descriptorAfter.dev ||
+    lexicalAfter.ino !== descriptorAfter.ino ||
+    descriptorBefore.dev !== descriptorAfter.dev ||
+    descriptorBefore.ino !== descriptorAfter.ino ||
+    descriptorBefore.size !== descriptorAfter.size ||
+    descriptorBefore.mtimeNs !== descriptorAfter.mtimeNs ||
+    descriptorBefore.ctimeNs !== descriptorAfter.ctimeNs ||
+    descriptorAfter.size !== builtinBigInt(builtinBufferByteLength(bytes)) ||
+    canonicalBefore !== canonicalAfter
+  ) {
+    throw new Error('framework implementation file changed during its authenticated read');
+  }
+  return { bytes, canonicalPath: canonicalAfter };
+}
+
+function pathIsStrictlyWithin(root: string, candidate: string): boolean {
+  const relativePath = slashPath(builtinRelative(root, candidate));
+  return (
+    relativePath !== '' &&
+    relativePath !== '..' &&
+    !relativePath.startsWith('../') &&
+    !builtinIsAbsolute(relativePath)
+  );
 }
 
 function visitImplementationTree(
   directory: string,
   appendFile: (fileName: string, entryName: string) => void,
+  depth = 0,
 ): void {
+  if (depth > frameworkImplementationMaxDepth) {
+    throw new Error('framework implementation exceeds the directory-depth bound');
+  }
   for (const entry of builtinReaddirSync(directory, { withFileTypes: true })) {
     const absolute = builtinJoin(directory, entry.name);
     if (entry.isDirectory()) {
-      visitImplementationTree(absolute, appendFile);
+      visitImplementationTree(absolute, appendFile, depth + 1);
       continue;
     }
     if (!entry.isFile()) throw new Error('implementation tree contains a non-file entry');
@@ -561,31 +940,15 @@ function visitImplementationTree(
   }
 }
 
-function digestFiles(
-  packageRoot: string,
-  files: readonly string[],
-  readFile: (fileName: string) => Buffer | undefined,
-): string {
-  const hash = builtinCreateHash('sha256');
-  for (const fileName of [...files].sort(compareStrings)) {
-    hash.update(slashPath(builtinRelative(packageRoot, fileName)));
-    hash.update('\0');
-    const bytes = readFile(fileName);
-    if (bytes !== undefined) hash.update(bytes);
-    hash.update('\0');
-  }
-  return hash.digest('hex');
-}
-
-function countFrameworkDigestMarkers(input: Buffer): number {
+function countFrameworkDigestMarkers(input: NativeBuffer): number {
   return [frameworkSourceImplementationPrefix, frameworkPackedImplementationPrefix].reduce(
     (count, prefix) => count + countDigestPayloads(input, prefix),
     0,
   );
 }
 
-function countDigestPayloads(input: Buffer, prefixText: string): number {
-  const prefix = Buffer.from(prefixText);
+function countDigestPayloads(input: NativeBuffer, prefixText: string): number {
+  const prefix = builtinBufferFrom(prefixText);
   let matches = 0;
   let offset = 0;
   while (offset < input.length) {

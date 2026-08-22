@@ -179,6 +179,7 @@ import {
   resolveCapabilityPackages,
 } from '../capability-closure-packages.js';
 import {
+  createDependencyCapabilityLoaderViteSession,
   dependencyCapabilityLoaderVitePlugin,
   htmlModuleSourcePaths,
 } from '../dependency-capability-loader.js';
@@ -9720,35 +9721,42 @@ async function loadBuildAppModule(
   sourceDerivedRegistryTransforms: readonly SourceDerivedRegistryTransform[],
 ): Promise<LoadedBuildAppModule> {
   const requireFromApp = createRequire(pathToFileURL(appModulePath));
-  const lifetime = await createBuildTimeViteRunnable({
-    appType: 'custom',
-    configFile: false,
-    logLevel: 'error',
-    plugins: [
-      approvedBuildSourcesVitePlugin(appModulePath, root, approvedSourceFiles),
-      dependencyCapabilityLoaderVitePlugin(
-        appModulePath,
-        approvedSourceFiles,
-        dependencyCapabilities,
-        'build-app',
-        { sourceRoot: root },
-      ),
-      sourceDerivedRegistryVitePlugin(appModulePath, root, sourceDerivedRegistryTransforms),
-    ],
-    oxc: {
-      jsx: {
-        importSource: '@kovojs/server',
-        runtime: 'automatic',
+  const dependencyLoader = createDependencyCapabilityLoaderViteSession(
+    appModulePath,
+    approvedSourceFiles,
+    dependencyCapabilities,
+    'build-app',
+    { sourceRoot: root },
+  );
+  let lifetime: BuildTimeViteRunnableLifetime;
+  try {
+    lifetime = await createBuildTimeViteRunnable({
+      appType: 'custom',
+      configFile: false,
+      logLevel: 'error',
+      plugins: [
+        approvedBuildSourcesVitePlugin(appModulePath, root, approvedSourceFiles),
+        dependencyLoader.plugin,
+        sourceDerivedRegistryVitePlugin(appModulePath, root, sourceDerivedRegistryTransforms),
+      ],
+      oxc: {
+        jsx: {
+          importSource: '@kovojs/server',
+          runtime: 'automatic',
+        },
       },
-    },
-    root,
-    server: buildTimeViteServerOptions(),
-    // The closed-app proof is intentionally module-local. Keep the app's Kovo imports inside this
-    // SSR graph so createApp() and the internal derivation capability share one app-guards WeakSet,
-    // including when the CLI runs from a packed install whose node_modules would otherwise be
-    // externalized by Vite.
-    ssr: dependencyCapabilityCompleteSsrOptions(),
-  });
+      root,
+      server: buildTimeViteServerOptions(),
+      // The closed-app proof is intentionally module-local. Keep the app's Kovo imports inside this
+      // SSR graph so createApp() and the internal derivation capability share one app-guards WeakSet,
+      // including when the CLI runs from a packed install whose node_modules would otherwise be
+      // externalized by Vite.
+      ssr: dependencyCapabilityCompleteSsrOptions(),
+    });
+  } catch (error) {
+    dependencyLoader.revoke();
+    throw error;
+  }
   const server = lifetime;
   let primaryError: unknown;
   let hasPrimaryError = false;
@@ -9777,6 +9785,10 @@ async function loadBuildAppModule(
     const appModule = await trustedInternalBuild.runWithUnavailableBuildAppEnvironment(() =>
       server.ssrLoadModule(viteSsrModuleId(appModulePath, root)),
     );
+    // Runnable SSR does not execute Rollup generateBundle. Re-census the complete phase-local
+    // package snapshots before any evaluated app/framework value can escape this function
+    // (SPEC §5.2 rule 9 / §6.6).
+    dependencyLoader.finalize();
     return {
       appModule,
       compilerClientModuleBuildInstaller,
@@ -9791,6 +9803,7 @@ async function loadBuildAppModule(
     hasPrimaryError = true;
     throw error;
   } finally {
+    dependencyLoader.revoke();
     await closeBuildTimeViteLifetime(lifetime, hasPrimaryError, primaryError);
   }
 }
@@ -13441,32 +13454,42 @@ async function loadExportAppModule(
   const resolvedAppModulePath = options.appModulePath;
   const root = options.root ?? dirname(resolvedAppModulePath);
   const requireFromApp = createRequire(pathToFileURL(resolvedAppModulePath));
-
-  const lifetime = await createBuildTimeViteRunnable({
-    appType: 'custom',
-    configFile: false,
-    logLevel: 'error',
-    plugins: [
-      approvedBuildSourcesVitePlugin(resolvedAppModulePath, root, approvedSourceFiles),
-      dependencyCapabilityLoaderVitePlugin(
-        resolvedAppModulePath,
-        approvedSourceFiles,
-        dependencyCapabilities,
-        'export',
-        { sourceRoot: root },
-      ),
-      sourceDerivedRegistryVitePlugin(resolvedAppModulePath, root, sourceDerivedRegistryTransforms),
-    ],
-    oxc: {
-      jsx: {
-        importSource: '@kovojs/server',
-        runtime: 'automatic',
+  const dependencyLoader = createDependencyCapabilityLoaderViteSession(
+    resolvedAppModulePath,
+    approvedSourceFiles,
+    dependencyCapabilities,
+    'export',
+    { sourceRoot: root },
+  );
+  let lifetime: BuildTimeViteRunnableLifetime;
+  try {
+    lifetime = await createBuildTimeViteRunnable({
+      appType: 'custom',
+      configFile: false,
+      logLevel: 'error',
+      plugins: [
+        approvedBuildSourcesVitePlugin(resolvedAppModulePath, root, approvedSourceFiles),
+        dependencyLoader.plugin,
+        sourceDerivedRegistryVitePlugin(
+          resolvedAppModulePath,
+          root,
+          sourceDerivedRegistryTransforms,
+        ),
+      ],
+      oxc: {
+        jsx: {
+          importSource: '@kovojs/server',
+          runtime: 'automatic',
+        },
       },
-    },
-    root,
-    server: buildTimeViteServerOptions(),
-    ssr: dependencyCapabilityCompleteSsrOptions(),
-  });
+      root,
+      server: buildTimeViteServerOptions(),
+      ssr: dependencyCapabilityCompleteSsrOptions(),
+    });
+  } catch (error) {
+    dependencyLoader.revoke();
+    throw error;
+  }
   const server = lifetime;
   try {
     await preloadKovoSsrSecurityProfile(server, resolvedAppModulePath, root);
@@ -13484,9 +13507,13 @@ async function loadExportAppModule(
     const appModule = await serverInternalBuildModule.runWithGeneratedLiveTargetRegistry(() =>
       server.ssrLoadModule(resolvedAppModulePath),
     );
+    dependencyLoader.finalize();
     return {
       appModule,
-      close: () => lifetime.close(),
+      close: () => {
+        dependencyLoader.revoke();
+        return lifetime.close();
+      },
       exportStaticApp: exportStaticAppFromModule(serverModule),
       isStaticExportDiagnostic: serverModule.isStaticExportDiagnostic,
       isStaticExportDiagnosticError: serverModule.isStaticExportDiagnosticError,
@@ -13495,6 +13522,7 @@ async function loadExportAppModule(
         serverModule.staticExportCompileDiagnosticsFromModule,
     };
   } catch (error) {
+    dependencyLoader.revoke();
     await closeBuildTimeViteLifetime(lifetime, true, error);
     throw error;
   }
