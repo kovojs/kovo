@@ -7,6 +7,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
@@ -132,6 +133,127 @@ describe('immutable ready-profile controller bootstrap', () => {
     }
   });
 
+  it('binds the archived module to canonical-equivalent roots and rejects every other archive', async () => {
+    const controllerSource = await realControllerRepository();
+    const authenticated = authenticateReadyProfileControllerSource({ root: controllerSource });
+    const materialized = materializeReadyProfileController(authenticated);
+    const secondArchive = materializeReadyProfileController(authenticated);
+    try {
+      const positiveRoots = [
+        { label: 'exact', root: materialized.privateRoot },
+        { label: 'trailing separator', root: `${materialized.privateRoot}${path.sep}` },
+      ];
+      if (process.platform === 'darwin') {
+        expect(materialized.privateRoot.startsWith('/private/var/')).toBe(true);
+        const macosAlias = materialized.privateRoot.slice('/private'.length);
+        expect(realpathSync(macosAlias)).toBe(materialized.privateRoot);
+        positiveRoots.push({ label: 'macOS /var canonical alias', root: macosAlias });
+      }
+
+      for (const bindingCase of positiveRoots) {
+        const probeRoot = await temporaryRoot();
+        const probe = spawnArchivedBindingProbe(
+          materialized,
+          { ...materialized.binding, privateRoot: bindingCase.root },
+          probeRoot,
+        );
+        expect(probe, bindingCase.label).toMatchObject({ signal: null, status: 0 });
+        expect(probe.stderr, bindingCase.label).toBe('');
+        expect(JSON.parse(probe.stdout), bindingCase.label).toEqual({
+          privateRoot: bindingCase.root,
+        });
+      }
+
+      const siblingRoot = path.join(path.dirname(materialized.privateRoot), 'sibling-controller');
+      mkdirSync(siblingRoot);
+      const symlinkRoot = path.join(await temporaryRoot(), 'controller-final-symlink');
+      symlinkSync(materialized.privateRoot, symlinkRoot, 'dir');
+      expect(
+        await readFile(path.join(materialized.privateRoot, 'scripts/perf-dev-ready-profile.mjs')),
+      ).toEqual(
+        await readFile(path.join(secondArchive.privateRoot, 'scripts/perf-dev-ready-profile.mjs')),
+      );
+      const negativeRoots = [
+        {
+          binding: { ...materialized.binding, privateRoot: siblingRoot },
+          error: /not imported from its bound immutable checkout/u,
+          label: 'sibling directory',
+        },
+        {
+          binding: secondArchive.binding,
+          error: /not imported from its bound immutable checkout/u,
+          label: 'independent byte-identical archive',
+        },
+        {
+          binding: { ...materialized.binding, privateRoot: symlinkRoot },
+          error: /must be a non-symlink directory/u,
+          label: 'direct final-component symlink',
+        },
+      ];
+
+      for (const bindingCase of negativeRoots) {
+        const probe = spawnArchivedBindingProbe(
+          materialized,
+          bindingCase.binding,
+          await temporaryRoot(),
+        );
+        expect(probe, bindingCase.label).toMatchObject({ signal: null, status: 1 });
+        expect(probe.stderr, bindingCase.label).toMatch(bindingCase.error);
+      }
+    } finally {
+      secondArchive.cleanup();
+      materialized.cleanup();
+    }
+  });
+
+  it('runs the archived script CLI through main and advances to candidate authentication', async () => {
+    const controllerSource = await realControllerRepository();
+    const candidate = await realCandidateRepository();
+    const authenticated = authenticateReadyProfileControllerSource({ root: controllerSource });
+    const materialized = materializeReadyProfileController(authenticated);
+    try {
+      const reportRoot = await temporaryRoot();
+      const child = spawnSync(
+        process.execPath,
+        [
+          path.join(materialized.privateRoot, 'scripts/perf-dev-ready-profile.mjs'),
+          '--diagnose',
+          '--baseline-root',
+          candidate.baseline,
+          '--spike-root',
+          candidate.repository,
+          '--out',
+          path.join(reportRoot, 'report.json'),
+          '--profile-dir',
+          path.join(reportRoot, 'profiles'),
+          '--host-settle-max-ms',
+          '0',
+          '--max-load-per-cpu',
+          '1000000000',
+        ],
+        {
+          cwd: materialized.privateRoot,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            KOVO_DEV_READY_PROFILE_CONTROLLER_BINDING: materialized.bindingPath,
+            KOVO_DEV_READY_PROFILE_CONTROLLER_BINDING_SHA256: materialized.bindingSha256,
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      );
+
+      expect(child).toMatchObject({ signal: null, status: 1 });
+      expect(child.stderr).not.toMatch(/bound immutable checkout/u);
+      expect(child.stderr).toMatch(
+        /refs\/heads\/perf-spike\/dev-query-mode-safe-20260821\^\{commit\}/u,
+      );
+      expect(readdirSync(reportRoot)).toEqual([]);
+    } finally {
+      materialized.cleanup();
+    }
+  });
+
   it('spawns the archived controller and reaches real Git candidate authentication before pack', async () => {
     const controllerRoot = await realControllerRepository();
     const candidate = await realCandidateRepository();
@@ -224,8 +346,7 @@ describe('immutable ready-profile controller bootstrap', () => {
         packedLaneInvoked: false,
         spikeRoot: candidate.repository,
       });
-      expect(existsSync(path.join(reportRoot, 'report.json'))).toBe(false);
-      expect(existsSync(path.join(reportRoot, 'profiles'))).toBe(false);
+      expect(readdirSync(reportRoot)).toEqual([]);
     } finally {
       materialized.cleanup();
     }
@@ -402,6 +523,32 @@ describe('immutable ready-profile controller bootstrap', () => {
     ).toThrow(/changed identity/u);
   });
 });
+
+function spawnArchivedBindingProbe(materialized, binding, probeRoot) {
+  const bindingPath = path.join(probeRoot, 'controller-binding.json');
+  const bindingBytes = Buffer.from(`${JSON.stringify(binding)}\n`);
+  writeFileSync(bindingPath, bindingBytes, { flag: 'wx', mode: 0o400 });
+  const controllerUrl = pathToFileURL(
+    path.join(materialized.privateRoot, 'scripts/perf-dev-ready-profile.mjs'),
+  ).href;
+  const childSource = `
+    import { controllerBindingFromEnvironment } from ${JSON.stringify(controllerUrl)};
+    const binding = controllerBindingFromEnvironment();
+    process.stdout.write(JSON.stringify({ privateRoot: binding.privateRoot }) + '\\n');
+  `;
+  return spawnSync(process.execPath, ['--input-type=module', '--eval', childSource], {
+    cwd: materialized.privateRoot,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      KOVO_DEV_READY_PROFILE_CONTROLLER_BINDING: bindingPath,
+      KOVO_DEV_READY_PROFILE_CONTROLLER_BINDING_SHA256: `sha256:${createHash('sha256')
+        .update(bindingBytes)
+        .digest('hex')}`,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
 
 async function bootstrapRunFixture() {
   const source = await sourceFixture();
