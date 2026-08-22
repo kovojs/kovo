@@ -100,6 +100,11 @@ const DIAGNOSTIC_ONLY_POLICY = Object.freeze({
   status: 'diagnostic-only',
   window: 'paused-before-user-code-through-browser-visible-ready',
 });
+const CONTROLLER_LOCK_FILES = Object.freeze([
+  'pnpm-lock.yaml',
+  'benchmarks/nextjs/pnpm-lock.yaml',
+  'benchmarks/harness/pnpm-lock.yaml',
+]);
 const CONTROLLER_FILES = Object.freeze([
   'benchmarks/corpora/dev-loop.mjs',
   'benchmarks/corpora/generate.mjs',
@@ -593,7 +598,7 @@ export function collectDevReadyProfileControllerState(dependencies = {}) {
       ];
     }),
   );
-  return { ...state, root, scripts, tree };
+  return { ...state, scripts, tree };
 }
 
 export async function runReadyProfileCell(options, dependencies = {}) {
@@ -888,6 +893,19 @@ function validateControllerState(value, phase) {
     value.dirtyPaths.length !== 0 ||
     !/^[0-9a-f]{40,64}$/u.test(value.commit ?? '') ||
     !/^[0-9a-f]{40,64}$/u.test(value.tree ?? '') ||
+    value.locks === null ||
+    typeof value.locks !== 'object' ||
+    Array.isArray(value.locks) ||
+    Object.keys(value.locks).length !== CONTROLLER_LOCK_FILES.length ||
+    CONTROLLER_LOCK_FILES.some(
+      (file) =>
+        !Object.hasOwn(value.locks, file) ||
+        !/^sha256:[0-9a-f]{64}$/u.test(value.locks[file] ?? ''),
+    ) ||
+    !/^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(
+      value.pnpmVersion ?? '',
+    ) ||
+    value.packageManager !== `pnpm@${value.pnpmVersion}` ||
     value.scripts === null ||
     typeof value.scripts !== 'object' ||
     Object.keys(value.scripts).length !== CONTROLLER_FILES.length ||

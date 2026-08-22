@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { inspectDevPortAllocation } from '../benchmarks/harness/dev-port-allocation.mjs';
 import {
+  collectDevReadyProfileControllerState,
   createDevReadyProfiler,
   DEV_READY_PROFILE_SCHEDULE,
   DEV_READY_PROFILE_SCHEMA,
@@ -26,6 +27,16 @@ import {
 } from './perf-dev-generation-spike.mjs';
 
 const roots = [];
+const CONTROLLER_FILE_PATHS = [
+  'benchmarks/corpora/dev-loop.mjs',
+  'benchmarks/corpora/generate.mjs',
+  'benchmarks/harness/dev-port-allocation.mjs',
+  'scripts/lib/perf-packed-kovo-product.mjs',
+  'scripts/lib/perf-ready-route.mjs',
+  'scripts/perf-dev-edit-profile.mjs',
+  'scripts/perf-dev-generation-spike.mjs',
+  'scripts/perf-dev-ready-profile.mjs',
+];
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
@@ -58,6 +69,40 @@ describe('authenticated cold-first-ready diagnostic', () => {
         '/tmp/report.json',
       ]),
     ).toMatchObject({ diagnose: true, out: '/tmp/report.json' });
+  });
+
+  it('binds committed controller inputs without publishing its local checkout path', async () => {
+    const root = await temporaryRoot();
+    await Promise.all(
+      CONTROLLER_FILE_PATHS.map(async (file) => {
+        await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+        await writeFile(path.join(root, file), `${file}\n`);
+      }),
+    );
+    const state = collectDevReadyProfileControllerState({
+      collectState: () => sourceState('a'.repeat(40)),
+      git: () => 'b'.repeat(40),
+      root,
+    });
+
+    expect(state).not.toHaveProperty('root');
+    expect(state).toMatchObject({
+      commit: 'a'.repeat(40),
+      dirty: false,
+      locks: sourceState('a'.repeat(40)).locks,
+      packageManager: 'pnpm@10.15.1',
+      pnpmVersion: '10.15.1',
+      tree: 'b'.repeat(40),
+    });
+    expect(Object.keys(state.scripts).sort()).toEqual([...CONTROLLER_FILE_PATHS].sort());
+    expect(Object.values(state.scripts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          gitBlob: 'b'.repeat(40),
+          sha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+        }),
+      ]),
+    );
   });
 
   it('authenticates the paused process identity and rejects a wrong PID/target', async () => {
@@ -355,12 +400,33 @@ describe('authenticated cold-first-ready diagnostic', () => {
   it('rejects a dirty or unauthenticated diagnostic controller before preparation', async () => {
     const root = await temporaryRoot();
     const prepare = vi.fn();
-    await expect(
-      runDevReadyProfile(runnerOptions(root), {
-        collectControllerState: () => ({ ...controllerState(), dirty: true, dirtyPaths: [' M x'] }),
-        prepare,
-      }),
-    ).rejects.toThrow(/controller is dirty or unauthenticated before preparation/u);
+    const malformedLock = controllerState();
+    malformedLock.locks['pnpm-lock.yaml'] = null;
+    const confusedLockKeys = controllerState();
+    delete confusedLockKeys.locks['pnpm-lock.yaml'];
+    confusedLockKeys.locks['package-lock.json'] = digest('4');
+    const mismatchedPackageManager = controllerState();
+    mismatchedPackageManager.packageManager = 'pnpm@0.0.0';
+    const malformedPnpmVersion = controllerState();
+    malformedPnpmVersion.pnpmVersion = '10.15';
+    malformedPnpmVersion.packageManager = 'pnpm@10.15';
+    const malformedScriptBlob = controllerState();
+    malformedScriptBlob.scripts['scripts/perf-dev-ready-profile.mjs'].gitBlob = 'not-a-blob';
+    for (const state of [
+      { ...controllerState(), dirty: true, dirtyPaths: [' M x'] },
+      malformedLock,
+      confusedLockKeys,
+      mismatchedPackageManager,
+      malformedPnpmVersion,
+      malformedScriptBlob,
+    ]) {
+      await expect(
+        runDevReadyProfile(runnerOptions(root), {
+          collectControllerState: () => state,
+          prepare,
+        }),
+      ).rejects.toThrow(/controller is dirty or unauthenticated before preparation/u);
+    }
     expect(prepare).not.toHaveBeenCalled();
   });
 
@@ -645,9 +711,9 @@ function sourceState(commit) {
     dirty: false,
     dirtyPaths: [],
     locks: {
-      'benchmarks/harness/pnpm-lock.yaml': digest('h'),
-      'benchmarks/nextjs/pnpm-lock.yaml': digest('n'),
-      'pnpm-lock.yaml': digest('r'),
+      'benchmarks/harness/pnpm-lock.yaml': digest('1'),
+      'benchmarks/nextjs/pnpm-lock.yaml': digest('2'),
+      'pnpm-lock.yaml': digest('3'),
     },
     packageManager: 'pnpm@10.15.1',
     pnpmVersion: '10.15.1',
@@ -724,16 +790,6 @@ function cellDependencies({
 }
 
 function controllerState() {
-  const files = [
-    'benchmarks/corpora/dev-loop.mjs',
-    'benchmarks/corpora/generate.mjs',
-    'benchmarks/harness/dev-port-allocation.mjs',
-    'scripts/lib/perf-packed-kovo-product.mjs',
-    'scripts/lib/perf-ready-route.mjs',
-    'scripts/perf-dev-edit-profile.mjs',
-    'scripts/perf-dev-generation-spike.mjs',
-    'scripts/perf-dev-ready-profile.mjs',
-  ];
   return {
     commit: 'a'.repeat(40),
     dirty: false,
@@ -741,9 +797,8 @@ function controllerState() {
     locks: sourceState('a'.repeat(40)).locks,
     packageManager: 'pnpm@10.15.1',
     pnpmVersion: '10.15.1',
-    root: '/controller',
     scripts: Object.fromEntries(
-      files.map((file, index) => [
+      CONTROLLER_FILE_PATHS.map((file, index) => [
         file,
         { bytes: index + 1, gitBlob: 'c'.repeat(40), sha256: digest('d') },
       ]),
