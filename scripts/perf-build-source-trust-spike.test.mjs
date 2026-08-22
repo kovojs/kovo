@@ -99,21 +99,47 @@ describe('build source-trust candidate decision', () => {
     });
     expect(buildSourceTrustBoundaryPolicyFindings(BUILD_SOURCE_TRUST_BOUNDARY_POLICY)).toEqual([]);
     expect(BUILD_SOURCE_TRUST_CANDIDATE).toEqual({
-      commit: 'c89e179a9e9b179dd75b0bebabd357f4aa9e36a6',
-      parent: '4ffd0b24c27f72b9e1b6250a267de325564a4d6f',
-      patchBytes: 18_234,
-      patchId: 'c8be3545899c135489152f0a82322b64a3208768',
-      patchSha256: 'sha256:0beca6e2ee833234dc85040d52644d3d7c10b65d3ddbe1199560507d53cd6253',
+      commit: 'c81817ac801b4171b806cca1702e31dee90b6080',
+      parent: '01b2c759468f41a3fc4739225eb13c8f5aa11406',
+      patchBytes: 133_773,
+      patchId: '9aa6b1bd0179e34ce3ec896573333348ec628099',
+      patchSha256: 'sha256:a7757b4146a44ad89b7d5bea6fc3ed99a744c29feff0b60f3a43cb9df5439f8f',
       pathChanges: [
         {
-          path: 'packages/compiler/src/scan/lexical-scope-declaration-index.test.ts',
+          path: 'packages/cli/src/commands/build-compiler-facts-handoff.test.ts',
           status: 'A',
         },
+        { path: 'packages/cli/src/commands/build-export.ts', status: 'M' },
+        {
+          path: 'packages/cli/src/commands/build-static-trust-worker.test.ts',
+          status: 'M',
+        },
+        { path: 'packages/compiler/src/app-contract-project.ts', status: 'M' },
+        { path: 'packages/compiler/src/compile.ts', status: 'M' },
+        { path: 'packages/compiler/src/emit/render-equivalence.ts', status: 'M' },
+        { path: 'packages/compiler/src/internal.ts', status: 'M' },
+        { path: 'packages/compiler/src/lower/structural-jsx.ts', status: 'M' },
+        { path: 'packages/compiler/src/lowering-pipeline.ts', status: 'M' },
         { path: 'packages/compiler/src/scan/parse.ts', status: 'M' },
-        { path: 'scripts/check-security-classifier-corpus.mjs', status: 'M' },
-        { path: 'security/security-carrier-grammar.json', status: 'M' },
+        {
+          path: 'packages/compiler/src/scan/shared-snapshot-entry-parse.test.ts',
+          status: 'M',
+        },
+        {
+          path: 'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
+          status: 'M',
+        },
+        { path: 'packages/core/src/internal/framework-identity.test.ts', status: 'M' },
+        { path: 'packages/core/src/internal/framework-identity.ts', status: 'M' },
+        { path: 'scripts/pack-security.files.json', status: 'M' },
+        {
+          path: 'security/framework-public-runtime-export-posture.json',
+          status: 'M',
+        },
+        { path: 'security/kovo-certificate-policy-v1.json', status: 'M' },
+        { path: 'security/kovo-certificate-v1.json', status: 'M' },
       ],
-      tree: 'bad908875754f4fe748d5e62f5ca9b3f61b7a7e5',
+      tree: '73740d7e6f8ad898b1283e2dac7254f22636fd2f',
     });
   });
 
@@ -877,7 +903,7 @@ describe('build source-trust candidate decision', () => {
     );
   });
 
-  it('accepts N=216 only with a >=10% median win, positive paired CI, and both p95 guards', () => {
+  it('accepts a corpus only with a >=10% median win, positive paired CI, and both p95 guards', () => {
     const analysis = aggregateBuildSourceTrustCells(
       syntheticCells({
         baselineDuration: 100,
@@ -914,21 +940,21 @@ describe('build source-trust candidate decision', () => {
       }),
       decisionPolicy(216),
     );
-    expect(tooSmall.acceptance.n216Primary.medianImprovementAtLeast10Percent).toBe(false);
+    expect(tooSmall.acceptance.wallPrimary.medianImprovementAtLeast10Percent).toBe(false);
     expect(tooSmall.acceptance.candidateAccepted).toBe(false);
   });
 
-  it('uses N=24 as a 5% median/p95/RSS non-regression guardrail', () => {
+  it('applies the same primary wall threshold at N=24', () => {
     const pass = aggregateBuildSourceTrustCells(
       syntheticCells({
         baselineDuration: 100,
         baselineRss: 1_000,
-        spikeDuration: 104,
-        spikeRss: 1_049,
+        spikeDuration: 80,
+        spikeRss: 950,
       }),
       decisionPolicy(24),
     );
-    expect(pass.acceptance.n24MedianGuardrail.passed).toBe(true);
+    expect(pass.acceptance.wallPrimary.passed).toBe(true);
     expect(pass.acceptance.p95Guardrails.totalWallMs.passed).toBe(true);
     expect(pass.acceptance.p95Guardrails.peakRssBytes.passed).toBe(true);
     expect(pass.acceptance.candidateAccepted).toBe(true);
@@ -937,12 +963,12 @@ describe('build source-trust candidate decision', () => {
       syntheticCells({
         baselineDuration: 100,
         baselineRss: 1_000,
-        spikeDuration: 106,
+        spikeDuration: 91,
         spikeRss: 1_000,
       }),
       decisionPolicy(24),
     );
-    expect(fail.acceptance.n24MedianGuardrail.passed).toBe(false);
+    expect(fail.acceptance.wallPrimary.medianImprovementAtLeast10Percent).toBe(false);
     expect(fail.acceptance.candidateAccepted).toBe(false);
   });
 

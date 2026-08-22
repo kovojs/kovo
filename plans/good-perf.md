@@ -274,6 +274,11 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
       before publication rather than carrying forward the source-specific `01b2c7594` decision.
 - [ ] Gate build wall, p95, RSS, and artifact size on the realistic corpus; reach the first milestone
       before attempting the competitive target.
+  - Preregistered candidate: durable direct-child ref
+    `perf-spike/build-compiler-facts-sealed-20260822` (`c81817ac8`) reuses one immutable parsed
+    project and a data-only compiler-facts capsule. `docs/performance/build-compiler-facts-spike.md`
+    binds its reviewed tree/patch and the same ≥10% wall win plus positive paired CI at both N=24
+    and N=216, with 5% wall-p95/RSS-p95 guardrails, before timing.
 
 ## Phase 3 — production runtime
 

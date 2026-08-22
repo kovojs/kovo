@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Authenticated hosted A/B decision for the profile-driven lexical-scope declaration index.
+ * Authenticated hosted A/B decision for the compiler-facts build candidate.
  *
  * This runner measures only clean Kovo product builds. Each arm is a clean committed worktree,
  * builds and freezes its own packed release closure, and runs an externally rooted corpus whose
@@ -67,21 +67,50 @@ export const BUILD_SOURCE_TRUST_BOUNDARY_POLICY = Object.freeze({
   timedWarmups: 0,
 });
 export const BUILD_SOURCE_TRUST_CANDIDATE = Object.freeze({
-  commit: 'c89e179a9e9b179dd75b0bebabd357f4aa9e36a6',
-  parent: '4ffd0b24c27f72b9e1b6250a267de325564a4d6f',
-  patchBytes: 18_234,
-  patchId: 'c8be3545899c135489152f0a82322b64a3208768',
-  patchSha256: 'sha256:0beca6e2ee833234dc85040d52644d3d7c10b65d3ddbe1199560507d53cd6253',
+  commit: 'c81817ac801b4171b806cca1702e31dee90b6080',
+  parent: '01b2c759468f41a3fc4739225eb13c8f5aa11406',
+  patchBytes: 133_773,
+  patchId: '9aa6b1bd0179e34ce3ec896573333348ec628099',
+  patchSha256: 'sha256:a7757b4146a44ad89b7d5bea6fc3ed99a744c29feff0b60f3a43cb9df5439f8f',
   pathChanges: Object.freeze([
     Object.freeze({
-      path: 'packages/compiler/src/scan/lexical-scope-declaration-index.test.ts',
+      path: 'packages/cli/src/commands/build-compiler-facts-handoff.test.ts',
       status: 'A',
     }),
+    Object.freeze({ path: 'packages/cli/src/commands/build-export.ts', status: 'M' }),
+    Object.freeze({
+      path: 'packages/cli/src/commands/build-static-trust-worker.test.ts',
+      status: 'M',
+    }),
+    Object.freeze({ path: 'packages/compiler/src/app-contract-project.ts', status: 'M' }),
+    Object.freeze({ path: 'packages/compiler/src/compile.ts', status: 'M' }),
+    Object.freeze({ path: 'packages/compiler/src/emit/render-equivalence.ts', status: 'M' }),
+    Object.freeze({ path: 'packages/compiler/src/internal.ts', status: 'M' }),
+    Object.freeze({ path: 'packages/compiler/src/lower/structural-jsx.ts', status: 'M' }),
+    Object.freeze({ path: 'packages/compiler/src/lowering-pipeline.ts', status: 'M' }),
     Object.freeze({ path: 'packages/compiler/src/scan/parse.ts', status: 'M' }),
-    Object.freeze({ path: 'scripts/check-security-classifier-corpus.mjs', status: 'M' }),
-    Object.freeze({ path: 'security/security-carrier-grammar.json', status: 'M' }),
+    Object.freeze({
+      path: 'packages/compiler/src/scan/shared-snapshot-entry-parse.test.ts',
+      status: 'M',
+    }),
+    Object.freeze({
+      path: 'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
+      status: 'M',
+    }),
+    Object.freeze({
+      path: 'packages/core/src/internal/framework-identity.test.ts',
+      status: 'M',
+    }),
+    Object.freeze({ path: 'packages/core/src/internal/framework-identity.ts', status: 'M' }),
+    Object.freeze({ path: 'scripts/pack-security.files.json', status: 'M' }),
+    Object.freeze({
+      path: 'security/framework-public-runtime-export-posture.json',
+      status: 'M',
+    }),
+    Object.freeze({ path: 'security/kovo-certificate-policy-v1.json', status: 'M' }),
+    Object.freeze({ path: 'security/kovo-certificate-v1.json', status: 'M' }),
   ]),
-  tree: 'bad908875754f4fe748d5e62f5ca9b3f61b7a7e5',
+  tree: '73740d7e6f8ad898b1283e2dac7254f22636fd2f',
 });
 
 const BUILD_ADAPTER_SCHEMA = 'kovo-build-benchmark/v1';
@@ -818,39 +847,31 @@ export function aggregateBuildSourceTrustCells(cells, policy) {
   const medianImprovement = duration.spikeMedianImprovementPercent;
   const durationP95Improvement = duration.spikeP95ImprovementPercent;
   const rssP95Improvement = peakRssBytes.spikeP95ImprovementPercent;
-  const n216Primary = {
+  const wallPrimary = {
     medianImprovementAtLeast10Percent:
-      policy.size === 216 && Number.isFinite(medianImprovement) && medianImprovement >= 10,
+      Number.isFinite(medianImprovement) && medianImprovement >= 10,
     pairedCiLowerPositive:
-      policy.size === 216 &&
       Number.isFinite(duration.pairedImprovement.bootstrap95Ci[0]) &&
       duration.pairedImprovement.bootstrap95Ci[0] > 0,
   };
-  n216Primary.passed =
-    n216Primary.medianImprovementAtLeast10Percent && n216Primary.pairedCiLowerPositive;
-  const n24MedianGuardrail = {
-    maximumRegressionPercent: 5,
-    observedImprovementPercent: medianImprovement,
-    passed: policy.size === 24 && Number.isFinite(medianImprovement) && medianImprovement >= -5,
-  };
+  wallPrimary.passed =
+    wallPrimary.medianImprovementAtLeast10Percent && wallPrimary.pairedCiLowerPositive;
   const p95Guardrails = {
     peakRssBytes: metricP95Guardrail(rssP95Improvement, 5),
     totalWallMs: metricP95Guardrail(durationP95Improvement, 5),
   };
-  const sizeRulePassed = policy.size === 216 ? n216Primary.passed : n24MedianGuardrail.passed;
   const candidateAccepted =
     correctness.complete &&
-    sizeRulePassed &&
+    wallPrimary.passed &&
     Object.values(p95Guardrails).every((guardrail) => guardrail.passed);
   return {
     acceptance: {
       artifactContentExactRequired: true,
       candidateAccepted,
-      n24MedianGuardrail,
-      n216Primary,
       p95Guardrails,
-      rule: 'n216-wall-win-n24-nonregression-and-both-p95-rss-guardrails/v1',
-      sizeRule: policy.size === 216 ? 'n216-primary' : 'n24-nonregression',
+      rule: 'all-corpora-wall-win-and-p95-rss-guardrails/v2',
+      sizeRule: 'all-corpora-primary',
+      wallPrimary,
     },
     correctness,
     metrics: { peakRssBytes, totalWallMs: duration },
