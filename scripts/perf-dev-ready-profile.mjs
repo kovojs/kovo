@@ -334,17 +334,25 @@ export async function createDevReadyProfiler(options, dependencies = {}) {
   const processMarker = requiredString(options.processMarker, 'process marker');
   const profileDir = canonicalDirectory(options.profileDir, 'profile directory');
   const artifactStem = boundedArtifactStem(options.artifactStem);
-  const consumerRoot = canonicalDirectory(options.consumerRoot, 'packed consumer root');
-  const productDigest = validSha256(options.productDigest, 'packed product digest');
-  const expectedEntrypoint = path.resolve(
-    requiredString(options.expectedEntrypoint, 'packed CLI entrypoint'),
+  // The packed launcher deliberately retains its lexical absolute path in argv. On macOS that
+  // commonly means `/var/...` while realpath authority is `/private/var/...`. Keep those two
+  // identities separate: Inspector authenticates the exact lexical argv, while filesystem
+  // containment is proven against canonical paths (SPEC §6.6 rule 6).
+  const lexicalConsumerRoot = exactLexicalAbsolutePath(
+    options.consumerRoot,
+    'packed consumer root',
   );
-  if (
-    expectedEntrypoint !== options.expectedEntrypoint ||
-    !isWithinOrEqual(consumerRoot, expectedEntrypoint)
-  ) {
-    throw new TypeError('packed CLI entrypoint must be normalized within the packed consumer');
-  }
+  const consumerRoot = canonicalDirectory(lexicalConsumerRoot, 'packed consumer root');
+  const productDigest = validSha256(options.productDigest, 'packed product digest');
+  const expectedEntrypoint = exactLexicalAbsolutePath(
+    options.expectedEntrypoint,
+    'packed CLI entrypoint',
+  );
+  authenticatePackedEntrypointPath({
+    canonicalConsumerRoot: consumerRoot,
+    expectedEntrypoint,
+    lexicalConsumerRoot,
+  });
   const cell = normalizeProfilerCellIdentity(options.cell, inspectorPort);
   const attributionRoots = normalizeAttributionRoots(
     options.attributionRoots ?? { consumer: consumerRoot },
@@ -2490,6 +2498,38 @@ function stableFileIdentity(stat) {
     mtimeNs: String(stat.mtimeNs),
     nlink: Number(stat.nlink),
   };
+}
+
+function exactLexicalAbsolutePath(value, label) {
+  const declared = requiredString(value, label);
+  const resolved = path.resolve(declared);
+  if (!path.isAbsolute(declared) || resolved !== declared) {
+    throw new TypeError(`${label} must be an absolute normalized path`);
+  }
+  return declared;
+}
+
+function authenticatePackedEntrypointPath({
+  canonicalConsumerRoot,
+  expectedEntrypoint,
+  lexicalConsumerRoot,
+}) {
+  if (!isWithin(lexicalConsumerRoot, expectedEntrypoint)) {
+    throw new TypeError('packed CLI entrypoint escaped the lexical packed consumer');
+  }
+  const before = lstatSync(expectedEntrypoint, { bigint: true });
+  if (!before.isFile() || before.isSymbolicLink()) {
+    throw new TypeError('packed CLI entrypoint must be a regular non-symlink file');
+  }
+  const canonicalEntrypoint = realpathSync(expectedEntrypoint);
+  const canonical = lstatSync(canonicalEntrypoint, { bigint: true });
+  const after = lstatSync(expectedEntrypoint, { bigint: true });
+  if (!sameStableFileStat(before, canonical) || !sameStableFileStat(before, after)) {
+    throw new Error('packed CLI entrypoint was substituted during path authentication');
+  }
+  if (!isWithin(canonicalConsumerRoot, canonicalEntrypoint)) {
+    throw new TypeError('packed CLI entrypoint escaped the canonical packed consumer');
+  }
 }
 
 function canonicalDirectory(value, label) {

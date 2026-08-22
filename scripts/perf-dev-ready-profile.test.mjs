@@ -222,6 +222,113 @@ describe('authenticated cold-first-ready diagnostic', () => {
     expect(commands).toEqual(['close']);
   });
 
+  it('retains an exact lexical entrypoint across a canonical parent-path alias', async () => {
+    const root = await temporaryRoot();
+    const canonicalParent = path.join(root, 'canonical-parent');
+    const lexicalParent = path.join(root, 'lexical-parent');
+    await mkdir(canonicalParent);
+    symlinkSync(canonicalParent, lexicalParent, 'dir');
+    const product = await syntheticPackedScript(lexicalParent);
+    const expectedEntrypoint = packedEntrypoint(product);
+    const canonicalEntrypoint = await realpath(expectedEntrypoint);
+    const profileDir = path.join(root, 'profiles');
+    await mkdir(profileDir);
+    const marker = 'KOVO_PERF_DEV_SESSION_READY_LEXICAL_ALIAS';
+    const commands = [];
+    const session = inspectorSession({ commands, marker, product });
+    const connectInspector = vi.fn(async (options) => {
+      expect(options.expectedEntrypoint).toBe(expectedEntrypoint);
+      expect(options.expectedEntrypoint).not.toBe(canonicalEntrypoint);
+      return session;
+    });
+
+    const profiler = await createDevReadyProfiler(
+      profilerOptions({ marker, product, profileDir }),
+      { connectInspector },
+    );
+    await profiler.abort();
+
+    expect(connectInspector).toHaveBeenCalledOnce();
+    expect(commands).toEqual(['close']);
+  });
+
+  it('rejects lexical and canonical entrypoint escapes, final symlinks, and substitutions', async () => {
+    const root = await temporaryRoot();
+    const profileDir = path.join(root, 'profiles');
+    await mkdir(profileDir);
+    const connectInspector = vi.fn();
+    const optionsFor = (product, suffix) =>
+      profilerOptions({
+        marker: `KOVO_PERF_DEV_SESSION_READY_PATH_${suffix}`,
+        product,
+        profileDir,
+      });
+
+    const unnormalizedProduct = await syntheticPackedScript(path.join(root, 'unnormalized'));
+    await expect(
+      createDevReadyProfiler(
+        {
+          ...optionsFor(unnormalizedProduct, 'UNNORMALIZED'),
+          expectedEntrypoint: `${unnormalizedProduct.consumerRoot}${path.sep}node_modules${path.sep}..${path.sep}outside.mjs`,
+        },
+        { connectInspector },
+      ),
+    ).rejects.toThrow(/absolute normalized path/u);
+
+    const lexicalEscapeProduct = await syntheticPackedScript(path.join(root, 'lexical-escape'));
+    const externalEntrypoint = path.join(root, 'external-entrypoint.mjs');
+    await writeFile(externalEntrypoint, '#!/usr/bin/env node\n');
+    await expect(
+      createDevReadyProfiler(
+        {
+          ...optionsFor(lexicalEscapeProduct, 'LEXICAL_ESCAPE'),
+          expectedEntrypoint: externalEntrypoint,
+        },
+        { connectInspector },
+      ),
+    ).rejects.toThrow(/escaped the lexical packed consumer/u);
+
+    const canonicalEscapeProduct = await syntheticPackedScript(path.join(root, 'canonical-escape'));
+    const externalDirectory = path.join(root, 'external-directory');
+    await mkdir(externalDirectory);
+    await writeFile(path.join(externalDirectory, 'bin.mjs'), '#!/usr/bin/env node\n');
+    const escapedDirectory = path.join(canonicalEscapeProduct.consumerRoot, 'escaped-directory');
+    symlinkSync(externalDirectory, escapedDirectory, 'dir');
+    await expect(
+      createDevReadyProfiler(
+        {
+          ...optionsFor(canonicalEscapeProduct, 'CANONICAL_ESCAPE'),
+          expectedEntrypoint: path.join(escapedDirectory, 'bin.mjs'),
+        },
+        { connectInspector },
+      ),
+    ).rejects.toThrow(/escaped the canonical packed consumer/u);
+
+    const substitutedProduct = await syntheticPackedScript(path.join(root, 'substituted'));
+    const substitutedEntrypoint = packedEntrypoint(substitutedProduct);
+    const replacementEntrypoint = path.join(path.dirname(substitutedEntrypoint), 'replacement.mjs');
+    await writeFile(replacementEntrypoint, '#!/usr/bin/env node\n');
+    unlinkSync(substitutedEntrypoint);
+    symlinkSync(replacementEntrypoint, substitutedEntrypoint);
+    await expect(
+      createDevReadyProfiler(optionsFor(substitutedProduct, 'SUBSTITUTED'), {
+        connectInspector,
+      }),
+    ).rejects.toThrow(/regular non-symlink file/u);
+
+    const rootTargetProduct = await syntheticPackedScript(path.join(root, 'root-target'));
+    const rootAlias = path.join(root, 'final-root-symlink');
+    symlinkSync(rootTargetProduct.consumerRoot, rootAlias, 'dir');
+    const rootAliasProduct = { ...rootTargetProduct, consumerRoot: rootAlias };
+    await expect(
+      createDevReadyProfiler(optionsFor(rootAliasProduct, 'FINAL_ROOT_SYMLINK'), {
+        connectInspector,
+      }),
+    ).rejects.toThrow(/packed consumer root must be a non-symlink directory/u);
+
+    expect(connectInspector).not.toHaveBeenCalled();
+  });
+
   it('writes exclusive raw CPU/coverage artifacts with exact packed ranges and source-map digests', async () => {
     const root = await temporaryRoot();
     const product = await syntheticPackedScript(root);
@@ -1181,7 +1288,12 @@ function artifactPath(fixture, cellIndex, kind) {
 async function syntheticPackedScript(root) {
   const consumerRoot = path.join(root, 'consumer');
   const dist = path.join(consumerRoot, 'node_modules/@kovojs/compiler/dist');
-  await mkdir(dist, { recursive: true });
+  const cliEntry = path.join(consumerRoot, 'node_modules/@kovojs/cli/dist/bin.mjs');
+  await Promise.all([
+    mkdir(dist, { recursive: true }),
+    mkdir(path.dirname(cliEntry), { recursive: true }),
+  ]);
+  await writeFile(cliEntry, '#!/usr/bin/env node\n');
   const names = [
     'queryPlanBootstrapInputForComponent',
     'resolveViteComponentQueryRuntimeNames',
