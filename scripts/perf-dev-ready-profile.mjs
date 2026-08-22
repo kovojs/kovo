@@ -1733,26 +1733,120 @@ export async function runReadyProfileCell(options, dependencies = {}) {
   });
 }
 
+export function profiledReadyObservationFindings(observation) {
+  const observed = observation ?? {};
+  const findings = [];
+  const reject = (invalid, field, expected, value, describe = boundedObservedScalar) => {
+    if (!invalid) return;
+    findings.push(`${field}: expected ${expected}; observed ${describe(value)}`);
+  };
+
+  reject(observed.success !== true, 'success', 'true', observed.success);
+  reject(
+    observed.browserContextClosed !== true,
+    'browserContextClosed',
+    'true',
+    observed.browserContextClosed,
+  );
+  reject(
+    observed.lifecycle?.complete !== true,
+    'lifecycle.complete',
+    'true',
+    observed.lifecycle?.complete,
+  );
+  reject(
+    !finiteNonNegative(observed.durationMs),
+    'durationMs',
+    'a finite non-negative number',
+    observed.durationMs,
+  );
+  reject(
+    !finiteNonNegative(observed.paintFenceMs),
+    'paintFenceMs',
+    'a finite non-negative number',
+    observed.paintFenceMs,
+  );
+  reject(
+    !Number.isSafeInteger(observed.peakRssBytes) || observed.peakRssBytes < 1,
+    'peakRssBytes',
+    'a positive safe integer',
+    observed.peakRssBytes,
+  );
+  reject(
+    !Number.isSafeInteger(observed.rssSamples) || observed.rssSamples < 1,
+    'rssSamples',
+    'a positive safe integer',
+    observed.rssSamples,
+  );
+  reject(
+    observed.browser?.requestFailedCount !== 0,
+    'browser.requestFailedCount',
+    '0',
+    observed.browser?.requestFailedCount,
+  );
+  reject(
+    observed.browser?.unexpectedErrorCount !== 0,
+    'browser.unexpectedErrorCount',
+    '0',
+    observed.browser?.unexpectedErrorCount,
+  );
+  reject(
+    !validReadyRouteProbe(observed.readinessProbe),
+    'readinessProbe',
+    'an exact successful root-route probe',
+    observed.readinessProbe,
+    boundedReadyRouteProbeObservation,
+  );
+  reject(
+    observed.readyDiagnostic?.schema !== DEV_READY_PROFILE_WINDOW_SCHEMA,
+    'readyDiagnostic.schema',
+    DEV_READY_PROFILE_WINDOW_SCHEMA,
+    observed.readyDiagnostic?.schema,
+  );
+  reject(
+    observed.readyDiagnostic?.diagnosticOnly?.acceptanceEligible !== false,
+    'readyDiagnostic.diagnosticOnly.acceptanceEligible',
+    'false',
+    observed.readyDiagnostic?.diagnosticOnly?.acceptanceEligible,
+  );
+  return Object.freeze(findings);
+}
+
 export function validateProfiledReadyObservation(observation) {
-  if (
-    observation?.success !== true ||
-    observation.browserContextClosed !== true ||
-    observation.lifecycle?.complete !== true ||
-    !finiteNonNegative(observation.durationMs) ||
-    !finiteNonNegative(observation.paintFenceMs) ||
-    !Number.isSafeInteger(observation.peakRssBytes) ||
-    observation.peakRssBytes < 1 ||
-    !Number.isSafeInteger(observation.rssSamples) ||
-    observation.rssSamples < 1 ||
-    observation.browser?.requestFailedCount !== 0 ||
-    observation.browser?.unexpectedErrorCount !== 0 ||
-    !validReadyRouteProbe(observation.readinessProbe) ||
-    observation.readyDiagnostic?.schema !== DEV_READY_PROFILE_WINDOW_SCHEMA ||
-    observation.readyDiagnostic?.diagnosticOnly?.acceptanceEligible !== false
-  ) {
-    throw new Error('fresh-ready profiled observation is incomplete or not diagnostic-only');
+  const findings = profiledReadyObservationFindings(observation);
+  if (findings.length > 0) {
+    throw new Error(`fresh-ready profiled observation rejected: ${findings.join('; ')}`);
   }
   return observation;
+}
+
+function boundedObservedScalar(value) {
+  if (value === undefined) return 'undefined';
+  if (value === null) return 'null';
+  if (typeof value === 'boolean') return String(value);
+  if (typeof value === 'number') {
+    if (Number.isNaN(value)) return 'number(NaN)';
+    if (value === Number.POSITIVE_INFINITY) return 'number(Infinity)';
+    if (value === Number.NEGATIVE_INFINITY) return 'number(-Infinity)';
+    if (Object.is(value, -0)) return 'number(-0)';
+    return `number(${String(value)})`;
+  }
+  if (typeof value === 'string') return `string(length=${String(value.length)})`;
+  if (Array.isArray(value)) return `array(length=${String(value.length)})`;
+  return typeof value;
+}
+
+function boundedReadyRouteProbeObservation(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return boundedObservedScalar(value);
+  }
+  return [
+    `object(keys=${String(Object.keys(value).length)}`,
+    `attempts=${boundedObservedScalar(value.attempts)}`,
+    `path=${value.path === '/' ? 'root' : boundedObservedScalar(value.path)}`,
+    `status=${boundedObservedScalar(value.status)}`,
+    `transientFailures=${boundedObservedScalar(value.transientFailures)})`,
+  ].join(',');
 }
 
 export function parseDevReadyProfileArgs(argv) {

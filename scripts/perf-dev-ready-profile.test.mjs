@@ -31,11 +31,13 @@ import {
   devReadyProfileSchedule,
   exactReadyCallEvidence,
   parseDevReadyProfileArgs,
+  profiledReadyObservationFindings,
   readStableReadyProfileFile,
   runDevReadyProfile,
   runReadyProfileCell,
   sealDevReadyProfileArtifacts,
   validReadyProfileAnalysis,
+  validateProfiledReadyObservation,
   validateReadyCpuProfile,
   validateReadyPreciseCoverage,
 } from './perf-dev-ready-profile.mjs';
@@ -103,6 +105,55 @@ describe('authenticated cold-first-ready diagnostic', () => {
       }).length,
     ).toBeLessThanOrEqual(8192);
     expect(devReadyProfileFailureDiagnostic({ verdict: { status: 'diagnostic-only' } })).toBeNull();
+  });
+
+  it('reports deterministic bounded findings for each rejected profiled observation field', () => {
+    const valid = completeProfiledObservation();
+    expect(profiledReadyObservationFindings(valid)).toEqual([]);
+    expect(validateProfiledReadyObservation(valid)).toBe(valid);
+
+    const invalid = structuredClone(valid);
+    delete invalid.success;
+    invalid.browserContextClosed = false;
+    invalid.lifecycle.complete = false;
+    invalid.durationMs = -1;
+    invalid.paintFenceMs = Number.NaN;
+    invalid.peakRssBytes = 0;
+    invalid.rssSamples = 0;
+    invalid.browser.requestFailedCount = 2;
+    invalid.browser.unexpectedErrorCount = 1;
+    delete invalid.readinessProbe.path;
+    invalid.readinessProbe.status = 500;
+    const secretSchema = `do-not-disclose-${'x'.repeat(10_000)}`;
+    invalid.readyDiagnostic.schema = secretSchema;
+    invalid.readyDiagnostic.diagnosticOnly.acceptanceEligible = true;
+
+    const findings = profiledReadyObservationFindings(invalid);
+    expect(findings).toEqual([
+      'success: expected true; observed undefined',
+      'browserContextClosed: expected true; observed false',
+      'lifecycle.complete: expected true; observed false',
+      'durationMs: expected a finite non-negative number; observed number(-1)',
+      'paintFenceMs: expected a finite non-negative number; observed number(NaN)',
+      'peakRssBytes: expected a positive safe integer; observed number(0)',
+      'rssSamples: expected a positive safe integer; observed number(0)',
+      'browser.requestFailedCount: expected 0; observed number(2)',
+      'browser.unexpectedErrorCount: expected 0; observed number(1)',
+      'readinessProbe: expected an exact successful root-route probe; observed object(keys=3,attempts=number(1),path=undefined,status=number(500),transientFailures=number(0))',
+      `readyDiagnostic.schema: expected ${DEV_READY_PROFILE_WINDOW_SCHEMA}; observed string(length=${String(secretSchema.length)})`,
+      'readyDiagnostic.diagnosticOnly.acceptanceEligible: expected false; observed true',
+    ]);
+    const message = (() => {
+      try {
+        validateProfiledReadyObservation(invalid);
+        throw new Error('expected profiled observation validation to fail');
+      } catch (error) {
+        return error.message;
+      }
+    })();
+    expect(message).toContain(findings.join('; '));
+    expect(message).not.toContain('do-not-disclose');
+    expect(message.length).toBeLessThan(4_096);
   });
 
   it('fixes one N=216 first-ready window in exact B,S,S,B order', () => {
