@@ -12,7 +12,7 @@ import {
   compilerOwnedProjectMutationRegistryFactsFromFiles,
   createCompilerOwnedAppContractProject,
 } from './app-contract-project.js';
-import { compileComponentModule } from './compile.js';
+import { compileComponentModule, compileComponentProjectEntries } from './compile.js';
 import { componentTaskBSourceOperationFacts } from './security-operation-facts.js';
 import { mutationSessionAuthorityFacts, parseComponentModule } from './scan/parse.js';
 
@@ -25,6 +25,107 @@ afterEach(async () => {
 });
 
 describe('D1 compiler-owned exact project resolver', () => {
+  it('keeps prepared query/task/mutation semantic roots byte-exact with per-entry compilation', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/app.tsx');
+    const contractSource = [
+      "import { defineKovo, s } from '@kovojs/server';",
+      '',
+      'export const app = defineKovo({',
+      "  appId: '03a0649a-09f2-4f3a-881b-000000000024',",
+      "  document: { lang: 'en-US' },",
+      "  renderRoute(value) { return typeof value === 'string' ? value : String(value ?? ''); },",
+      '});',
+      '',
+      'export const benchmarkRefreshQuery = app.query({',
+      "  access: app.publicAccess('generated equal-shape refresh-surface query'),",
+      "  load: () => ({ label: 'ready' }),",
+      '  output: s.object({ label: s.string() }),',
+      '});',
+      'export const benchmarkWriteMutation = app.mutation({',
+      '  handler: () => ({ ok: true }),',
+      '});',
+      'export const benchmarkTask = app.task({',
+      '  run: () => undefined,',
+      '});',
+      '',
+    ].join('\n');
+    const entrySource = [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { app, benchmarkRefreshQuery, benchmarkTask, benchmarkWriteMutation } from './kovo.js';",
+      'export default app.assemble({',
+      '  mutations: [benchmarkWriteMutation],',
+      '  queries: [benchmarkRefreshQuery],',
+      '  routes: [],',
+      '  tasks: [benchmarkTask],',
+      '});',
+      '',
+    ].join('\n');
+    await writeSource(contract, contractSource);
+    await writeSource(entry, entrySource);
+    const files = [
+      { fileName: contract, source: contractSource },
+      { fileName: entry, source: entrySource },
+    ];
+    const project = createCompilerOwnedAppContractProject({ rootNames: [contract, entry] });
+
+    const legacy = files.map((file, index) => {
+      const extraFiles = files.filter((_candidate, candidateIndex) => candidateIndex !== index);
+      return project.withEntryResolutions(file.fileName, (source) => ({
+        component: compileComponentModule({
+          extraFiles,
+          fileName: file.fileName,
+          source,
+          sourceProvenance: 'app',
+        }),
+        parsed: parseComponentModule(file.fileName, source, {
+          frameworkIdentityFiles: extraFiles,
+        }),
+      }));
+    });
+    const prepared = compileComponentProjectEntries(files, {
+      sourceProvenance: 'app',
+      withEntryResolutions: (fileName, source, operation) =>
+        project.withEntryResolutions(fileName, (exactSource) => {
+          expect(exactSource).toBe(source);
+          return operation();
+        }),
+    });
+    const legacyGraphs = legacy.flatMap(({ component }) =>
+      component.componentGraphFacts.flatMap((fact) =>
+        fact.securitySemanticGraph === undefined ? [] : [fact.securitySemanticGraph],
+      ),
+    );
+    const preparedGraphs = prepared.components.flatMap((component) =>
+      component.componentGraphFacts.flatMap((fact) =>
+        fact.securitySemanticGraph === undefined ? [] : [fact.securitySemanticGraph],
+      ),
+    );
+    const legacyOperations = legacy.flatMap(({ parsed }) =>
+      componentTaskBSourceOperationFacts(parsed),
+    );
+    const preparedOperations = prepared.parsedModules.flatMap((parsed) =>
+      componentTaskBSourceOperationFacts(parsed),
+    );
+
+    expect(prepared.components.map((component) => component.diagnostics)).toEqual(
+      legacy.map(({ component }) => component.diagnostics),
+    );
+    expect(preparedGraphs).toEqual(legacyGraphs);
+    expect(preparedOperations).toEqual(legacyOperations);
+    expect([...new Set(preparedOperations.map((operation) => operation.root))].sort()).toEqual([
+      'mutation:kovo/benchmark-write-mutation',
+      'query:kovo/benchmark-refresh-query',
+      'task:kovo/benchmark-task',
+    ]);
+    expect(preparedGraphs.flatMap((graph) => graph.roots.map((root) => root.root)).sort()).toEqual([
+      'mutation:kovo/benchmark-write-mutation',
+      'query:kovo/benchmark-refresh-query',
+      'task:kovo/benchmark-task',
+    ]);
+  });
+
   it('accepts the normative appId/provider-descriptor contract without spike-only provider keys', async () => {
     const fixture = await createFixture();
     const contract = join(fixture.root, 'app/src/kovo.ts');
@@ -1868,16 +1969,20 @@ async function createServerPackage(root: string): Promise<string> {
       'export declare function route(path: string, definition: unknown): unknown;',
       'export declare function task(definition: unknown): unknown;',
       'export declare function publicAccess(reason: string): unknown;',
+      'export declare const s: { object(value: unknown): unknown; string(): unknown };',
       'export declare function defineKovo<const AppId extends string>(options: {',
       '  readonly appId: AppId;',
       '  readonly db?: unknown;',
+      '  readonly document?: unknown;',
       '  readonly provider?: unknown;',
       '  readonly providerKey?: string;',
+      '  readonly renderRoute?: (value: unknown) => unknown;',
       '}): {',
       '  readonly endpoint: typeof endpoint;',
       '  readonly integrateMutation: typeof integrateMutation;',
       '  readonly layout: typeof layout;',
       '  readonly mutation: typeof mutation;',
+      '  readonly publicAccess: typeof publicAccess;',
       '  readonly query: typeof query;',
       '  readonly route: typeof route;',
       '  readonly task: typeof task;',

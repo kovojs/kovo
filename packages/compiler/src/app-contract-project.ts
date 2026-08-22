@@ -140,6 +140,28 @@ export function compilerOwnedProjectMutationRegistryFactsFromFiles(
   // structural mutation-fact input and must not be misrepresented as a TypeScript root.
   const sourceFiles = files.filter((file) => /\.[cm]?[jt]sx?$/u.test(file.fileName));
   if (sourceFiles.length === 0) return projectMutationRegistryFactsFromFiles(sourceFiles);
+  const programFiles = sourceFiles.map((file) => {
+    const fileName = resolve(rootDirectory, file.fileName);
+    return { fileName, source: file.source };
+  });
+  const project = createCompilerOwnedAppContractProject({
+    rootNames: programFiles.map((file) => file.fileName),
+  });
+  return compilerOwnedProjectMutationRegistryFactsFromProject(project, sourceFiles, rootDirectory);
+}
+
+/**
+ * Project deployment mutation facts through an already-authenticated compiler Program. This is
+ * the cross-phase build path: it preserves the established absolute identity derivation and
+ * caller path spelling without constructing a second Program (SPEC §5.2 rules 6/9).
+ */
+export function compilerOwnedProjectMutationRegistryFactsFromProject(
+  project: CompilerOwnedAppContractProject,
+  files: readonly ProjectMutationSourceFile[],
+  rootDirectory: string = process.cwd(),
+): ProjectMutationRegistryFacts {
+  const sourceFiles = files.filter((file) => /\.[cm]?[jt]sx?$/u.test(file.fileName));
+  if (sourceFiles.length === 0) return projectMutationRegistryFactsFromFiles(sourceFiles);
   const originalNames = new Map<string, string>();
   const programFiles = sourceFiles.map((file) => {
     const fileName = resolve(rootDirectory, file.fileName);
@@ -151,9 +173,6 @@ export function compilerOwnedProjectMutationRegistryFactsFromFiles(
     }
     originalNames.set(canonical, file.fileName);
     return { fileName, source: file.source };
-  });
-  const project = createCompilerOwnedAppContractProject({
-    rootNames: programFiles.map((file) => file.fileName),
   });
   const facts = project.projectMutationRegistryFacts(programFiles);
   const originalName = (fileName: string): string => {

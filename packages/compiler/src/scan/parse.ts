@@ -7,12 +7,15 @@ import type {
 } from '@kovojs/core/internal/cache-influence';
 import {
   canonicalFrameworkExportForExpression,
+  createFrameworkIdentityProject,
   expressionResolvesToFrameworkExport,
   frameworkCatalogExportForModuleSpecifier,
   frameworkExport,
   frameworkExportEquals,
   registerFrameworkIdentityProject,
+  resetFrameworkIdentityProject,
   type FrameworkExportIdentity,
+  type FrameworkIdentityProject,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import type { SessionAuthorityFact } from '@kovojs/core/internal/graph';
@@ -402,11 +405,29 @@ export interface ParseComponentModuleOptions {
     readonly fileName: string;
     readonly source: string;
   }[];
+  /** @internal Invocation-scoped project lookup; never serialized or accepted as app authority. */
+  readonly frameworkIdentityProject?: FrameworkIdentityProject;
 }
 
 export interface ParseComponentProjectFile {
   readonly fileName: string;
   readonly source: string;
+}
+
+interface ParseComponentProjectOptions {
+  readonly withEntryResolutions?: <Value>(
+    fileName: string,
+    source: string,
+    operation: () => Value,
+  ) => Value;
+}
+
+/** @internal Parsed models plus their invocation-scoped framework-identity lookup. */
+export interface ParsedComponentProject {
+  /** Exact compiler-owned source carriers aligned with `models`; never serialized. */
+  readonly files: readonly ParseComponentProjectFile[];
+  readonly frameworkIdentityProject: FrameworkIdentityProject;
+  readonly models: readonly ComponentModuleModel[];
 }
 
 export function parseDiagnosticsForSourceFile(
@@ -466,7 +487,9 @@ export function parseComponentModule(
   options: ParseComponentModuleOptions = {},
 ): ComponentModuleModel {
   const sourceFile = parseSourceFile(fileName, source);
-  if (options.frameworkIdentityFiles?.length) {
+  if (options.frameworkIdentityProject !== undefined) {
+    registerFrameworkIdentityProject(sourceFile, options.frameworkIdentityProject);
+  } else if (options.frameworkIdentityFiles?.length) {
     const identityFiles: TS.SourceFile[] = [];
     const identityFileLength = compilerArrayLength(
       options.frameworkIdentityFiles,
@@ -501,9 +524,20 @@ export function parseComponentModule(
 export function parseComponentProjectModules(
   files: readonly ParseComponentProjectFile[],
 ): readonly ComponentModuleModel[] {
+  return parseComponentProject(files).models;
+}
+
+/**
+ * @internal Parse and register one immutable project for callers that compile every entry. The
+ * returned project is an in-memory invocation capability, not a serializable proof carrier.
+ */
+export function parseComponentProject(
+  files: readonly ParseComponentProjectFile[],
+  options: ParseComponentProjectOptions = {},
+): ParsedComponentProject {
   const snapshot = compilerSnapshotDenseArray(files, 'Component project source files');
+  const projectFiles: ParseComponentProjectFile[] = [];
   const sourceFiles: TS.SourceFile[] = [];
-  const sources: string[] = [];
   for (let index = 0; index < snapshot.length; index += 1) {
     const file = snapshot[index]!;
     const fileName = compilerOwnDataValue(file, 'fileName', 'Component project source file');
@@ -511,27 +545,42 @@ export function parseComponentProjectModules(
     if (typeof fileName !== 'string' || typeof source !== 'string') {
       throw new TypeError(`Component project source files[${index}] must contain own strings.`);
     }
+    const projectFile = { fileName, source };
+    // The project owns one deep source snapshot. Retain the caller entry only as a weak parse
+    // identity hint; every reuse still checks this compiler-owned carrier's exact path and bytes.
+    shareSnapshotEntryParseOrigin(file, projectFile);
+    compilerArrayAppend(projectFiles, projectFile, 'Component project source snapshot');
     compilerArrayAppend(
       sourceFiles,
       // plans/good-perf.md O7: the same approved project snapshot is re-supplied per module;
       // reuse each entry's shared parse (byte-exact revalidated) instead of re-parsing it.
-      parseSharedSnapshotEntry(file),
+      parseSharedSnapshotEntry(projectFile),
       'Component project parsed source files',
     );
-    compilerArrayAppend(sources, source, 'Component project source bytes');
   }
-  if (sourceFiles.length > 0) {
-    registerFrameworkIdentityProject(sourceFiles[0]!, sourceFiles);
-  }
+  const frameworkIdentityProject = createFrameworkIdentityProject(sourceFiles);
   const models: ComponentModuleModel[] = [];
-  for (let index = 0; index < sourceFiles.length; index += 1) {
-    compilerArrayAppend(
-      models,
-      parseComponentModuleFromSourceFile(sourceFiles[index]!, sources[index]!),
-      'Component project parsed models',
-    );
+  try {
+    for (let index = 0; index < sourceFiles.length; index += 1) {
+      const sourceFile = sourceFiles[index]!;
+      const projectFile = projectFiles[index]!;
+      const parseEntry = (): ComponentModuleModel =>
+        parseComponentModuleFromSourceFile(sourceFile, projectFile.source);
+      compilerArrayAppend(
+        models,
+        options.withEntryResolutions === undefined
+          ? parseEntry()
+          : options.withEntryResolutions(projectFile.fileName, projectFile.source, parseEntry),
+        'Component project parsed models',
+      );
+    }
+    return { files: projectFiles, frameworkIdentityProject, models };
+  } catch (error) {
+    // A resolution wrapper is allowed to fail after invoking the parser. Never let that retain
+    // invocation-scoped transformed-root state for a project that cannot be returned to its owner.
+    resetFrameworkIdentityProject(frameworkIdentityProject);
+    throw error;
   }
-  return models;
 }
 
 function parseComponentModuleFromSourceFile(

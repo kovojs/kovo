@@ -5,6 +5,7 @@ export type {
 } from './diagnostics.js';
 export {
   compilerOwnedAppContractStaticFactsFromFiles,
+  compilerOwnedProjectMutationRegistryFactsFromProject,
   compilerOwnedProjectMutationRegistryFactsFromFiles,
   createCompilerOwnedAppContractProject,
   type CompilerOwnedAppContractDiagnostic,
@@ -20,6 +21,11 @@ export { snapshotCompileComponentOptions } from './compile-options.js';
 export { compileComponentModuleForFramework } from './framework-compile.js';
 export type { PlatformSubstitution } from './lower/platform.js';
 export { appGraphContributionHash } from './app-graph.js';
+export {
+  compileComponentProjectEntries,
+  type CompileComponentProjectEntriesOptions,
+  type CompileComponentProjectEntriesResult,
+} from './compile.js';
 export {
   deriveBrowserPostureManifestFromSourceFiles,
   mergeBrowserPostureManifests,
@@ -164,6 +170,9 @@ export {
   mutationHandlerFingerprintFromRuntimeSource,
   mutationSessionAuthorityFacts,
   parseComponentModule,
+  parseComponentProject,
+  parseComponentProjectModules,
+  type ParsedComponentProject,
 } from './scan/parse.js';
 export { deriveRegistryIdentity } from './registry-identities.js';
 export {

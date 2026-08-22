@@ -1,3 +1,4 @@
+import type { FrameworkIdentityProject } from '@kovojs/core/internal/framework-identity';
 import { isGeneratedOnlySemanticAttribute } from '@kovojs/core/internal/semantic-attributes';
 
 import { compilerIrHeader } from '../ir.js';
@@ -138,7 +139,11 @@ export function semanticRenderEquivalenceCheck(
   const actualModel = parseComponentModule(
     artifact,
     actualSource,
-    options.extraFiles?.length ? { frameworkIdentityFiles: options.extraFiles } : {},
+    options.frameworkIdentityProject !== undefined
+      ? { frameworkIdentityProject: options.frameworkIdentityProject }
+      : options.extraFiles?.length
+        ? { frameworkIdentityFiles: options.extraFiles }
+        : {},
   );
   const actual = semanticRenderModel(actualModel);
   const normalizedExpected = normalizeSemanticHtmlForComparison(expected);
@@ -393,6 +398,7 @@ for (let index = 0; index < semanticVoidElementNames.length; index += 1) {
 interface SemanticRenderContext {
   extraFiles?: readonly { readonly fileName: string; readonly source: string }[];
   fileName?: string;
+  frameworkIdentityProject?: FrameworkIdentityProject;
   registryFacts?: RegistryFacts;
 }
 

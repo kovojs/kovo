@@ -6,6 +6,7 @@ import {
   securityMapGet,
   securityMapHas,
   securityMapSet,
+  securityIsArray,
   securityOwnArrayEntry,
   securitySet,
   securitySetAdd,
@@ -146,10 +147,49 @@ const expressionSpanCache = securityWeakMap<
   TypeScript.SourceFile,
   Map<string, TypeScript.Expression>
 >();
+const frameworkIdentityProjectLookup: unique symbol = Symbol('kovo.framework-identity-project');
+const ambiguousFrameworkIdentityProjectSource: unique symbol = Symbol(
+  'kovo.ambiguous-framework-identity-project-source',
+);
+
+type FrameworkIdentityProjectSource =
+  | TypeScript.SourceFile
+  | typeof ambiguousFrameworkIdentityProjectSource;
+
+interface FrameworkIdentityProjectState {
+  /**
+   * The currently compiled root may be a compiler-transformed reparse of one source in `lookup`.
+   * Keep that constant-size overlay separate so registering a new lowering phase does not rebuild
+   * or mutate the immutable N-file lookup.
+   */
+  activeOverlay: ReadonlyMap<string, TypeScript.SourceFile> | undefined;
+  readonly lookup: Map<string, FrameworkIdentityProjectSource>;
+}
+
+/**
+ * @internal Invocation-scoped source-project lookup. It carries parsed SourceFiles only inside one
+ * compiler process; build handoffs retain data-only facts instead (SPEC §5.2 rules 6/9).
+ */
+export interface FrameworkIdentityProject {
+  readonly [frameworkIdentityProjectLookup]: FrameworkIdentityProjectState;
+}
+
 const frameworkIdentityProjectCache = securityWeakMap<
   TypeScript.SourceFile,
-  Map<string, TypeScript.SourceFile>
+  FrameworkIdentityProject
 >();
+let frameworkIdentityProjectConstructions = 0;
+let frameworkIdentityActiveProjectOverlays = 0;
+
+/** @internal Test-only work observation; it cannot alter resolver behavior. */
+export function frameworkIdentityProjectConstructionsForTesting(): number {
+  return frameworkIdentityProjectConstructions;
+}
+
+/** @internal Test-only lifetime observation; it cannot expose or alter a project overlay. */
+export function frameworkIdentityActiveProjectOverlaysForTesting(): number {
+  return frameworkIdentityActiveProjectOverlays;
+}
 
 /** @internal */
 export function frameworkExport(
@@ -350,33 +390,19 @@ function uniqueSyntaxKinds(
   return securitySetValues(uniqueKinds);
 }
 
-/** @internal Register extra local source files that source-only identity resolution may inspect. */
-export function registerFrameworkIdentityProject(
-  sourceFile: TypeScript.SourceFile,
+/** @internal Build one exact local-source lookup for an immutable compiler invocation. */
+export function createFrameworkIdentityProject(
   files: readonly TypeScript.SourceFile[],
-): void {
-  if (files.length === 0) return;
-  const project = securityMap<string, TypeScript.SourceFile>();
-  const sourceNames = sourceFileLookupNames(sourceFile.fileName);
-  for (let index = 0; index < sourceNames.length; index += 1) {
-    securityMapSet(
-      project,
-      identityArrayEntry(sourceNames, index, 'Framework source lookup names'),
-      sourceFile,
-    );
-  }
+): FrameworkIdentityProject {
+  frameworkIdentityProjectConstructions += 1;
+  const lookup = securityMap<string, FrameworkIdentityProjectSource>();
   for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
     const file = identityArrayEntry(files, fileIndex, 'Framework identity project files');
-    const names = sourceFileLookupNames(file.fileName);
-    for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
-      securityMapSet(
-        project,
-        identityArrayEntry(names, nameIndex, 'Framework project lookup names'),
-        file,
-      );
-    }
+    registerFrameworkIdentityProjectFile(lookup, file);
   }
-  securityWeakMapSet(frameworkIdentityProjectCache, sourceFile, project);
+  const project: FrameworkIdentityProject = {
+    [frameworkIdentityProjectLookup]: { activeOverlay: undefined, lookup },
+  };
   for (let index = 0; index < files.length; index += 1) {
     securityWeakMapSet(
       frameworkIdentityProjectCache,
@@ -384,6 +410,71 @@ export function registerFrameworkIdentityProject(
       project,
     );
   }
+  return project;
+}
+
+/**
+ * @internal Register extra local source files that source-only identity resolution may inspect.
+ * A prebuilt project makes registration O(1) for reparsed/lowered entry models; the legacy array
+ * form preserves standalone callers and constructs one exact project for that call.
+ */
+export function registerFrameworkIdentityProject(
+  sourceFile: TypeScript.SourceFile,
+  files: readonly TypeScript.SourceFile[] | FrameworkIdentityProject,
+): void {
+  if (!securityIsArray(files)) {
+    const project = files as FrameworkIdentityProject;
+    // A lowered/reparsed root must shadow the original SourceFile stored under the same path.
+    // This synchronous invocation-scoped overlay preserves the legacy current-root-first lookup
+    // while keeping registration independent of project size.
+    const overlay = securityMap<string, TypeScript.SourceFile>();
+    const sourceNames = sourceFileLookupNames(sourceFile.fileName);
+    for (let index = 0; index < sourceNames.length; index += 1) {
+      const name = identityArrayEntry(sourceNames, index, 'Framework active-root lookup names');
+      // A transformed root replaces only an unambiguous source identity. When two exact source
+      // paths share an extensionless alias, no compile order or active entry may choose a winner.
+      // Explicit paths remain independently addressable through their exact lookup keys.
+      if (
+        securityMapGet(project[frameworkIdentityProjectLookup].lookup, name) !==
+        ambiguousFrameworkIdentityProjectSource
+      ) {
+        securityMapSet(overlay, name, sourceFile);
+      }
+    }
+    if (project[frameworkIdentityProjectLookup].activeOverlay === undefined) {
+      frameworkIdentityActiveProjectOverlays += 1;
+    }
+    project[frameworkIdentityProjectLookup].activeOverlay = overlay;
+    securityWeakMapSet(frameworkIdentityProjectCache, sourceFile, project);
+    return;
+  }
+  const sourceFiles = files as readonly TypeScript.SourceFile[];
+  if (sourceFiles.length === 0) return;
+  frameworkIdentityProjectConstructions += 1;
+  const lookup = securityMap<string, FrameworkIdentityProjectSource>();
+  registerFrameworkIdentityProjectFile(lookup, sourceFile);
+  for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
+    const file = identityArrayEntry(sourceFiles, fileIndex, 'Framework identity project files');
+    registerFrameworkIdentityProjectFile(lookup, file);
+  }
+  const project: FrameworkIdentityProject = {
+    [frameworkIdentityProjectLookup]: { activeOverlay: undefined, lookup },
+  };
+  securityWeakMapSet(frameworkIdentityProjectCache, sourceFile, project);
+  for (let index = 0; index < sourceFiles.length; index += 1) {
+    securityWeakMapSet(
+      frameworkIdentityProjectCache,
+      identityArrayEntry(sourceFiles, index, 'Framework identity project files'),
+      project,
+    );
+  }
+}
+
+/** @internal End one synchronous prepared-project compile and discard its transformed-root view. */
+export function resetFrameworkIdentityProject(project: FrameworkIdentityProject): void {
+  const state = project[frameworkIdentityProjectLookup];
+  if (state.activeOverlay !== undefined) frameworkIdentityActiveProjectOverlays -= 1;
+  state.activeOverlay = undefined;
 }
 
 /** @internal Resolve one relative module against the compiler-registered source project. */
@@ -1299,12 +1390,40 @@ function resolveProjectSourceFile(
   const baseDir = directoryName(importingSourceFile.fileName);
   const base = normalizePath(`${baseDir}${baseDir ? '/' : ''}${specifier}`);
   const candidates = sourceFileLookupNames(base);
+  const state = project[frameworkIdentityProjectLookup];
+  const activeOverlay = state.activeOverlay;
   for (let index = 0; index < candidates.length; index += 1) {
     const candidate = identityArrayEntry(candidates, index, 'Framework identity source candidates');
-    const file = securityMapGet(project, candidate);
+    const activeRoot = activeOverlay && securityMapGet(activeOverlay, candidate);
+    if (activeRoot) return activeRoot;
+    const file = securityMapGet(state.lookup, candidate);
+    if (file === ambiguousFrameworkIdentityProjectSource) return undefined;
     if (file) return file;
   }
   return undefined;
+}
+
+function registerFrameworkIdentityProjectFile(
+  lookup: Map<string, FrameworkIdentityProjectSource>,
+  file: TypeScript.SourceFile,
+): void {
+  const normalizedFileName = normalizePath(file.fileName);
+  const names = sourceFileLookupNames(normalizedFileName);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = identityArrayEntry(names, index, 'Framework project lookup names');
+    const existing = securityMapGet(lookup, name);
+    if (
+      existing === undefined ||
+      (existing !== ambiguousFrameworkIdentityProjectSource &&
+        normalizePath(existing.fileName) === normalizedFileName)
+    ) {
+      securityMapSet(lookup, name, file);
+    } else {
+      // Keep ambiguity as a module-private state. A public structural sentinel would let callers
+      // forge resolver outcomes; consumers observe only the existing fail-closed `undefined`.
+      securityMapSet(lookup, name, ambiguousFrameworkIdentityProjectSource);
+    }
+  }
 }
 
 function hasExportModifier(ts: FrameworkIdentityTypeScript, node: TypeScript.Node): boolean {
