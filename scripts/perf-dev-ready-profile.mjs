@@ -12,19 +12,22 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import {
   closeSync,
+  constants as fsConstants,
   existsSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
   openSync,
-  readFileSync,
+  readdirSync,
   realpathSync,
+  readSync,
   rmSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { chromium } from 'playwright';
 
@@ -61,6 +64,10 @@ import { validReadyRouteProbe } from './lib/perf-ready-route.mjs';
 
 export const DEV_READY_PROFILE_SCHEMA = 'kovo-dev-ready-profile/v1';
 export const DEV_READY_PROFILE_WINDOW_SCHEMA = 'kovo-dev-ready-profile-window/v1';
+export const DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA = 'kovo-dev-ready-profile-cpu/v1';
+export const DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA = 'kovo-dev-ready-profile-coverage/v1';
+export const DEV_READY_PROFILE_CONTROLLER_BINDING_SCHEMA =
+  'kovo-dev-ready-profile-controller-binding/v1';
 export const DEV_READY_PROFILE_SCHEDULE = Object.freeze([
   Object.freeze({ lane: 'baseline', occurrence: 0, scheduleIndex: 0 }),
   Object.freeze({ lane: 'spike', occurrence: 0, scheduleIndex: 1 }),
@@ -75,6 +82,9 @@ const MAX_COVERAGE_SCRIPTS = 20_000;
 const MAX_COVERAGE_FUNCTIONS_PER_SCRIPT = 100_000;
 const MAX_COVERAGE_RANGES_PER_FUNCTION = 10_000;
 const MAX_EVIDENCE_STRING = 8_192;
+const MAX_CONTROLLER_FILE_BYTES = 32 * 1024 * 1024;
+const MAX_CONTROLLER_BINDING_BYTES = 4 * 1024 * 1024;
+const MAX_ATTRIBUTION_FILE_BYTES = 64 * 1024 * 1024;
 const PROFILE_TARGETS = Object.freeze([
   Object.freeze({ name: 'queryPlanBootstrapInputForComponent', required: true }),
   Object.freeze({ name: 'resolveViteComponentQueryRuntimeNames', required: true }),
@@ -107,14 +117,33 @@ const CONTROLLER_LOCK_FILES = Object.freeze([
 ]);
 const CONTROLLER_FILES = Object.freeze([
   'benchmarks/corpora/dev-loop.mjs',
+  'benchmarks/corpora/dev-process-marker.mjs',
   'benchmarks/corpora/generate.mjs',
   'benchmarks/harness/dev-port-allocation.mjs',
+  'scripts/lib/cli-entry.mjs',
+  'scripts/lib/perf-dev-session-evidence.mjs',
+  'scripts/lib/perf-execution.mjs',
+  'scripts/lib/perf-host.mjs',
   'scripts/lib/perf-packed-kovo-product.mjs',
+  'scripts/lib/perf-provenance.mjs',
   'scripts/lib/perf-ready-route.mjs',
+  'scripts/lib/process-tree-rss.mjs',
   'scripts/perf-dev-edit-profile.mjs',
   'scripts/perf-dev-generation-spike.mjs',
+  'scripts/perf-dev-ready-profile-bootstrap.mjs',
   'scripts/perf-dev-ready-profile.mjs',
 ]);
+const CONTROLLER_MANIFEST_FILE = 'package.json';
+const CONTROLLER_BOUND_PATHS = Object.freeze(
+  [CONTROLLER_MANIFEST_FILE, ...CONTROLLER_LOCK_FILES, ...CONTROLLER_FILES].sort(),
+);
+const EXPECTED_PROFILE_FILES = Object.freeze(
+  DEV_READY_PROFILE_SCHEDULE.flatMap((cell) => {
+    const stem = `cell-${String(cell.scheduleIndex).padStart(3, '0')}-${cell.lane}`;
+    return [`${stem}.coverage.json`, `${stem}.cpuprofile`];
+  }).sort((left, right) => left.localeCompare(right)),
+);
+const READY_PROFILE_SEAL_CAPABILITY = Symbol('kovo.dev-ready-profile.seal-capability');
 const controllerRoot = fileURLToPath(new URL('..', import.meta.url));
 
 export function devReadyProfileSchedule(portBase = DEFAULT_DEV_PORT_BASE) {
@@ -126,6 +155,155 @@ export function devReadyProfileSchedule(portBase = DEFAULT_DEV_PORT_BASE) {
     boundedPort(inspectorPort, `profile cell ${String(cell.scheduleIndex)} Inspector port`);
     return { ...cell, inspectorPort, port };
   });
+}
+
+function normalizeProfilerCellIdentity(value, inspectorPort) {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    !Number.isSafeInteger(value.scheduleIndex) ||
+    !Number.isSafeInteger(value.occurrence) ||
+    !Number.isSafeInteger(value.port)
+  ) {
+    throw new TypeError('fresh-ready profiler cell identity is incomplete');
+  }
+  const scheduled = DEV_READY_PROFILE_SCHEDULE[value.scheduleIndex];
+  if (
+    scheduled === undefined ||
+    value.lane !== scheduled.lane ||
+    value.occurrence !== scheduled.occurrence ||
+    boundedPort(value.port, 'profile cell port') + 1 !== inspectorPort
+  ) {
+    throw new Error('fresh-ready profiler cell identity is schedule-confused');
+  }
+  return {
+    inspectorPort,
+    lane: value.lane,
+    occurrence: value.occurrence,
+    port: value.port,
+    scheduleIndex: value.scheduleIndex,
+  };
+}
+
+function normalizeAttributionRoots(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('fresh-ready attribution roots are required');
+  }
+  const entries = Object.entries(value)
+    .map(([label, root]) => {
+      if (!/^[a-z][a-z0-9-]{0,31}$/u.test(label)) {
+        throw new TypeError('fresh-ready attribution root label is malformed');
+      }
+      return { label, root: canonicalDirectory(root, `${label} attribution root`) };
+    })
+    .sort((left, right) => left.label.localeCompare(right.label));
+  if (
+    entries.length < 1 ||
+    new Set(entries.map((entry) => entry.root)).size !== entries.length ||
+    entries.some((entry, index) =>
+      entries.some(
+        (other, otherIndex) =>
+          index !== otherIndex &&
+          (isWithinOrEqual(entry.root, other.root) || isWithinOrEqual(other.root, entry.root)),
+      ),
+    )
+  ) {
+    throw new Error('fresh-ready attribution roots alias or contain one another');
+  }
+  return entries;
+}
+
+function captureReadyAttribution(cpu, coverage, { roots }) {
+  const cpuUrls = cpu.nodes.map((node) => node.callFrame.url).filter(isFileBackedRuntimeUrl);
+  const coverageUrls = coverage.result.map((script) => script.url).filter(isFileBackedRuntimeUrl);
+  return {
+    coverage: captureFileUrlCensus(coverageUrls, roots, 'coverage'),
+    cpu: captureFileUrlCensus(cpuUrls, roots, 'CPU'),
+  };
+}
+
+function captureFileUrlCensus(urls, roots, label) {
+  const byPath = new Map();
+  for (const rawUrl of [...new Set(urls)].sort((left, right) => left.localeCompare(right))) {
+    const url = rawUrl.startsWith('file:') ? new URL(rawUrl) : pathToFileURL(rawUrl);
+    if (url.protocol !== 'file:') throw new Error(`${label} attribution contains a non-file URL`);
+    const filesystemUrl = new URL(url);
+    filesystemUrl.search = '';
+    filesystemUrl.hash = '';
+    const declared = fileURLToPath(filesystemUrl);
+    const absolute = realpathSync(declared);
+    const matches = roots.filter((entry) => isWithinOrEqual(entry.root, absolute));
+    if (matches.length !== 1) {
+      throw new Error(`${label} file URL is outside or ambiguous across attribution roots`);
+    }
+    const existing = byPath.get(absolute);
+    if (existing !== undefined) {
+      existing.urls.push(rawUrl);
+      existing.urls.sort((left, right) => left.localeCompare(right));
+      continue;
+    }
+    const source = readStableReadyProfileFile(
+      absolute,
+      MAX_ATTRIBUTION_FILE_BYTES,
+      `${label} attribution source`,
+      { allowMultipleLinks: true },
+    );
+    const root = matches[0];
+    byPath.set(absolute, {
+      bytes: source.bytes.byteLength,
+      contentBase64: source.bytes.toString('base64'),
+      identity: source.identity,
+      map: captureSourceMapEvidence(absolute, source.bytes, root, label),
+      path: path.relative(root.root, absolute).split(path.sep).join('/'),
+      root: root.label,
+      sha256: sha256(source.bytes),
+      urls: [rawUrl],
+    });
+  }
+  return [...byPath.values()].sort((left, right) =>
+    `${left.root}/${left.path}`.localeCompare(`${right.root}/${right.path}`),
+  );
+}
+
+function isFileBackedRuntimeUrl(value) {
+  return typeof value === 'string' && (value.startsWith('file:') || path.isAbsolute(value));
+}
+
+function captureSourceMapEvidence(sourcePath, bytes, root, label) {
+  const source = bytes.toString('utf8');
+  const matches = [
+    ...source.matchAll(
+      /(?:\/\/[#@]\s*sourceMappingURL=([^\s]+)|\/\*[#@]\s*sourceMappingURL=([^*]+?)\s*\*\/)/gu,
+    ),
+  ];
+  const reference = matches.at(-1)?.[1] ?? matches.at(-1)?.[2] ?? null;
+  if (reference === null) return { kind: 'none' };
+  if (reference.startsWith('data:')) {
+    return { kind: 'inline', sha256: sha256(Buffer.from(reference)), value: reference };
+  }
+  const mapUrl = new URL(reference, pathToFileURL(sourcePath));
+  if (mapUrl.protocol !== 'file:' || mapUrl.search !== '' || mapUrl.hash !== '') {
+    throw new Error(`${label} attribution source map URL is not a canonical file URL`);
+  }
+  const mapPath = realpathSync(fileURLToPath(mapUrl));
+  if (!isWithinOrEqual(root.root, mapPath)) {
+    throw new Error(`${label} attribution source map escaped its source root`);
+  }
+  const map = readStableReadyProfileFile(
+    mapPath,
+    MAX_ATTRIBUTION_FILE_BYTES,
+    `${label} attribution source map`,
+    { allowMultipleLinks: true },
+  );
+  return {
+    bytes: map.bytes.byteLength,
+    contentBase64: map.bytes.toString('base64'),
+    identity: map.identity,
+    kind: 'file',
+    path: path.relative(root.root, mapPath).split(path.sep).join('/'),
+    sha256: sha256(map.bytes),
+  };
 }
 
 /** Start one exact Inspector window while the packed CLI is still paused at `--inspect-brk`. */
@@ -142,6 +320,10 @@ export async function createDevReadyProfiler(options, dependencies = {}) {
   const artifactStem = boundedArtifactStem(options.artifactStem);
   const consumerRoot = canonicalDirectory(options.consumerRoot, 'packed consumer root');
   const productDigest = validSha256(options.productDigest, 'packed product digest');
+  const cell = normalizeProfilerCellIdentity(options.cell, inspectorPort);
+  const attributionRoots = normalizeAttributionRoots(
+    options.attributionRoots ?? { consumer: consumerRoot },
+  );
   const reservation = reserveArtifactStem(profileDir, artifactStem);
   let session;
   try {
@@ -152,6 +334,17 @@ export async function createDevReadyProfiler(options, dependencies = {}) {
     });
     validateReadyInspectorIdentity(session?.identity, { expectedPid, processMarker });
     const invocation = await readPausedInspectorInvocation(session, inspectorPort);
+    const binding = {
+      cell,
+      inspectorProcess: {
+        pid: expectedPid,
+        processMarkerSha256: sha256(Buffer.from(processMarker)),
+        targetId: session.identity.targetId,
+      },
+      invocation,
+      productDigest,
+      schema: 'kovo-dev-ready-profile-window-binding/v1',
+    };
     let active = false;
     let closed = false;
     let captured = false;
@@ -194,23 +387,40 @@ export async function createDevReadyProfiler(options, dependencies = {}) {
       const cpu = validateReadyCpuProfile(cpuResult?.profile);
       const coverage = validateReadyPreciseCoverage(coverageResult);
       const callEvidence = exactReadyCallEvidence(coverage, { consumerRoot });
-      const cpuBytes = serializedArtifactBytes(cpu, MAX_CPU_PROFILE_BYTES, 'CPU profile');
-      const coverageBytes = serializedArtifactBytes(
+      const attribution = captureReadyAttribution(cpu, coverage, { roots: attributionRoots });
+      const cpuArtifact = {
+        attribution: attribution.cpu,
+        binding,
+        profile: cpu,
+        schema: DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
+      };
+      const coverageArtifact = {
+        attribution: attribution.coverage,
+        binding,
+        calls: callEvidence.calls,
         coverage,
+        product: { digest: productDigest, scriptAssets: callEvidence.scriptAssets },
+        schema: DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA,
+      };
+      const cpuBytes = serializedArtifactBytes(cpuArtifact, MAX_CPU_PROFILE_BYTES, 'CPU profile');
+      const coverageBytes = serializedArtifactBytes(
+        coverageArtifact,
         MAX_COVERAGE_BYTES,
         'precise coverage',
       );
       const artifact = reservation.write(cpuBytes, coverageBytes);
+      artifact.cpu.schema = DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA;
+      artifact.coverage.schema = DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA;
       captured = true;
       await closeSession();
       return {
         artifact,
+        attribution,
+        binding,
         calls: callEvidence.calls,
         diagnosticOnly: DIAGNOSTIC_ONLY_POLICY,
         inspectorProcess: {
-          pid: expectedPid,
-          processMarkerSha256: sha256(Buffer.from(processMarker)),
-          targetId: session.identity.targetId,
+          ...binding.inspectorProcess,
         },
         invocation,
         product: {
@@ -330,8 +540,7 @@ export function exactReadyCallEvidence(coverage, { consumerRoot }) {
         if (fn.functionName !== target.name) continue;
         const asset = authenticatedCoverageAsset(script.url, canonicalConsumerRoot);
         const outer = outerCoverageRange(fn.ranges);
-        const source = readFileSync(asset.absolutePath, 'utf8');
-        if (!bundleRangeDeclaresFunction(source, outer, target.name)) {
+        if (!bundleRangeDeclaresFunction(asset.source, outer, target.name)) {
           throw new Error(
             `precise coverage range for ${target.name} does not match its authenticated script`,
           );
@@ -364,10 +573,203 @@ export function exactReadyCallEvidence(coverage, { consumerRoot }) {
   };
 }
 
+export function attachReadyProfileSealCapability(cell, roots) {
+  if (
+    cell === null ||
+    typeof cell !== 'object' ||
+    cell[READY_PROFILE_SEAL_CAPABILITY] !== undefined
+  ) {
+    throw new TypeError('fresh-ready seal capability target is invalid or already bound');
+  }
+  const normalized = normalizeAttributionRoots(roots);
+  Object.defineProperty(cell, READY_PROFILE_SEAL_CAPABILITY, {
+    configurable: false,
+    enumerable: false,
+    value: Object.freeze({
+      roots: Object.freeze(
+        Object.fromEntries(normalized.map((entry) => [entry.label, entry.root])),
+      ),
+    }),
+    writable: false,
+  });
+  return cell;
+}
+
+/** Re-open and authenticate the exact eight raw files before packed consumers are cleaned. */
+export function sealDevReadyProfileArtifacts(options, dependencies = {}) {
+  const profileDir = canonicalDirectory(options.profileDir, 'profile artifact directory');
+  const schedule = options.schedule;
+  const cells = options.cells;
+  if (
+    !Array.isArray(schedule) ||
+    schedule.length !== DEV_READY_PROFILE_SCHEDULE.length ||
+    !Array.isArray(cells) ||
+    cells.length !== schedule.length
+  ) {
+    throw new Error('fresh-ready artifact seal requires the complete serialized schedule');
+  }
+  const directoryBefore = lstatSync(profileDir, { bigint: true });
+  if (!directoryBefore.isDirectory() || directoryBefore.isSymbolicLink()) {
+    throw new Error('fresh-ready artifact root is not a non-symlink directory');
+  }
+  const entries = readdirSync(profileDir, { withFileTypes: true });
+  const names = entries.map((entry) => entry.name).sort((left, right) => left.localeCompare(right));
+  if (
+    entries.some((entry) => !entry.isFile() || entry.isSymbolicLink()) ||
+    canonicalJson(names) !== canonicalJson(EXPECTED_PROFILE_FILES)
+  ) {
+    throw new Error('fresh-ready artifact directory does not contain the exact eight-file census');
+  }
+  dependencies.afterDirectoryCensus?.({ profileDir });
+  const readStable = dependencies.readStableFile ?? readStableReadyProfileFile;
+  const inodeOwners = new Set();
+  const sealedCells = [];
+  for (let index = 0; index < schedule.length; index += 1) {
+    const expected = schedule[index];
+    const cell = cells[index];
+    validateReadyProfileCell(cell, expected);
+    const capability = cell[READY_PROFILE_SEAL_CAPABILITY];
+    if (capability === undefined) {
+      throw new Error('fresh-ready cell omitted its private seal capability');
+    }
+    const roots = normalizeAttributionRoots(capability.roots);
+    const consumerRoot = roots.find((entry) => entry.label === 'consumer')?.root;
+    if (consumerRoot === undefined) {
+      throw new Error('fresh-ready cell seal capability omitted the packed consumer root');
+    }
+    const cpu = reopenArtifact(
+      profileDir,
+      cell.profile.artifact.cpu,
+      MAX_CPU_PROFILE_BYTES,
+      readStable,
+    );
+    const coverage = reopenArtifact(
+      profileDir,
+      cell.profile.artifact.coverage,
+      MAX_COVERAGE_BYTES,
+      readStable,
+    );
+    for (const artifact of [cpu, coverage]) {
+      const inode = `${artifact.identity.dev}:${artifact.identity.ino}`;
+      if (inodeOwners.has(inode)) {
+        throw new Error('fresh-ready artifacts alias or duplicate an inode across cells');
+      }
+      inodeOwners.add(inode);
+    }
+    const cpuEnvelope = parseArtifactEnvelope(
+      cpu.bytes,
+      DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
+      'CPU',
+    );
+    const coverageEnvelope = parseArtifactEnvelope(
+      coverage.bytes,
+      DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA,
+      'coverage',
+    );
+    if (
+      canonicalJson(cpuEnvelope.binding) !== canonicalJson(cell.profile.binding) ||
+      canonicalJson(coverageEnvelope.binding) !== canonicalJson(cell.profile.binding) ||
+      coverageEnvelope.product?.digest !== cell.profile.product.digest ||
+      canonicalJson(coverageEnvelope.calls) !== canonicalJson(cell.profile.calls) ||
+      canonicalJson(coverageEnvelope.product?.scriptAssets) !==
+        canonicalJson(cell.profile.product.scriptAssets)
+    ) {
+      throw new Error('fresh-ready artifact envelope is cross-bound to the wrong cell or product');
+    }
+    const rawCpu = validateReadyCpuProfile(cpuEnvelope.profile);
+    const rawCoverage = validateReadyPreciseCoverage(coverageEnvelope.coverage);
+    const recomputedCalls = exactReadyCallEvidence(rawCoverage, { consumerRoot });
+    if (
+      canonicalJson(recomputedCalls.calls) !== canonicalJson(cell.profile.calls) ||
+      canonicalJson(recomputedCalls.scriptAssets) !==
+        canonicalJson(cell.profile.product.scriptAssets)
+    ) {
+      throw new Error('retained coverage no longer proves the exact call/range/script evidence');
+    }
+    const recomputedAttribution = captureReadyAttribution(rawCpu, rawCoverage, { roots });
+    if (
+      canonicalJson(recomputedAttribution) !== canonicalJson(cell.profile.attribution) ||
+      canonicalJson(cpuEnvelope.attribution) !== canonicalJson(recomputedAttribution.cpu) ||
+      canonicalJson(coverageEnvelope.attribution) !==
+        canonicalJson(recomputedAttribution.coverage) ||
+      !validRetainedAttribution(recomputedAttribution)
+    ) {
+      throw new Error('retained file-backed frame attribution is incomplete or changed');
+    }
+    sealedCells.push({
+      artifacts: {
+        coverage: { ...cell.profile.artifact.coverage, sealed: true },
+        cpu: { ...cell.profile.artifact.cpu, sealed: true },
+      },
+      binding: cell.profile.binding,
+    });
+  }
+  const directoryAfter = lstatSync(profileDir, { bigint: true });
+  if (!sameStableFileStat(directoryBefore, directoryAfter)) {
+    throw new Error('fresh-ready artifact directory changed while being sealed');
+  }
+  return {
+    cells: sealedCells,
+    directory: { files: EXPECTED_PROFILE_FILES, identity: stableFileIdentity(directoryAfter) },
+    schema: 'kovo-dev-ready-profile-artifact-seal/v1',
+  };
+}
+
+function reopenArtifact(profileDir, evidence, maximum, readStable) {
+  const file = path.resolve(profileDir, ...evidence.file.split('/'));
+  if (!isWithinOrEqual(profileDir, file)) throw new Error('fresh-ready artifact escaped its root');
+  const observed = readStable(file, maximum, `fresh-ready artifact ${evidence.file}`);
+  if (
+    observed.bytes.byteLength !== evidence.bytes ||
+    sha256(observed.bytes) !== evidence.sha256 ||
+    observed.identity.dev !== evidence.dev ||
+    observed.identity.ino !== evidence.ino ||
+    observed.identity.mode !== evidence.mode ||
+    observed.identity.nlink !== evidence.nlink ||
+    observed.identity.mtimeNs !== evidence.mtimeNs ||
+    observed.identity.ctimeNs !== evidence.ctimeNs
+  ) {
+    throw new Error(`fresh-ready artifact identity or bytes changed: ${evidence.file}`);
+  }
+  return observed;
+}
+
+function parseArtifactEnvelope(bytes, schema, label) {
+  let parsed;
+  try {
+    parsed = JSON.parse(bytes.toString('utf8'));
+  } catch (error) {
+    throw new Error(`${label} artifact is not JSON: ${errorMessage(error)}`);
+  }
+  if (parsed === null || typeof parsed !== 'object' || parsed.schema !== schema) {
+    throw new Error(`${label} artifact schema is missing or confused`);
+  }
+  return parsed;
+}
+
+function validRetainedAttribution(value) {
+  return ['cpu', 'coverage'].every(
+    (kind) =>
+      Array.isArray(value[kind]) &&
+      value[kind].every(
+        (entry) =>
+          Buffer.from(entry.contentBase64 ?? '', 'base64').byteLength === entry.bytes &&
+          sha256(Buffer.from(entry.contentBase64 ?? '', 'base64')) === entry.sha256 &&
+          (entry.map?.kind !== 'file' ||
+            (Buffer.from(entry.map.contentBase64 ?? '', 'base64').byteLength === entry.map.bytes &&
+              sha256(Buffer.from(entry.map.contentBase64 ?? '', 'base64')) === entry.map.sha256)),
+      ),
+  );
+}
+
 export async function runDevReadyProfile(options = {}, dependencies = {}) {
   const policy = normalizeReadyProfileOptions(options);
   const collectControllerState =
-    dependencies.collectControllerState ?? collectDevReadyProfileControllerState;
+    dependencies.collectControllerState ??
+    (() =>
+      collectDevReadyProfileControllerState({
+        binding: dependencies.controllerBinding,
+      }));
   const controllerBefore = collectControllerState();
   validateControllerState(controllerBefore, 'before preparation');
   const schedule = devReadyProfileSchedule(policy.portBase);
@@ -523,8 +925,23 @@ export async function runDevReadyProfile(options = {}, dependencies = {}) {
         ...worktreeStabilityFindings(prepared.source.before[lane], sourceAfter[lane], lane),
       );
     }
-    const complete = errors.length === 0 && cells.length === DEV_READY_PROFILE_SCHEDULE.length;
+    let artifactSeal = null;
+    if (errors.length === 0 && cells.length === DEV_READY_PROFILE_SCHEDULE.length) {
+      try {
+        artifactSeal = (dependencies.sealArtifacts ?? sealDevReadyProfileArtifacts)(
+          { cells, profileDir: policy.profileDir, schedule },
+          dependencies.sealDependencies ?? {},
+        );
+      } catch (error) {
+        errors.push(`artifact sealing: ${errorMessage(error)}`);
+      }
+    }
+    const complete =
+      errors.length === 0 &&
+      cells.length === DEV_READY_PROFILE_SCHEDULE.length &&
+      artifactSeal?.schema === 'kovo-dev-ready-profile-artifact-seal/v1';
     const report = {
+      artifactSeal,
       candidate: prepared.candidateBinding,
       cells,
       controller: { after: controllerAfter, before: controllerBefore, stable: controllerStable },
@@ -533,6 +950,7 @@ export async function runDevReadyProfile(options = {}, dependencies = {}) {
       hostDiagnostics: postTimingHost === null ? [] : [postTimingHost],
       hostSamples,
       integrity: {
+        artifactsSealed: artifactSeal?.schema === 'kovo-dev-ready-profile-artifact-seal/v1',
         complete,
         controllerStable,
         errors: [...new Set(errors)],
@@ -576,29 +994,64 @@ export function collectDevReadyProfileControllerState(dependencies = {}) {
     dependencies.root ?? controllerRoot,
     'diagnostic controller root',
   );
-  const collectState = dependencies.collectState ?? collectWorktreeState;
-  const git = dependencies.git ?? controllerGitOutput;
-  const state = collectState(root);
-  const tree = git(root, ['rev-parse', 'HEAD^{tree}']);
-  const scripts = Object.fromEntries(
-    CONTROLLER_FILES.map((relativePath) => {
-      const absolutePath = path.join(root, relativePath);
-      const stat = lstatSync(absolutePath);
-      if (!stat.isFile() || stat.isSymbolicLink()) {
-        throw new Error(`diagnostic controller file is not regular: ${relativePath}`);
+  const binding = validateControllerBinding(dependencies.binding);
+  if (realpathSync(binding.privateRoot) !== root) {
+    throw new Error('diagnostic controller binding names a different immutable checkout');
+  }
+  const readStable = dependencies.readStableFile ?? readStableReadyProfileFile;
+  const observedBytes = new Map();
+  const observed = Object.fromEntries(
+    CONTROLLER_BOUND_PATHS.map((relativePath) => {
+      const expected = binding.files[relativePath];
+      const snapshot = readStable(
+        path.join(root, ...relativePath.split('/')),
+        MAX_CONTROLLER_FILE_BYTES,
+        `controller ${relativePath}`,
+      );
+      const observedSha = sha256(snapshot.bytes);
+      if (
+        snapshot.bytes.byteLength !== expected.bytes ||
+        observedSha !== expected.sha256 ||
+        canonicalJson(snapshot.identity) !== canonicalJson(expected.snapshotIdentity) ||
+        !validGitObjectId(expected.gitBlob)
+      ) {
+        throw new Error(`immutable controller bytes differ from committed blob: ${relativePath}`);
       }
-      const bytes = readFileSync(absolutePath);
+      observedBytes.set(relativePath, snapshot.bytes);
       return [
         relativePath,
-        {
-          bytes: bytes.byteLength,
-          gitBlob: git(root, ['rev-parse', `HEAD:${relativePath}`]),
-          sha256: sha256(bytes),
-        },
+        { ...snapshot.identity, gitBlob: expected.gitBlob, sha256: observedSha },
       ];
     }),
   );
-  return { ...state, scripts, tree };
+  const manifest = JSON.parse(observedBytes.get(CONTROLLER_MANIFEST_FILE).toString('utf8'));
+  const pnpmVersion = String(
+    dependencies.pnpmVersion ??
+      execFileSync('pnpm', ['--version'], {
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }),
+  ).trim();
+  if (
+    manifest.packageManager !== binding.packageManager ||
+    pnpmVersion !== binding.pnpmVersion ||
+    binding.packageManager !== `pnpm@${binding.pnpmVersion}`
+  ) {
+    throw new Error('immutable controller package-manager identity differs from its binding');
+  }
+  return {
+    commit: binding.commit,
+    dirty: false,
+    dirtyPaths: [],
+    immutableSnapshot: true,
+    locks: Object.fromEntries(CONTROLLER_LOCK_FILES.map((file) => [file, observed[file]])),
+    manifest: observed[CONTROLLER_MANIFEST_FILE],
+    packageManager: binding.packageManager,
+    pnpmVersion: binding.pnpmVersion,
+    scripts: Object.fromEntries(CONTROLLER_FILES.map((file) => [file, observed[file]])),
+    tree: binding.tree,
+  };
 }
 
 export async function runReadyProfileCell(options, dependencies = {}) {
@@ -651,6 +1104,13 @@ export async function runReadyProfileCell(options, dependencies = {}) {
   try {
     profiler = await createProfiler({
       artifactStem: `cell-${String(options.scheduleIndex).padStart(3, '0')}-${options.lane}`,
+      attributionRoots: { consumer: packedBefore.consumerRoot, corpus: loaded.appRoot },
+      cell: {
+        lane: options.lane,
+        occurrence: options.occurrence,
+        port: options.port,
+        scheduleIndex: options.scheduleIndex,
+      },
       consumerRoot: packedBefore.consumerRoot,
       expectedPid: launched.session.pid,
       inspectorPort: options.inspectorPort,
@@ -690,7 +1150,7 @@ export async function runReadyProfileCell(options, dependencies = {}) {
     options.product.identity.digest,
     options.sourceState,
   );
-  return {
+  const cell = {
     authentication: {
       corpus: { afterVerified: true, beforeVerified: true, identity: corpusBefore },
       product: {
@@ -715,10 +1175,18 @@ export async function runReadyProfileCell(options, dependencies = {}) {
     },
     occurrence: options.occurrence,
     port: options.port,
+    process: {
+      pid: launched.session.pid,
+      processMarkerSha256: sha256(Buffer.from(launched.session.processMarker)),
+    },
     processMarker: launched.session.processMarker,
     profile: observation.readyDiagnostic,
     scheduleIndex: options.scheduleIndex,
   };
+  return attachReadyProfileSealCapability(cell, {
+    consumer: packedBefore.consumerRoot,
+    corpus: loaded.appRoot,
+  });
 }
 
 export function validateProfiledReadyObservation(observation) {
@@ -868,12 +1336,48 @@ function assertEvidenceOutsideMeasuredRoots(policy, prepared) {
 }
 
 function validateReadyProfileCell(cell, expected) {
+  const profile = cell?.profile;
+  const expectedStem = `cell-${String(expected.scheduleIndex).padStart(3, '0')}-${expected.lane}`;
+  const markerSha =
+    typeof cell?.processMarker === 'string' ? sha256(Buffer.from(cell.processMarker)) : null;
+  const expectedBinding = {
+    inspectorPort: expected.inspectorPort,
+    lane: expected.lane,
+    occurrence: expected.occurrence,
+    port: expected.port,
+    scheduleIndex: expected.scheduleIndex,
+  };
   if (
     cell?.scheduleIndex !== expected.scheduleIndex ||
     cell.lane !== expected.lane ||
     cell.occurrence !== expected.occurrence ||
-    cell.profile?.schema !== DEV_READY_PROFILE_WINDOW_SCHEMA ||
-    cell.profile?.diagnosticOnly?.acceptanceEligible !== false ||
+    cell.port !== expected.port ||
+    cell.inspectorPort !== expected.inspectorPort ||
+    profile?.schema !== DEV_READY_PROFILE_WINDOW_SCHEMA ||
+    profile?.diagnosticOnly?.acceptanceEligible !== false ||
+    profile.binding?.schema !== 'kovo-dev-ready-profile-window-binding/v1' ||
+    canonicalJson(profile.binding.cell) !== canonicalJson(expectedBinding) ||
+    canonicalJson(profile.binding.inspectorProcess) !== canonicalJson(profile.inspectorProcess) ||
+    profile.binding.productDigest !== profile.product?.digest ||
+    profile.binding.productDigest !== cell.authentication?.product?.digest ||
+    profile.binding.inspectorProcess?.pid !== cell.process?.pid ||
+    profile.binding.inspectorProcess?.processMarkerSha256 !== markerSha ||
+    cell.process?.processMarkerSha256 !== markerSha ||
+    !validReadyInspectorBinding(profile.binding, expected.inspectorPort) ||
+    !validReadyCalls(profile.calls) ||
+    !Array.isArray(profile.product?.scriptAssets) ||
+    !Array.isArray(profile.attribution?.cpu) ||
+    !Array.isArray(profile.attribution?.coverage) ||
+    !validArtifactEvidence(
+      profile.artifact?.cpu,
+      `${expectedStem}.cpuprofile`,
+      DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
+    ) ||
+    !validArtifactEvidence(
+      profile.artifact?.coverage,
+      `${expectedStem}.coverage.json`,
+      DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA,
+    ) ||
     cell.authentication?.product?.beforeVerified !== true ||
     cell.authentication?.product?.afterVerified !== true ||
     cell.authentication?.corpus?.beforeVerified !== true ||
@@ -884,6 +1388,107 @@ function validateReadyProfileCell(cell, expected) {
   }
 }
 
+function validReadyInspectorBinding(binding, inspectorPort) {
+  const expectedFlag = `--inspect-brk=127.0.0.1:${String(inspectorPort)}`;
+  return (
+    Number.isSafeInteger(binding.inspectorProcess?.pid) &&
+    binding.inspectorProcess.pid > 0 &&
+    /^sha256:[0-9a-f]{64}$/u.test(binding.inspectorProcess.processMarkerSha256 ?? '') &&
+    typeof binding.inspectorProcess.targetId === 'string' &&
+    binding.inspectorProcess.targetId.length > 0 &&
+    binding.invocation?.pauseFlag === expectedFlag &&
+    Array.isArray(binding.invocation.execArgv) &&
+    binding.invocation.execArgv.filter((value) => value === expectedFlag).length === 1 &&
+    binding.invocation.execArgv.every(
+      (value) =>
+        typeof value === 'string' &&
+        (value === expectedFlag ||
+          (!value.startsWith('--inspect=') && !value.startsWith('--inspect-brk='))),
+    )
+  );
+}
+
+function validReadyCalls(value) {
+  if (
+    !Array.isArray(value) ||
+    value.length !== PROFILE_TARGETS.length ||
+    value.some((call, index) => call?.name !== PROFILE_TARGETS[index].name)
+  ) {
+    return false;
+  }
+  return value.every(
+    (call, index) =>
+      call.required === PROFILE_TARGETS[index].required &&
+      typeof call.present === 'boolean' &&
+      Number.isSafeInteger(call.callCount) &&
+      call.callCount >= 0 &&
+      Array.isArray(call.instances) &&
+      call.present === call.instances.length > 0 &&
+      (!call.required || call.present) &&
+      call.instances.every(
+        (instance) =>
+          Number.isSafeInteger(instance.callCount) &&
+          instance.callCount >= 0 &&
+          typeof instance.script === 'string' &&
+          instance.script.length > 0 &&
+          typeof instance.scriptId === 'string' &&
+          instance.scriptId.length > 0 &&
+          Array.isArray(instance.ranges) &&
+          instance.ranges.length > 0 &&
+          instance.ranges.every(
+            (range) =>
+              Number.isSafeInteger(range.startOffset) &&
+              Number.isSafeInteger(range.endOffset) &&
+              Number.isSafeInteger(range.count) &&
+              range.startOffset >= 0 &&
+              range.endOffset > range.startOffset &&
+              range.count >= 0,
+          ),
+      ) &&
+      call.callCount === call.instances.reduce((total, instance) => total + instance.callCount, 0),
+  );
+}
+
+function validArtifactEvidence(value, file, schema) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    value.file === file &&
+    value.schema === schema &&
+    Number.isSafeInteger(value.bytes) &&
+    value.bytes > 0 &&
+    /^[0-9]+$/u.test(value.dev ?? '') &&
+    /^[0-9]+$/u.test(value.ino ?? '') &&
+    /^[0-9]+$/u.test(value.mode ?? '') &&
+    /^[0-9]+$/u.test(value.mtimeNs ?? '') &&
+    /^[0-9]+$/u.test(value.ctimeNs ?? '') &&
+    value.nlink === 1 &&
+    /^sha256:[0-9a-f]{64}$/u.test(value.sha256 ?? '')
+  );
+}
+
+function validateControllerBinding(value) {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    value.schema !== DEV_READY_PROFILE_CONTROLLER_BINDING_SCHEMA ||
+    !validGitObjectId(value.commit) ||
+    !validGitObjectId(value.tree) ||
+    typeof value.privateRoot !== 'string' ||
+    !path.isAbsolute(value.privateRoot) ||
+    !validPnpmIdentity(value.packageManager, value.pnpmVersion) ||
+    value.files === null ||
+    typeof value.files !== 'object' ||
+    Array.isArray(value.files) ||
+    !sameExactStringSet(Object.keys(value.files), CONTROLLER_BOUND_PATHS) ||
+    CONTROLLER_BOUND_PATHS.some((file) => !validCommittedFileBinding(value.files[file]))
+  ) {
+    throw new Error('immutable diagnostic controller binding is malformed');
+  }
+  return value;
+}
+
 function validateControllerState(value, phase) {
   if (
     value === null ||
@@ -891,34 +1496,89 @@ function validateControllerState(value, phase) {
     value.dirty !== false ||
     !Array.isArray(value.dirtyPaths) ||
     value.dirtyPaths.length !== 0 ||
-    !/^[0-9a-f]{40,64}$/u.test(value.commit ?? '') ||
-    !/^[0-9a-f]{40,64}$/u.test(value.tree ?? '') ||
+    value.immutableSnapshot !== true ||
+    !validGitObjectId(value.commit) ||
+    !validGitObjectId(value.tree) ||
     value.locks === null ||
     typeof value.locks !== 'object' ||
     Array.isArray(value.locks) ||
-    Object.keys(value.locks).length !== CONTROLLER_LOCK_FILES.length ||
-    CONTROLLER_LOCK_FILES.some(
-      (file) =>
-        !Object.hasOwn(value.locks, file) ||
-        !/^sha256:[0-9a-f]{64}$/u.test(value.locks[file] ?? ''),
-    ) ||
-    !/^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(
-      value.pnpmVersion ?? '',
-    ) ||
-    value.packageManager !== `pnpm@${value.pnpmVersion}` ||
+    !sameExactStringSet(Object.keys(value.locks), CONTROLLER_LOCK_FILES) ||
+    CONTROLLER_LOCK_FILES.some((file) => !validObservedControllerFile(value.locks[file])) ||
+    !validPnpmIdentity(value.packageManager, value.pnpmVersion) ||
+    !validObservedControllerFile(value.manifest) ||
     value.scripts === null ||
     typeof value.scripts !== 'object' ||
-    Object.keys(value.scripts).length !== CONTROLLER_FILES.length ||
-    CONTROLLER_FILES.some(
-      (file) =>
-        !Number.isSafeInteger(value.scripts[file]?.bytes) ||
-        value.scripts[file].bytes < 1 ||
-        !/^[0-9a-f]{40,64}$/u.test(value.scripts[file]?.gitBlob ?? '') ||
-        !/^sha256:[0-9a-f]{64}$/u.test(value.scripts[file]?.sha256 ?? ''),
-    )
+    Array.isArray(value.scripts) ||
+    !sameExactStringSet(Object.keys(value.scripts), CONTROLLER_FILES) ||
+    CONTROLLER_FILES.some((file) => !validObservedControllerFile(value.scripts[file]))
   ) {
     throw new Error(`diagnostic controller is dirty or unauthenticated ${phase}`);
   }
+}
+
+function validCommittedFileBinding(value) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Number.isSafeInteger(value.bytes) &&
+    value.bytes > 0 &&
+    validGitObjectId(value.gitBlob) &&
+    /^sha256:[0-9a-f]{64}$/u.test(value.sha256 ?? '') &&
+    validStableIdentity(value.snapshotIdentity, value.bytes)
+  );
+}
+
+function validObservedControllerFile(value) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Number.isSafeInteger(value.bytes) &&
+    value.bytes > 0 &&
+    validGitObjectId(value.gitBlob) &&
+    /^sha256:[0-9a-f]{64}$/u.test(value.sha256 ?? '') &&
+    /^[0-9]+$/u.test(value.dev ?? '') &&
+    /^[0-9]+$/u.test(value.ino ?? '') &&
+    /^[0-9]+$/u.test(value.mode ?? '') &&
+    /^[0-9]+$/u.test(value.mtimeNs ?? '') &&
+    /^[0-9]+$/u.test(value.ctimeNs ?? '') &&
+    value.nlink === 1
+  );
+}
+
+function validStableIdentity(value, expectedBytes) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    value.bytes === expectedBytes &&
+    /^[0-9]+$/u.test(value.dev ?? '') &&
+    /^[0-9]+$/u.test(value.ino ?? '') &&
+    /^[0-9]+$/u.test(value.mode ?? '') &&
+    /^[0-9]+$/u.test(value.mtimeNs ?? '') &&
+    /^[0-9]+$/u.test(value.ctimeNs ?? '') &&
+    value.nlink === 1
+  );
+}
+
+function validPnpmIdentity(packageManager, pnpmVersion) {
+  return (
+    /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(
+      pnpmVersion ?? '',
+    ) && packageManager === `pnpm@${pnpmVersion}`
+  );
+}
+
+function validGitObjectId(value) {
+  return /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u.test(value ?? '');
+}
+
+function sameExactStringSet(left, right) {
+  if (left.length !== right.length) return false;
+  const sortedLeft = [...left].sort((a, b) => a.localeCompare(b));
+  const sortedRight = [...right].sort((a, b) => a.localeCompare(b));
+  return sortedLeft.every((value, index) => value === sortedRight[index]);
 }
 
 function validateCoverageFunction(fn) {
@@ -991,25 +1651,29 @@ function authenticatedCoverageAsset(urlValue, consumerRoot) {
     throw new Error('target precise-coverage script URL contains search/hash data');
   }
   const declaredPath = fileURLToPath(url);
-  const stat = lstatSync(declaredPath);
-  if (!stat.isFile() || stat.isSymbolicLink()) {
-    throw new Error('target precise-coverage script is not a regular file');
-  }
   const absolutePath = realpathSync(declaredPath);
   if (!isWithinOrEqual(consumerRoot, absolutePath)) {
     throw new Error('target precise-coverage script escaped the authenticated packed consumer');
   }
   const mapPath = `${declaredPath}.map`;
-  const mapStat = lstatSync(mapPath);
-  if (!mapStat.isFile() || mapStat.isSymbolicLink()) {
-    throw new Error('target precise-coverage script has no regular source map');
-  }
   const mapRealPath = realpathSync(mapPath);
   if (!isWithinOrEqual(consumerRoot, mapRealPath)) {
     throw new Error('target precise-coverage source map escaped the packed consumer');
   }
-  const bytes = readFileSync(absolutePath);
-  const mapBytes = readFileSync(mapRealPath);
+  const source = readStableReadyProfileFile(
+    absolutePath,
+    MAX_ATTRIBUTION_FILE_BYTES,
+    'target precise-coverage script',
+    { allowMultipleLinks: true },
+  );
+  const sourceMap = readStableReadyProfileFile(
+    mapRealPath,
+    MAX_ATTRIBUTION_FILE_BYTES,
+    'target precise-coverage source map',
+    { allowMultipleLinks: true },
+  );
+  const bytes = source.bytes;
+  const mapBytes = sourceMap.bytes;
   if (!bytes.toString('utf8').includes(`sourceMappingURL=${path.basename(mapPath)}`)) {
     throw new Error('target precise-coverage script does not bind its sibling source map');
   }
@@ -1017,10 +1681,16 @@ function authenticatedCoverageAsset(urlValue, consumerRoot) {
     absolutePath,
     evidence: {
       bytes: bytes.byteLength,
+      identity: source.identity,
       sha256: sha256(bytes),
-      sourceMap: { bytes: mapBytes.byteLength, sha256: sha256(mapBytes) },
+      sourceMap: {
+        bytes: mapBytes.byteLength,
+        identity: sourceMap.identity,
+        sha256: sha256(mapBytes),
+      },
     },
     relativePath: path.relative(consumerRoot, absolutePath).split(path.sep).join('/'),
+    source: bytes.toString('utf8'),
   };
 }
 
@@ -1089,25 +1759,73 @@ function reserveArtifactStem(profileDir, stem) {
       if (released) throw new Error('fresh-ready artifact reservation is already released');
       let cpuWritten = false;
       try {
-        writeFileSync(cpuPath, cpuBytes, { flag: 'wx', mode: 0o600 });
+        const cpu = writeExclusiveArtifact(cpuPath, cpuBytes, profileDir);
         cpuWritten = true;
-        writeFileSync(coveragePath, coverageBytes, { flag: 'wx', mode: 0o600 });
+        const coverage = writeExclusiveArtifact(coveragePath, coverageBytes, profileDir);
+        return { coverage, cpu };
       } catch (error) {
         if (cpuWritten) rmSync(cpuPath, { force: true });
         throw error;
       }
-      return {
-        cpu: artifactEvidence(cpuPath, cpuBytes, profileDir),
-        coverage: artifactEvidence(coveragePath, coverageBytes, profileDir),
-      };
     },
   };
 }
 
-function artifactEvidence(file, bytes, root) {
+function writeExclusiveArtifact(file, bytes, root) {
+  let descriptor;
+  let created = false;
+  let evidence;
+  let failure;
+  try {
+    descriptor = openSync(
+      file,
+      fsConstants.O_WRONLY |
+        fsConstants.O_CREAT |
+        fsConstants.O_EXCL |
+        (fsConstants.O_NOFOLLOW ?? 0),
+      0o600,
+    );
+    created = true;
+    writeFileSync(descriptor, bytes);
+    const handle = fstatSync(descriptor, { bigint: true });
+    const pathStat = lstatSync(file, { bigint: true });
+    if (
+      !handle.isFile() ||
+      handle.nlink !== 1n ||
+      handle.size !== BigInt(bytes.byteLength) ||
+      !sameStableFileStat(handle, pathStat)
+    ) {
+      throw new Error('fresh-ready artifact changed identity while being written');
+    }
+    evidence = artifactEvidence(file, bytes, root, handle);
+  } catch (error) {
+    failure = error;
+  } finally {
+    if (descriptor !== undefined) {
+      try {
+        closeSync(descriptor);
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+  }
+  if (failure !== undefined) {
+    if (created) rmSync(file, { force: true });
+    throw failure;
+  }
+  return evidence;
+}
+
+function artifactEvidence(file, bytes, root, stat) {
   return {
     bytes: bytes.byteLength,
+    ctimeNs: String(stat.ctimeNs),
+    dev: String(stat.dev),
     file: path.relative(root, file).split(path.sep).join('/'),
+    ino: String(stat.ino),
+    mode: String(stat.mode),
+    mtimeNs: String(stat.mtimeNs),
+    nlink: Number(stat.nlink),
     sha256: sha256(bytes),
   };
 }
@@ -1118,6 +1836,104 @@ function serializedArtifactBytes(value, maximum, label) {
     throw new Error(`${label} exceeds its retained artifact bound`);
   }
   return bytes;
+}
+
+/** Stable bounded evidence read with final-component no-follow and path/descriptor identity. */
+export function readStableReadyProfileFile(file, maximum, label, dependencies = {}) {
+  if (!Number.isSafeInteger(maximum) || maximum < 1) {
+    throw new TypeError(`${label} has an invalid byte bound`);
+  }
+  const absolute = path.resolve(requiredString(file, `${label} path`));
+  const lstat = dependencies.lstat ?? ((target) => lstatSync(target, { bigint: true }));
+  const fstat = dependencies.fstat ?? ((descriptor) => fstatSync(descriptor, { bigint: true }));
+  const open = dependencies.open ?? openSync;
+  const close = dependencies.close ?? closeSync;
+  const read = dependencies.read ?? readSync;
+  const realpath = dependencies.realpath ?? realpathSync;
+  const uniqueLink = dependencies.allowMultipleLinks !== true;
+  const beforePath = lstat(absolute);
+  if (
+    !beforePath.isFile() ||
+    beforePath.isSymbolicLink() ||
+    beforePath.nlink < 1n ||
+    (uniqueLink && beforePath.nlink !== 1n) ||
+    beforePath.size < 1n ||
+    beforePath.size > BigInt(maximum) ||
+    realpath(absolute) !== absolute
+  ) {
+    throw new Error(`${label} is not a bounded uniquely linked regular file`);
+  }
+  dependencies.afterLstat?.({ file: absolute, stat: beforePath });
+  let descriptor;
+  try {
+    descriptor = open(
+      absolute,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
+    );
+    const beforeHandle = fstat(descriptor);
+    if (
+      !beforeHandle.isFile() ||
+      beforeHandle.nlink < 1n ||
+      (uniqueLink && beforeHandle.nlink !== 1n) ||
+      beforeHandle.size > BigInt(maximum) ||
+      !sameStableFileStat(beforePath, beforeHandle)
+    ) {
+      throw new Error(`${label} changed identity while being opened`);
+    }
+    const buffer = Buffer.alloc(Number(beforeHandle.size) + 1);
+    let offset = 0;
+    while (offset < buffer.byteLength) {
+      const count = read(descriptor, buffer, offset, buffer.byteLength - offset, null);
+      if (!Number.isSafeInteger(count) || count < 0 || count > buffer.byteLength - offset) {
+        throw new Error(`${label} returned an invalid read count`);
+      }
+      if (count === 0) break;
+      offset += count;
+    }
+    if (offset !== Number(beforeHandle.size) || offset > maximum) {
+      throw new Error(`${label} changed size while being read`);
+    }
+    const afterHandle = fstat(descriptor);
+    const afterPath = lstat(absolute);
+    if (
+      realpath(absolute) !== absolute ||
+      !sameStableFileStat(beforeHandle, afterHandle) ||
+      !sameStableFileStat(afterHandle, afterPath)
+    ) {
+      throw new Error(`${label} changed while being read`);
+    }
+    return {
+      bytes: Buffer.from(buffer.subarray(0, offset)),
+      identity: stableFileIdentity(afterHandle),
+    };
+  } finally {
+    if (descriptor !== undefined) close(descriptor);
+  }
+}
+
+function sameStableFileStat(left, right) {
+  return (
+    left.isFile() === right.isFile() &&
+    left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.mode === right.mode &&
+    left.nlink === right.nlink &&
+    left.size === right.size &&
+    left.mtimeNs === right.mtimeNs &&
+    left.ctimeNs === right.ctimeNs
+  );
+}
+
+function stableFileIdentity(stat) {
+  return {
+    bytes: Number(stat.size),
+    ctimeNs: String(stat.ctimeNs),
+    dev: String(stat.dev),
+    ino: String(stat.ino),
+    mode: String(stat.mode),
+    mtimeNs: String(stat.mtimeNs),
+    nlink: Number(stat.nlink),
+  };
 }
 
 function canonicalDirectory(value, label) {
@@ -1197,23 +2013,36 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function controllerGitOutput(root, args) {
-  try {
-    return String(
-      execFileSync('git', ['-C', root, ...args], {
-        encoding: 'utf8',
-        maxBuffer: 4 * 1024 * 1024,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      }),
-    ).trim();
-  } catch (error) {
-    throw new Error(`diagnostic controller Git authentication failed: ${errorMessage(error)}`);
+function controllerBindingFromEnvironment(environment = process.env) {
+  const bindingPath = requiredString(
+    environment.KOVO_DEV_READY_PROFILE_CONTROLLER_BINDING,
+    'controller binding path',
+  );
+  const expectedSha = validSha256(
+    environment.KOVO_DEV_READY_PROFILE_CONTROLLER_BINDING_SHA256,
+    'controller binding digest',
+  );
+  const snapshot = readStableReadyProfileFile(
+    bindingPath,
+    MAX_CONTROLLER_BINDING_BYTES,
+    'controller binding',
+  );
+  if (sha256(snapshot.bytes) !== expectedSha) {
+    throw new Error('controller binding bytes differ from the bootstrap digest');
   }
+  const binding = validateControllerBinding(JSON.parse(snapshot.bytes.toString('utf8')));
+  if (
+    canonicalDirectory(binding.privateRoot, 'bound immutable controller root') !== controllerRoot
+  ) {
+    throw new Error('controller module was not imported from its bound immutable checkout');
+  }
+  return binding;
 }
 
 export async function main(argv = process.argv.slice(2)) {
   const parsed = parseDevReadyProfileArgs(argv);
-  const report = await runDevReadyProfile(parsed);
+  const controllerBinding = controllerBindingFromEnvironment();
+  const report = await runDevReadyProfile(parsed, { controllerBinding });
   const serialized = `${JSON.stringify(report, null, 2)}\n`;
   writeFileSync(path.resolve(parsed.out), serialized, { flag: 'wx', mode: 0o600 });
   process.stdout.write(serialized);

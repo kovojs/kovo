@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { linkSync, renameSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -8,16 +9,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { inspectDevPortAllocation } from '../benchmarks/harness/dev-port-allocation.mjs';
 import {
+  attachReadyProfileSealCapability,
   collectDevReadyProfileControllerState,
   createDevReadyProfiler,
+  DEV_READY_PROFILE_CONTROLLER_BINDING_SCHEMA,
+  DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA,
+  DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
   DEV_READY_PROFILE_SCHEDULE,
   DEV_READY_PROFILE_SCHEMA,
   DEV_READY_PROFILE_WINDOW_SCHEMA,
   devReadyProfileSchedule,
   exactReadyCallEvidence,
   parseDevReadyProfileArgs,
+  readStableReadyProfileFile,
   runDevReadyProfile,
   runReadyProfileCell,
+  sealDevReadyProfileArtifacts,
   validateReadyCpuProfile,
   validateReadyPreciseCoverage,
 } from './perf-dev-ready-profile.mjs';
@@ -29,14 +36,28 @@ import {
 const roots = [];
 const CONTROLLER_FILE_PATHS = [
   'benchmarks/corpora/dev-loop.mjs',
+  'benchmarks/corpora/dev-process-marker.mjs',
   'benchmarks/corpora/generate.mjs',
   'benchmarks/harness/dev-port-allocation.mjs',
+  'scripts/lib/cli-entry.mjs',
+  'scripts/lib/perf-dev-session-evidence.mjs',
+  'scripts/lib/perf-execution.mjs',
+  'scripts/lib/perf-host.mjs',
   'scripts/lib/perf-packed-kovo-product.mjs',
+  'scripts/lib/perf-provenance.mjs',
   'scripts/lib/perf-ready-route.mjs',
+  'scripts/lib/process-tree-rss.mjs',
   'scripts/perf-dev-edit-profile.mjs',
   'scripts/perf-dev-generation-spike.mjs',
+  'scripts/perf-dev-ready-profile-bootstrap.mjs',
   'scripts/perf-dev-ready-profile.mjs',
 ];
+const CONTROLLER_LOCK_PATHS = [
+  'pnpm-lock.yaml',
+  'benchmarks/nextjs/pnpm-lock.yaml',
+  'benchmarks/harness/pnpm-lock.yaml',
+];
+const CONTROLLER_BOUND_PATHS = ['package.json', ...CONTROLLER_LOCK_PATHS, ...CONTROLLER_FILE_PATHS];
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
@@ -74,14 +95,20 @@ describe('authenticated cold-first-ready diagnostic', () => {
   it('binds committed controller inputs without publishing its local checkout path', async () => {
     const root = await temporaryRoot();
     await Promise.all(
-      CONTROLLER_FILE_PATHS.map(async (file) => {
+      CONTROLLER_BOUND_PATHS.map(async (file) => {
         await mkdir(path.dirname(path.join(root, file)), { recursive: true });
-        await writeFile(path.join(root, file), `${file}\n`);
+        await writeFile(
+          path.join(root, file),
+          file === 'package.json'
+            ? `${JSON.stringify({ packageManager: 'pnpm@10.15.1' })}\n`
+            : `${file}\n`,
+        );
       }),
     );
+    const binding = await controllerBindingFixture(root);
     const state = collectDevReadyProfileControllerState({
-      collectState: () => sourceState('a'.repeat(40)),
-      git: () => 'b'.repeat(40),
+      binding,
+      pnpmVersion: '10.15.1',
       root,
     });
 
@@ -89,20 +116,26 @@ describe('authenticated cold-first-ready diagnostic', () => {
     expect(state).toMatchObject({
       commit: 'a'.repeat(40),
       dirty: false,
-      locks: sourceState('a'.repeat(40)).locks,
+      immutableSnapshot: true,
       packageManager: 'pnpm@10.15.1',
       pnpmVersion: '10.15.1',
       tree: 'b'.repeat(40),
     });
+    expect(Object.keys(state.locks).sort()).toEqual([...CONTROLLER_LOCK_PATHS].sort());
+    expect(state.manifest).toMatchObject({ gitBlob: 'c'.repeat(40) });
     expect(Object.keys(state.scripts).sort()).toEqual([...CONTROLLER_FILE_PATHS].sort());
     expect(Object.values(state.scripts)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          gitBlob: 'b'.repeat(40),
+          gitBlob: 'c'.repeat(40),
           sha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
         }),
       ]),
     );
+    await writeFile(path.join(root, CONTROLLER_FILE_PATHS[0]), 'different immutable bytes\n');
+    expect(() =>
+      collectDevReadyProfileControllerState({ binding, pnpmVersion: '10.15.1', root }),
+    ).toThrow(/bytes differ from committed blob/u);
   });
 
   it('authenticates the paused process identity and rejects a wrong PID/target', async () => {
@@ -179,8 +212,14 @@ describe('authenticated cold-first-ready diagnostic', () => {
     ]);
     expect(evidence).toMatchObject({
       artifact: {
-        coverage: { file: 'cell-000-baseline.coverage.json' },
-        cpu: { file: 'cell-000-baseline.cpuprofile' },
+        coverage: {
+          file: 'cell-000-baseline.coverage.json',
+          schema: DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA,
+        },
+        cpu: {
+          file: 'cell-000-baseline.cpuprofile',
+          schema: DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
+        },
       },
       diagnosticOnly: {
         acceptanceEligible: false,
@@ -205,12 +244,176 @@ describe('authenticated cold-first-ready diagnostic', () => {
     expect(
       evidence.calls.find((entry) => entry.name === 'resolveFreshDirectQueryRuntimeNames'),
     ).toMatchObject({ callCount: 3, present: true, required: false });
-    expect(
-      JSON.parse(await readFile(path.join(profileDir, evidence.artifact.cpu.file), 'utf8')),
-    ).toEqual(syntheticCpuProfile());
-    expect(
-      JSON.parse(await readFile(path.join(profileDir, evidence.artifact.coverage.file), 'utf8')),
-    ).toEqual(product.coverage);
+    const cpuArtifact = JSON.parse(
+      await readFile(path.join(profileDir, evidence.artifact.cpu.file), 'utf8'),
+    );
+    const coverageArtifact = JSON.parse(
+      await readFile(path.join(profileDir, evidence.artifact.coverage.file), 'utf8'),
+    );
+    expect(cpuArtifact).toMatchObject({
+      binding: evidence.binding,
+      profile: syntheticCpuProfile(),
+      schema: DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
+    });
+    expect(coverageArtifact).toMatchObject({
+      binding: evidence.binding,
+      calls: evidence.calls,
+      coverage: product.coverage,
+      schema: DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA,
+    });
+    expect(coverageArtifact.attribution).toEqual(evidence.attribution.coverage);
+  });
+
+  it('seals the exact eight-file census and recomputes calls plus retained frame attribution', async () => {
+    const fixture = await capturedSealableFixture();
+    const seal = sealDevReadyProfileArtifacts({
+      cells: fixture.cells,
+      profileDir: fixture.profileDir,
+      schedule: fixture.schedule,
+    });
+
+    expect(seal).toMatchObject({
+      cells: expect.arrayContaining([
+        expect.objectContaining({
+          artifacts: {
+            coverage: expect.objectContaining({ sealed: true }),
+            cpu: expect.objectContaining({ sealed: true }),
+          },
+        }),
+      ]),
+      directory: { files: expect.any(Array) },
+      schema: 'kovo-dev-ready-profile-artifact-seal/v1',
+    });
+    expect(seal.directory.files).toHaveLength(8);
+    expect(fixture.cells[0].profile.attribution.coverage[0]).toMatchObject({
+      contentBase64: expect.any(String),
+      map: {
+        contentBase64: expect.any(String),
+        kind: 'file',
+        sha256: sha256(Buffer.from(fixture.product.sourceMap)),
+      },
+      sha256: sha256(Buffer.from(fixture.product.source)),
+    });
+  });
+
+  it('rejects missing, replaced, re-inoded, linked, swapped, or extra final artifacts', async () => {
+    const mutations = [
+      async (fixture) => {
+        unlinkSync(artifactPath(fixture, 0, 'cpu'));
+      },
+      async (fixture) => {
+        writeFileSync(artifactPath(fixture, 0, 'cpu'), '{"changed":true}\n');
+      },
+      async (fixture) => {
+        const file = artifactPath(fixture, 0, 'cpu');
+        const bytes = await readFile(file);
+        unlinkSync(file);
+        writeFileSync(file, bytes, { mode: 0o600 });
+      },
+      async (fixture) => {
+        const file = artifactPath(fixture, 0, 'cpu');
+        const target = `${file}.target`;
+        renameSync(file, target);
+        symlinkSync(target, file);
+      },
+      async (fixture) => {
+        const target = artifactPath(fixture, 1, 'coverage');
+        unlinkSync(target);
+        linkSync(artifactPath(fixture, 0, 'cpu'), target);
+      },
+      async (fixture) => {
+        const left = artifactPath(fixture, 0, 'cpu');
+        const right = artifactPath(fixture, 1, 'cpu');
+        const temporary = `${left}.swap`;
+        renameSync(left, temporary);
+        renameSync(right, left);
+        renameSync(temporary, right);
+      },
+      async (fixture) => {
+        await writeFile(path.join(fixture.profileDir, 'unexpected.json'), '{}\n');
+      },
+    ];
+    for (const mutate of mutations) {
+      const fixture = await capturedSealableFixture();
+      await mutate(fixture);
+      expect(() =>
+        sealDevReadyProfileArtifacts({
+          cells: fixture.cells,
+          profileDir: fixture.profileDir,
+          schedule: fixture.schedule,
+        }),
+      ).toThrow();
+    }
+  });
+
+  it('rejects missing or cross-cell-confused PID, marker, target, port, product, calls, and ranges', async () => {
+    const mutations = [
+      (cell) => {
+        delete cell.profile.artifact.coverage.sha256;
+      },
+      (cell) => {
+        cell.profile.binding.inspectorProcess.pid += 1;
+      },
+      (cell) => {
+        cell.processMarker = `${cell.processMarker}_WRONG`;
+      },
+      (cell) => {
+        cell.profile.binding.inspectorProcess.targetId = 'wrong-target';
+      },
+      (cell) => {
+        cell.profile.binding.cell.inspectorPort += 1;
+      },
+      (cell) => {
+        cell.profile.binding.invocation.pauseFlag = '--inspect-brk=127.0.0.1:1';
+      },
+      (cell) => {
+        cell.profile.binding.productDigest = digest('f');
+      },
+      (cell) => {
+        cell.profile.calls[0].callCount += 1;
+      },
+      (cell) => {
+        cell.profile.calls[0].instances[0].ranges[0].endOffset += 1;
+      },
+      (cell) => {
+        cell.profile.product.scriptAssets[0].sha256 = digest('f');
+      },
+      (cell) => {
+        cell.profile.artifact.cpu.file = 'cell-999-spike.cpuprofile';
+      },
+    ];
+    for (const mutate of mutations) {
+      const fixture = await capturedSealableFixture();
+      mutate(fixture.cells[0]);
+      expect(() =>
+        sealDevReadyProfileArtifacts({
+          cells: fixture.cells,
+          profileDir: fixture.profileDir,
+          schedule: fixture.schedule,
+        }),
+      ).toThrow();
+    }
+  });
+
+  it('rejects a final-component symlink and an lstat-to-open identity race', async () => {
+    const root = await temporaryRoot();
+    const declaredFile = path.join(root, 'evidence.json');
+    const replacement = path.join(root, 'replacement.json');
+    await Promise.all([writeFile(declaredFile, '{"a":1}\n'), writeFile(replacement, '{"a":1}\n')]);
+    const file = await realpath(declaredFile);
+    const link = path.join(root, 'link.json');
+    symlinkSync(file, link);
+    expect(() => readStableReadyProfileFile(link, 1024, 'symlink evidence')).toThrow(
+      /regular file/u,
+    );
+    expect(() =>
+      readStableReadyProfileFile(file, 1024, 'raced evidence', {
+        afterLstat() {
+          unlinkSync(file);
+          renameSync(replacement, file);
+        },
+      }),
+    ).toThrow(/changed identity/u);
   });
 
   it('fails closed on incomplete CPU profiles and precise coverage', async () => {
@@ -260,6 +463,9 @@ describe('authenticated cold-first-ready diagnostic', () => {
 
   it('runs the exact packed cell paused and authenticates product/corpus on both sides', async () => {
     const root = await temporaryRoot();
+    const consumerRoot = path.join(root, 'consumer');
+    const corpusRoot = path.join(root, 'corpus');
+    await Promise.all([mkdir(consumerRoot), mkdir(corpusRoot)]);
     const expectedCorpus = { modules: 216, schema: 'test-corpus/v1' };
     const stop = vi.fn(async () => ({ complete: true }));
     const startAndResume = vi.fn();
@@ -276,7 +482,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
     }));
     const verifyProduct = vi.fn(() => ({
       cliEntry: '/consumer/bin.mjs',
-      consumerRoot: root,
+      consumerRoot,
       identity: { digest: digest('a') },
     }));
     const measure = vi.fn(async (_options, dependencies) => {
@@ -310,7 +516,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
         launch,
         measure,
         profiler,
-        root,
+        root: corpusRoot,
         verifyProduct,
       }),
     );
@@ -456,6 +662,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
         });
         return successfulCell(options);
       },
+      sealArtifacts: () => ({ schema: 'kovo-dev-ready-profile-artifact-seal/v1' }),
     });
 
     expect(calls.map(({ lane }) => lane)).toEqual(['baseline', 'spike', 'spike', 'baseline']);
@@ -507,6 +714,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
       launchBrowser: async () => ({ close() {} }),
       prepare: async () => prepared,
       runCell: async (options) => ({ ...successfulCell(options), lane: 'spike' }),
+      sealArtifacts: () => ({ schema: 'kovo-dev-ready-profile-artifact-seal/v1' }),
     });
 
     expect(report.cells).toEqual([]);
@@ -538,6 +746,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
       launchBrowser: async () => ({ close() {} }),
       prepare: async () => prepared,
       runCell: async (options) => successfulCell(options),
+      sealArtifacts: () => ({ schema: 'kovo-dev-ready-profile-artifact-seal/v1' }),
     });
 
     expect(report.controller.stable).toBe(false);
@@ -548,6 +757,70 @@ describe('authenticated cold-first-ready diagnostic', () => {
     });
   });
 });
+
+async function capturedSealableFixture() {
+  const root = await temporaryRoot();
+  const product = await syntheticPackedScript(root);
+  const corpusRoot = path.join(root, 'corpus');
+  const profileDir = path.join(root, 'profiles');
+  await Promise.all([mkdir(corpusRoot), mkdir(profileDir)]);
+  const schedule = devReadyProfileSchedule(24_000);
+  const cells = [];
+  for (const scheduled of schedule) {
+    const marker = `KOVO_PERF_DEV_SESSION_SEAL_${String(scheduled.scheduleIndex)}`;
+    const pid = 10_000 + scheduled.scheduleIndex;
+    const commands = [];
+    const inspector = inspectorSession({
+      commands,
+      execArgv: [`--inspect-brk=127.0.0.1:${String(scheduled.inspectorPort)}`],
+      marker,
+      pid,
+      product,
+    });
+    const profiler = await createDevReadyProfiler(
+      profilerOptions({
+        cell: scheduled,
+        marker,
+        pid,
+        product,
+        profileDir,
+      }),
+      { connectInspector: async () => inspector },
+    );
+    await profiler.startAndResume();
+    const profile = await profiler.captureAtReady();
+    const cell = {
+      authentication: {
+        corpus: { afterVerified: true, beforeVerified: true },
+        product: {
+          afterVerified: true,
+          beforeVerified: true,
+          digest: digest('a'),
+        },
+      },
+      inspectorPort: scheduled.inspectorPort,
+      lane: scheduled.lane,
+      observation: { success: true },
+      occurrence: scheduled.occurrence,
+      port: scheduled.port,
+      process: { pid, processMarkerSha256: sha256(Buffer.from(marker)) },
+      processMarker: marker,
+      profile,
+      scheduleIndex: scheduled.scheduleIndex,
+    };
+    cells.push(
+      attachReadyProfileSealCapability(cell, {
+        consumer: product.consumerRoot,
+        corpus: corpusRoot,
+      }),
+    );
+  }
+  return { cells, product, profileDir, root, schedule };
+}
+
+function artifactPath(fixture, cellIndex, kind) {
+  return path.join(fixture.profileDir, fixture.cells[cellIndex].profile.artifact[kind].file);
+}
 
 async function syntheticPackedScript(root) {
   const consumerRoot = path.join(root, 'consumer');
@@ -599,13 +872,14 @@ function inspectorSession({
   commands,
   execArgv = ['--inspect-brk=127.0.0.1:21216'],
   marker,
+  pid = 9_201,
   product,
 }) {
   return {
     close() {
       commands.push('close');
     },
-    identity: inspectorIdentity(9_201, marker, 'owned-target'),
+    identity: inspectorIdentity(pid, marker, 'owned-target'),
     async send(method) {
       commands.push(method);
       if (method === 'Runtime.evaluate') return { result: { value: { execArgv } } };
@@ -625,12 +899,20 @@ function inspectorIdentity(pid, marker, targetId) {
   };
 }
 
-function profilerOptions({ marker, product, profileDir }) {
+function profilerOptions({
+  cell = { lane: 'baseline', occurrence: 0, port: 21_215, scheduleIndex: 0 },
+  marker,
+  pid = 9_201,
+  product,
+  profileDir,
+}) {
   return {
-    artifactStem: 'cell-000-baseline',
+    artifactStem: `cell-${String(cell.scheduleIndex).padStart(3, '0')}-${cell.lane}`,
+    attributionRoots: { consumer: product.consumerRoot },
+    cell,
     consumerRoot: product.consumerRoot,
-    expectedPid: 9_201,
-    inspectorPort: 21_216,
+    expectedPid: pid,
+    inspectorPort: cell.port + 1,
     processMarker: marker,
     productDigest: digest('a'),
     profileDir,
@@ -721,17 +1003,94 @@ function sourceState(commit) {
 }
 
 function successfulCell(options) {
+  const marker = `KOVO_PERF_DEV_SESSION_CELL_${String(options.scheduleIndex)}`;
+  const markerSha = sha256(Buffer.from(marker));
+  const pid = 9_000 + options.scheduleIndex;
+  const targetId = `target-${String(options.scheduleIndex)}`;
+  const inspectFlag = `--inspect-brk=127.0.0.1:${String(options.inspectorPort)}`;
+  const binding = {
+    cell: {
+      inspectorPort: options.inspectorPort,
+      lane: options.lane,
+      occurrence: options.occurrence,
+      port: options.port,
+      scheduleIndex: options.scheduleIndex,
+    },
+    inspectorProcess: { pid, processMarkerSha256: markerSha, targetId },
+    invocation: { execArgv: [inspectFlag], pauseFlag: inspectFlag },
+    productDigest: options.product.identity.digest,
+    schema: 'kovo-dev-ready-profile-window-binding/v1',
+  };
+  const calls = [
+    'queryPlanBootstrapInputForComponent',
+    'resolveViteComponentQueryRuntimeNames',
+    'resolveComponentQueryRuntimeNames',
+    'queryIdentityCompilerOptions',
+    'exactEntryCompilerHost',
+    'resolveFreshDirectQueryRuntimeNames',
+    'freshDirectImportedQueryRuntimeName',
+  ].map((name, index) => ({
+    callCount: 1,
+    instances: [
+      {
+        callCount: 1,
+        ranges: [{ count: 1, endOffset: index + 2, startOffset: index + 1 }],
+        script: 'module.mjs',
+        scriptId: String(index + 1),
+      },
+    ],
+    name,
+    present: true,
+    required: index < 5,
+  }));
+  const stem = `cell-${String(options.scheduleIndex).padStart(3, '0')}-${options.lane}`;
+  const artifact = (file, schema, ino) => ({
+    bytes: 10,
+    ctimeNs: '1',
+    dev: '1',
+    file,
+    ino,
+    mode: '33152',
+    mtimeNs: '1',
+    nlink: 1,
+    schema,
+    sha256: digest('e'),
+  });
   return {
     authentication: {
       corpus: { afterVerified: true, beforeVerified: true },
-      product: { afterVerified: true, beforeVerified: true },
+      product: {
+        afterVerified: true,
+        beforeVerified: true,
+        digest: options.product.identity.digest,
+      },
     },
+    inspectorPort: options.inspectorPort,
     lane: options.lane,
     observation: { success: true },
     occurrence: options.occurrence,
-    processMarker: `KOVO_PERF_DEV_SESSION_CELL_${String(options.scheduleIndex)}`,
+    port: options.port,
+    process: { pid, processMarkerSha256: markerSha },
+    processMarker: marker,
     profile: {
+      artifact: {
+        coverage: artifact(
+          `${stem}.coverage.json`,
+          DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA,
+          String(options.scheduleIndex * 2 + 2),
+        ),
+        cpu: artifact(
+          `${stem}.cpuprofile`,
+          DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
+          String(options.scheduleIndex * 2 + 1),
+        ),
+      },
+      attribution: { coverage: [], cpu: [] },
+      binding,
+      calls,
       diagnosticOnly: { acceptanceEligible: false },
+      inspectorProcess: binding.inspectorProcess,
+      product: { digest: options.product.identity.digest, scriptAssets: [] },
       schema: DEV_READY_PROFILE_WINDOW_SCHEMA,
     },
     scheduleIndex: options.scheduleIndex,
@@ -790,19 +1149,60 @@ function cellDependencies({
 }
 
 function controllerState() {
+  const evidence = (index = 0) => ({
+    bytes: index + 1,
+    ctimeNs: '1',
+    dev: '1',
+    gitBlob: 'c'.repeat(40),
+    ino: String(index + 2),
+    mode: '33188',
+    mtimeNs: '1',
+    nlink: 1,
+    sha256: digest('d'),
+  });
   return {
     commit: 'a'.repeat(40),
     dirty: false,
     dirtyPaths: [],
-    locks: sourceState('a'.repeat(40)).locks,
+    immutableSnapshot: true,
+    locks: Object.fromEntries(CONTROLLER_LOCK_PATHS.map((file, index) => [file, evidence(index)])),
+    manifest: evidence(20),
     packageManager: 'pnpm@10.15.1',
     pnpmVersion: '10.15.1',
     scripts: Object.fromEntries(
-      CONTROLLER_FILE_PATHS.map((file, index) => [
-        file,
-        { bytes: index + 1, gitBlob: 'c'.repeat(40), sha256: digest('d') },
-      ]),
+      CONTROLLER_FILE_PATHS.map((file, index) => [file, evidence(index + 30)]),
     ),
+    tree: 'b'.repeat(40),
+  };
+}
+
+async function controllerBindingFixture(root) {
+  return {
+    commit: 'a'.repeat(40),
+    files: Object.fromEntries(
+      await Promise.all(
+        CONTROLLER_BOUND_PATHS.map(async (file) => {
+          const snapshot = readStableReadyProfileFile(
+            path.join(root, file),
+            32 * 1024 * 1024,
+            `test controller ${file}`,
+          );
+          return [
+            file,
+            {
+              bytes: snapshot.bytes.byteLength,
+              gitBlob: 'c'.repeat(40),
+              sha256: sha256(snapshot.bytes),
+              snapshotIdentity: snapshot.identity,
+            },
+          ];
+        }),
+      ),
+    ),
+    packageManager: 'pnpm@10.15.1',
+    pnpmVersion: '10.15.1',
+    privateRoot: root,
+    schema: DEV_READY_PROFILE_CONTROLLER_BINDING_SCHEMA,
     tree: 'b'.repeat(40),
   };
 }
@@ -854,7 +1254,8 @@ function sha256(bytes) {
 }
 
 async function temporaryRoot() {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-dev-ready-profile-test-'));
+  const declared = await mkdtemp(path.join(os.tmpdir(), 'kovo-dev-ready-profile-test-'));
+  const root = await realpath(declared);
   roots.push(root);
   return root;
 }
