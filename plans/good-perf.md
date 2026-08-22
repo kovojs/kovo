@@ -227,6 +227,20 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     measured Vite path: only modules with query-plan bootstrap metadata invoke the resolver, and the
     three query-bearing N=216 modules still take the unchanged dependency-analysis path. Exact ref,
     patch custody, and production call-chain proof are in the same decision record.
+- [ ] Run the exact diagnostic-only cold-first-ready profile at N=216 in fixed `baseline, spike,
+      spike, baseline` order against `01b2c7594` and the rejected query candidate `64abadb44`.
+      Authenticate the materialized controller, packed products, process/Inspector bindings, all
+      four CPU/coverage windows, and the exact eight-file final artifact census; use its current
+      top-five CPU/call ranking to select the distinct cold-ready candidate.
+- [ ] Decide a newly sealed HMR-generation-only query-identity candidate. Initial transforms must
+      retain the complete Program path; only a module-private authenticated hot-update generation
+      may use direct resolution, with fresh provider/config/package/mode/symlink facts and full
+      fallback on ambiguity. Re-run the complete N=24/N=216 dev contract rather than reusing the
+      rejected candidate's measurements.
+- [ ] Decide the remaining `check --watch` path with fresh app evaluation on every revision and
+      only exact-key pure fact/transform reuse. The accepted implementation must reach 5 seconds
+      with paired confidence and the plan's p95/RSS/correctness guards; the prior 9.39-second spike
+      and its 15.72% RSS increase are evidence, not an acceptance waiver.
 - [ ] Reach the remaining developer first milestones at both N=24 and N=216: cold ready at least
       30% better than the pre-change Kovo baseline, leaf and entry edit-to-paint at least 20% better
       with zero misses/state loss, and authenticated `check --watch` closure edits at most 5 seconds.
