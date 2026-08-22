@@ -301,7 +301,10 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     20-path census. Its fresh 20-cell N=24 report is unproven because graph diagnostics and seven
     output paths differ across lanes; it also measured only +0.4268% wall median with CI crossing
     zero. N=216 did not start because N=24 cannot meet the all-corpora rule. Exact custody is in the
-    decision record; neither attempt is admissible or eligible for integration.
+    decision record; neither attempt is admissible or eligible for integration. Replaying the
+    authenticated report through `buildSourceTrustVerdict` now emits the two exact cross-lane
+    artifact/diagnostic reasons instead of an unexplained empty-reason `unproven` verdict
+    (`pnpm exec vitest run scripts/perf-build-source-trust-spike.test.mjs --reporter=dot`, 26/26).
 
 ## Phase 3 — production runtime
 
