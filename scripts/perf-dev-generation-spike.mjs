@@ -1910,7 +1910,7 @@ function adapterProcessExit(result) {
   return `exit ${String(result.status)} signal ${String(result.signal)}`;
 }
 
-function collectWorktreeState(root) {
+export function collectWorktreeState(root) {
   const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
   const pnpmVersion = String(runCheckedCommand('pnpm', ['--version'], { cwd: root })).trim();
   const dirtyPaths = gitDirtyPaths(root, gitOutput);
@@ -1961,7 +1961,7 @@ function sourcePairStabilityFindings(before, after, candidateBinding) {
   ];
 }
 
-function worktreeStabilityFindings(before, after, lane) {
+export function worktreeStabilityFindings(before, after, lane) {
   const findings = [];
   if (after?.dirty !== false) findings.push(`${lane} source is dirty`);
   if (before?.commit !== after?.commit) findings.push(`${lane} source commit changed`);
@@ -2729,7 +2729,7 @@ function devGenerationHostFailure(sample) {
   )} after bounded ${String(sample.settle?.waitedMs ?? 0)}ms quiet-host admission`;
 }
 
-function sampleHostLoad(label, ceiling) {
+export function sampleHostLoad(label, ceiling) {
   const loadAverage = os.loadavg();
   const cpuCount = os.cpus().length;
   const loadPerCpu = loadAverage[0] / cpuCount;
@@ -2744,7 +2744,7 @@ function sampleHostLoad(label, ceiling) {
   };
 }
 
-function acquireTimingLock(file) {
+export function acquireTimingLock(file) {
   const resolved = path.resolve(file);
   let descriptor;
   try {

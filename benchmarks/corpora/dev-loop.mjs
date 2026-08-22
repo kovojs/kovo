@@ -440,6 +440,7 @@ export async function measureFreshReady(
   dependencies = {},
 ) {
   const now = dependencies.now ?? (() => performance.now());
+  const readyDiagnostic = dependencies.readyDiagnostic ?? null;
   const createRssSampler = dependencies.createRssSampler ?? createProcessTreeRssSampler;
   const createSession = dependencies.startDevSession ?? startDevSession;
   const waitForReady = dependencies.waitForReadyPage ?? waitForReadyPage;
@@ -449,6 +450,11 @@ export async function measureFreshReady(
   const started = suppliedStarted ?? now();
   const session = suppliedSession ?? createSession({ appRoot, command, spawnProcess });
   const rss = createRssSampler(session.pid);
+  let rssStopPromise = null;
+  const stopRss = () => {
+    rssStopPromise ??= rss.stop();
+    return rssStopPromise;
+  };
   let context;
   let browserEvidence = emptyBrowserEvidence();
   let observation;
@@ -473,7 +479,10 @@ export async function measureFreshReady(
     readinessProbe = paint.readinessProbe;
     telemetry.markReady();
     browserEvidence = telemetry.snapshot();
-    const rssEvidence = await rss.stop();
+    const [rssEvidence, diagnosticEvidence] = await Promise.all([
+      stopRss(),
+      readyDiagnostic === null ? null : readyDiagnostic.captureAtReady(),
+    ]);
     const hasRss = rssEvidence.sampleCount > 0 && rssEvidence.peakRssBytes > 0;
     observation = {
       browser: browserEvidence,
@@ -485,9 +494,10 @@ export async function measureFreshReady(
       readinessProbe,
       rssSamples: rssEvidence.sampleCount,
       success: hasRss,
+      ...(diagnosticEvidence === null ? {} : { readyDiagnostic: diagnosticEvidence }),
     };
   } catch (error) {
-    const rssEvidence = await rss.stop();
+    const rssEvidence = await stopRss();
     browserEvidence = telemetry?.snapshot() ?? browserEvidence;
     observation = {
       browser: browserEvidence,
@@ -501,6 +511,22 @@ export async function measureFreshReady(
       success: false,
     };
   } finally {
+    const diagnosticAbortError = await readyDiagnosticAbortError(readyDiagnostic);
+    if (diagnosticAbortError !== null) {
+      observation ??= {
+        browser: browserEvidence,
+        durationMs: null,
+        error: 'fresh ready did not produce an observation',
+        iteration,
+        paintFenceMs: null,
+        peakRssBytes: 0,
+        readinessProbe,
+        rssSamples: 0,
+        success: false,
+      };
+      observation.error = [observation.error, diagnosticAbortError].filter(Boolean).join('; ');
+      observation.success = false;
+    }
     const contextCloseError = await browserContextCloseError(context);
     const lifecycle = await session.stop();
     browserEvidence = telemetry?.snapshot() ?? browserEvidence;
@@ -537,6 +563,22 @@ export async function measureFreshReady(
     }
   }
   return observation;
+}
+
+async function readyDiagnosticAbortError(readyDiagnostic) {
+  if (readyDiagnostic === null) return null;
+  if (
+    typeof readyDiagnostic?.captureAtReady !== 'function' ||
+    typeof readyDiagnostic.abort !== 'function'
+  ) {
+    return 'fresh-ready diagnostic has an invalid lifecycle';
+  }
+  try {
+    await readyDiagnostic.abort();
+    return null;
+  } catch (error) {
+    return `fresh-ready diagnostic abort: ${errorMessage(error)}`;
+  }
 }
 
 export function freshReadySeriesCanContinue(observation) {
@@ -1452,6 +1494,7 @@ export async function launchDevSessionAfterHandoff(options, dependencies = {}) {
     appRoot: options.appRoot,
     command: options.command,
     inspectorPort: options.inspectorPort ?? null,
+    inspectorPauseOnStart: options.inspectorPauseOnStart ?? false,
     spawnProcess: options.spawnProcess,
   });
   return { handoff, session, started };
@@ -2144,8 +2187,16 @@ function linuxSocketState(code) {
   );
 }
 
-function startDevSession({ appRoot, command, inspectorPort = null, spawnProcess }) {
-  const invocation = profiledDevInvocation(command, inspectorPort);
+function startDevSession({
+  appRoot,
+  command,
+  inspectorPauseOnStart = false,
+  inspectorPort = null,
+  spawnProcess,
+}) {
+  const invocation = profiledDevInvocation(command, inspectorPort, {
+    pauseOnStart: inspectorPauseOnStart,
+  });
   const processMarker = createDevProcessMarker();
   const child = spawnProcess(invocation.executable, invocation.argv, {
     cwd: command.cwd,
@@ -2621,11 +2672,15 @@ function mergeMarkedDevProcessEvidence(previous, current) {
   };
 }
 
-export function profiledDevInvocation(command, inspectorPort) {
+export function profiledDevInvocation(command, inspectorPort, options = {}) {
   if (inspectorPort === null) {
+    if (options.pauseOnStart === true) {
+      throw new TypeError('paused dev profiling requires an Inspector port');
+    }
     return { argv: command.argv.slice(1), executable: command.argv[0] };
   }
   boundedInteger(inspectorPort, 1_024, 65_535, 'inspector port');
+  const inspectFlag = `${options.pauseOnStart === true ? '--inspect-brk' : '--inspect'}=127.0.0.1:${String(inspectorPort)}`;
   if (command.packedProduct !== undefined) {
     const entrypoint = command.packedProduct.cliEntry;
     if (
@@ -2637,14 +2692,14 @@ export function profiledDevInvocation(command, inspectorPort) {
       throw new TypeError('profiled packed Kovo command confused its authenticated dist entry');
     }
     return {
-      argv: [`--inspect=127.0.0.1:${String(inspectorPort)}`, entrypoint, ...command.argv.slice(2)],
+      argv: [inspectFlag, entrypoint, ...command.argv.slice(2)],
       executable: process.execPath,
     };
   }
   const entrypoint = resolveProfiledKovoEntrypoint(command);
   return {
     argv: [
-      `--inspect=127.0.0.1:${String(inspectorPort)}`,
+      inspectFlag,
       '--disable-warning=ExperimentalWarning',
       '--experimental-transform-types',
       entrypoint,
@@ -3046,14 +3101,14 @@ function materializeCommand(contract, appRoot, port) {
   };
 }
 
-function materializeEntrantCommand(contract, appRoot, port, packedProduct) {
+export function materializeEntrantCommand(contract, appRoot, port, packedProduct) {
   const declared = materializeCommand(contract, appRoot, port);
   return packedProduct === null
     ? declared
     : materializePackedKovoCommand(declared, packedProduct, appRoot);
 }
 
-async function cleanGeneratedOutputs(appRoot, outputs) {
+export async function cleanGeneratedOutputs(appRoot, outputs) {
   for (const output of [...outputs.requiredNonempty, ...outputs.absent]) {
     assertSafeRelativePath(output.replace(/\*$/u, 'sentinel'), 'build output');
     if (output.endsWith('*')) {

@@ -406,6 +406,13 @@ describe('single-entrant developer-loop adapter', () => {
       argv: ['--inspect=127.0.0.1:49121', packedEntry, 'dev', './src/app.tsx'],
       executable: process.execPath,
     });
+    expect(profiledDevInvocation(packedCommand, 49_121, { pauseOnStart: true })).toEqual({
+      argv: ['--inspect-brk=127.0.0.1:49121', packedEntry, 'dev', './src/app.tsx'],
+      executable: process.execPath,
+    });
+    expect(() => profiledDevInvocation(packedCommand, null, { pauseOnStart: true })).toThrow(
+      /requires an Inspector port/u,
+    );
     expect(profiledDevInvocation(packedCommand, 49_121).argv).not.toContain(
       '--experimental-transform-types',
     );
@@ -1786,6 +1793,51 @@ describe('single-entrant developer-loop adapter', () => {
       success: true,
     });
     expect(lifecycleStops).toBe(1);
+  });
+
+  it('captures a one-shot diagnostic at the browser-ready fence before process teardown', async () => {
+    const events = [];
+    const readyDiagnostic = {
+      async abort() {
+        events.push('diagnostic-abort-noop');
+      },
+      async captureAtReady() {
+        events.push('diagnostic-capture');
+        return { diagnosticOnly: { acceptanceEligible: false }, schema: 'ready-profile-test/v1' };
+      },
+    };
+    const observation = await measureFreshReady(
+      freshReadyMeasurementOptions({ closeContext: async () => events.push('context-close') }),
+      {
+        createRssSampler: () => ({
+          stop: async () => {
+            events.push('rss-stop');
+            return { peakRssBytes: 1_024, sampleCount: 2 };
+          },
+        }),
+        now: () => 10,
+        readyDiagnostic,
+        startDevSession: () => ({
+          pid: 123,
+          stop: async () => {
+            events.push('session-stop');
+            return completeLifecycleFixture();
+          },
+        }),
+        waitForReadyPage: async () => {
+          events.push('browser-ready');
+          return { paintFenceMs: 2, readinessProbe: completeReadinessProbe() };
+        },
+      },
+    );
+
+    expect(observation.readyDiagnostic).toEqual({
+      diagnosticOnly: { acceptanceEligible: false },
+      schema: 'ready-profile-test/v1',
+    });
+    expect(events.indexOf('browser-ready')).toBeLessThan(events.indexOf('diagnostic-capture'));
+    expect(events.indexOf('diagnostic-capture')).toBeLessThan(events.indexOf('session-stop'));
+    expect(events).toContain('diagnostic-abort-noop');
   });
 
   it('fails the observation and stops later starts when browser-context teardown rejects', async () => {
