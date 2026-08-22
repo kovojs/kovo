@@ -26,6 +26,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
 import { collectPerformanceProvenance } from '../../scripts/lib/perf-provenance.mjs';
+import { devReadyProfilerCaptureFailure } from '../../scripts/lib/perf-dev-ready-failure.mjs';
 import {
   materializePackedKovoCommand,
   normalizedPackedKovoCommand,
@@ -529,6 +530,7 @@ export async function measureFreshReady(
       iteration,
       paintFenceMs: paint.paintFenceMs,
       peakRssBytes: rssEvidence.peakRssBytes,
+      profilerFailureSubstage: 'none',
       readinessProbe,
       rssSamples: rssEvidence.sampleCount,
       success: hasRss,
@@ -536,6 +538,10 @@ export async function measureFreshReady(
     };
   } catch (error) {
     const failure = freshReadyFailure(error, activeFailureStage);
+    const profilerFailure =
+      failure.stage === 'evidence-capture-profiler'
+        ? devReadyProfilerCaptureFailure(failure.cause)
+        : { cause: failure.cause, substage: 'none' };
     const stoppedRss = await stoppedFreshReadyRss(stopRss);
     const rssEvidence = stoppedRss.evidence;
     browserEvidence = telemetry?.snapshot() ?? browserEvidence;
@@ -543,8 +549,8 @@ export async function measureFreshReady(
       browser: browserEvidence,
       durationMs: null,
       error: [
-        freshReadyErrorMessage(failure.cause),
-        stoppedRss.error !== null && stoppedRss.error !== failure.cause
+        freshReadyErrorMessage(profilerFailure.cause),
+        stoppedRss.error !== null && stoppedRss.error !== profilerFailure.cause
           ? `process-tree RSS stop: ${freshReadyErrorMessage(stoppedRss.error)}`
           : null,
       ]
@@ -554,6 +560,7 @@ export async function measureFreshReady(
       iteration,
       paintFenceMs: null,
       peakRssBytes: rssEvidence.peakRssBytes,
+      profilerFailureSubstage: profilerFailure.substage,
       readinessProbe,
       rssSamples: rssEvidence.sampleCount,
       success: false,
@@ -569,6 +576,7 @@ export async function measureFreshReady(
         iteration,
         paintFenceMs: null,
         peakRssBytes: 0,
+        profilerFailureSubstage: 'unknown',
         readinessProbe,
         rssSamples: 0,
         success: false,
@@ -588,6 +596,7 @@ export async function measureFreshReady(
       iteration,
       paintFenceMs: null,
       peakRssBytes: 0,
+      profilerFailureSubstage: 'unknown',
       readinessProbe,
       rssSamples: 0,
       success: false,

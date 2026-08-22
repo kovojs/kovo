@@ -55,6 +55,7 @@ const CONTROLLER_FILES = Object.freeze([
   'scripts/lib/cli-entry.mjs',
   'scripts/lib/deterministic-tarball.mjs',
   'scripts/lib/pack-without-lifecycle.mjs',
+  'scripts/lib/perf-dev-ready-failure.mjs',
   'scripts/lib/perf-dev-session-evidence.mjs',
   'scripts/lib/perf-execution.mjs',
   'scripts/lib/perf-host.mjs',

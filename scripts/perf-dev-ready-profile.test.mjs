@@ -49,6 +49,10 @@ import {
   publishReadyProfileArtifacts,
   verifyProfileArtifactCustody,
 } from './perf-dev-ready-profile-bootstrap.mjs';
+import {
+  DEV_READY_PROFILER_CAPTURE_SUBSTAGES,
+  devReadyProfilerCaptureFailure,
+} from './lib/perf-dev-ready-failure.mjs';
 
 const roots = [];
 const CONTROLLER_FILE_PATHS = [
@@ -62,6 +66,7 @@ const CONTROLLER_FILE_PATHS = [
   'scripts/lib/cli-entry.mjs',
   'scripts/lib/deterministic-tarball.mjs',
   'scripts/lib/pack-without-lifecycle.mjs',
+  'scripts/lib/perf-dev-ready-failure.mjs',
   'scripts/lib/perf-dev-session-evidence.mjs',
   'scripts/lib/perf-execution.mjs',
   'scripts/lib/perf-host.mjs',
@@ -142,7 +147,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
       'readinessProbe: expected an exact successful root-route probe; observed object(keys=3,attempts=number(1),path=undefined,status=number(500),transientFailures=number(0))',
       `readyDiagnostic.schema: expected ${DEV_READY_PROFILE_WINDOW_SCHEMA}; observed string(length=${String(secretSchema.length)})`,
       'readyDiagnostic.diagnosticOnly.acceptanceEligible: expected false; observed true',
-      `errorContext,stage=none,category=other,utf8Bytes=0,sha256=${sha256(Buffer.from(''))}`,
+      `errorContext,stage=none,profilerSubstage=none,category=other,utf8Bytes=0,sha256=${sha256(Buffer.from(''))}`,
     ]);
     const message = (() => {
       try {
@@ -161,6 +166,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
     const valid = completeProfiledObservation();
     valid.error = `dev process exited before ready: ${'VALID_SECRET'.repeat(1_000)}`;
     valid.failureStage = 'ready-wait';
+    valid.profilerFailureSubstage = 'cpu-validation';
     expect(profiledReadyObservationFindings(valid)).toEqual([]);
     expect(validateProfiledReadyObservation(valid)).toBe(valid);
 
@@ -169,40 +175,67 @@ describe('authenticated cold-first-ready diagnostic', () => {
         'dev process exited before ready: PRIVATE_LOG_TAIL',
         'ready-wait',
         'process-exited-before-ready',
+        'none',
       ],
-      ['dev ready timed out: PRIVATE_SELECTOR', 'ready-wait', 'dev-ready-timeout'],
+      ['dev ready timed out: PRIVATE_SELECTOR', 'ready-wait', 'dev-ready-timeout', 'none'],
       [
         'dev ready shared deadline expired during browser navigation',
         'ready-wait',
         'shared-deadline',
+        'none',
       ],
       [
         'dev ready route probe timed out: PRIVATE_RESPONSE',
         'ready-wait',
         'route-probe-timeout',
+        'none',
       ],
-      ['unclassified; browser telemetry recorded 1 request failures', 'telemetry', 'browser'],
+      [
+        'unclassified; browser telemetry recorded 1 request failures',
+        'telemetry',
+        'browser',
+        'none',
+      ],
       [
         'fresh-ready diagnostic abort: PRIVATE_INSPECTOR_FAILURE',
         'cleanup-profiler-abort',
         'profiler',
+        'none',
+      ],
+      [
+        'fresh-ready profiler capture failure',
+        'evidence-capture-profiler',
+        'profiler',
+        'cpu-validation',
       ],
       [
         'fresh ready did not produce process-tree RSS evidence',
         'evidence-capture-rss',
         'rss',
+        'none',
       ],
-      ['PRIVATE_OTHER_FAILURE_雪', 'not-framework-owned', 'other'],
+      [
+        'PRIVATE_OTHER_FAILURE_雪',
+        'not-framework-owned',
+        'other',
+        'PRIVATE_UNTRUSTED_SUBSTAGE',
+      ],
     ];
     expect(Buffer.byteLength(cases.at(-1)[0], 'utf8')).toBeGreaterThan(cases.at(-1)[0].length);
-    for (const [error, failureStage, category] of cases) {
+    for (const [error, failureStage, category, profilerFailureSubstage] of cases) {
       const invalid = completeProfiledObservation();
       invalid.success = false;
       invalid.error = error;
       invalid.failureStage = failureStage;
+      invalid.profilerFailureSubstage = profilerFailureSubstage;
+      const expectedProfilerSubstage =
+        profilerFailureSubstage === 'PRIVATE_UNTRUSTED_SUBSTAGE'
+          ? 'unknown'
+          : profilerFailureSubstage;
       const expectedContext = [
         'errorContext',
         `stage=${failureStage === 'not-framework-owned' ? 'unknown' : failureStage}`,
+        `profilerSubstage=${expectedProfilerSubstage}`,
         `category=${category}`,
         `utf8Bytes=${String(Buffer.byteLength(error, 'utf8'))}`,
         `sha256=${sha256(Buffer.from(error))}`,
@@ -450,6 +483,213 @@ describe('authenticated cold-first-ready diagnostic', () => {
     ).rejects.toThrow(/packed consumer root must be a non-symlink directory/u);
 
     expect(connectInspector).not.toHaveBeenCalled();
+  });
+
+  it('starts stop and precise-coverage capture concurrently without changing tuple or command order', async () => {
+    const root = await temporaryRoot();
+    const product = await syntheticPackedScript(root);
+    const profileDir = path.join(root, 'profiles');
+    await mkdir(profileDir);
+    const marker = 'KOVO_PERF_DEV_SESSION_READY_CONCURRENT_CAPTURE';
+    const commands = [];
+    const cpu = deferredPromise();
+    const coverage = deferredPromise();
+    const session = inspectorSession({ commands, marker, product });
+    const originalSend = session.send.bind(session);
+    session.send = async (method) => {
+      if (method === 'Profiler.stop') {
+        commands.push(method);
+        return cpu.promise;
+      }
+      if (method === 'Profiler.takePreciseCoverage') {
+        commands.push(method);
+        return coverage.promise;
+      }
+      return originalSend(method);
+    };
+    const profiler = await createDevReadyProfiler(
+      profilerOptions({ marker, product, profileDir }),
+      { connectInspector: async () => session },
+    );
+
+    await profiler.startAndResume();
+    const capture = profiler.captureAtReady();
+    expect(commands.slice(-2)).toEqual([
+      'Profiler.stop',
+      'Profiler.takePreciseCoverage',
+    ]);
+    coverage.resolve(product.coverage);
+    cpu.resolve({ profile: syntheticCpuProfile(product) });
+    await expect(capture).resolves.toMatchObject({ schema: DEV_READY_PROFILE_WINDOW_SCHEMA });
+    expect(commands).toEqual([
+      'Profiler.enable',
+      'Profiler.setSamplingInterval',
+      'Profiler.startPreciseCoverage',
+      'Profiler.start',
+      'Runtime.runIfWaitingForDebugger',
+      'Profiler.stop',
+      'Profiler.takePreciseCoverage',
+      'Profiler.stopPreciseCoverage',
+      'close',
+    ]);
+  });
+
+  it('keeps first concurrent Inspector failure precedence and safely retains an opaque cause', async () => {
+    expect(DEV_READY_PROFILER_CAPTURE_SUBSTAGES).toEqual([
+      'none',
+      'inspector-profiler-stop',
+      'inspector-take-precise-coverage',
+      'inspector-stop-precise-coverage',
+      'cpu-validation',
+      'coverage-validation',
+      'exact-call-evidence',
+      'attribution-capture',
+      'cpu-serialization',
+      'coverage-serialization',
+      'artifact-write',
+      'session-close',
+      'unknown',
+    ]);
+    expect(Object.isFrozen(DEV_READY_PROFILER_CAPTURE_SUBSTAGES)).toBe(true);
+
+    for (const first of ['stop', 'coverage']) {
+      const root = await temporaryRoot();
+      const product = await syntheticPackedScript(root);
+      const profileDir = path.join(root, 'profiles');
+      await mkdir(profileDir);
+      const marker = `KOVO_PERF_DEV_SESSION_READY_FIRST_${first.toUpperCase()}`;
+      const commands = [];
+      const cpu = deferredPromise();
+      const coverage = deferredPromise();
+      const opaqueCause = new Proxy(Object.create(null), {
+        get() {
+          throw new Error('opaque cause getter must not run');
+        },
+        getPrototypeOf() {
+          throw new Error('opaque cause prototype trap must not run');
+        },
+      });
+      const session = inspectorSession({ commands, marker, product });
+      let stopCalls = 0;
+      const originalSend = session.send.bind(session);
+      session.send = async (method) => {
+        if (method === 'Profiler.stop') {
+          commands.push(method);
+          stopCalls += 1;
+          return stopCalls === 1 ? cpu.promise : {};
+        }
+        if (method === 'Profiler.takePreciseCoverage') {
+          commands.push(method);
+          return coverage.promise;
+        }
+        return originalSend(method);
+      };
+      const profiler = await createDevReadyProfiler(
+        profilerOptions({ marker, product, profileDir }),
+        { connectInspector: async () => session },
+      );
+      await profiler.startAndResume();
+      const capture = profiler.captureAtReady();
+      const firstPromise = first === 'stop' ? cpu : coverage;
+      const secondPromise = first === 'stop' ? coverage : cpu;
+      firstPromise.reject(opaqueCause);
+      const failure = await capturedProfilerFailure(capture);
+      secondPromise.reject(new Error('later concurrent failure'));
+      await Promise.resolve();
+
+      expect(failure.substage).toBe(
+        first === 'stop'
+          ? 'inspector-profiler-stop'
+          : 'inspector-take-precise-coverage',
+      );
+      expect(failure.cause).toBe(opaqueCause);
+      await profiler.abort();
+    }
+  });
+
+  it('attributes each sequential capture boundary to its finite profiler substage', async () => {
+    const scenarios = [
+      {
+        failMethod: 'Profiler.stopPreciseCoverage',
+        substage: 'inspector-stop-precise-coverage',
+      },
+      { cpuProfile: {}, substage: 'cpu-validation' },
+      { coverage: {}, substage: 'coverage-validation' },
+      {
+        coverage: (product) => ({
+          ...product.coverage,
+          result: product.coverage.result.map((script) => ({ ...script, functions: [] })),
+        }),
+        substage: 'exact-call-evidence',
+      },
+      {
+        cpuProfile: (product, root) => {
+          const cpu = syntheticCpuProfile(product);
+          cpu.nodes[0].callFrame.url = pathToFileURL(path.join(root, 'missing-runtime.mjs')).href;
+          return cpu;
+        },
+        substage: 'attribution-capture',
+      },
+      {
+        cpuProfile: (product) => {
+          const cpu = syntheticCpuProfile(product);
+          cpu.toJSON = () => {
+            throw new Error('private CPU serialization failure');
+          };
+          return cpu;
+        },
+        substage: 'cpu-serialization',
+      },
+      {
+        coverage: (product) => {
+          const coverage = structuredClone(product.coverage);
+          coverage.toJSON = () => {
+            throw new Error('private coverage serialization failure');
+          };
+          return coverage;
+        },
+        substage: 'coverage-serialization',
+      },
+      { removeProfileDir: true, substage: 'artifact-write' },
+      { closeFailure: new Error('private close failure'), substage: 'session-close' },
+    ];
+
+    for (const [index, scenario] of scenarios.entries()) {
+      const root = await temporaryRoot();
+      const product = await syntheticPackedScript(root);
+      const profileDir = path.join(root, 'profiles');
+      await mkdir(profileDir);
+      const marker = `KOVO_PERF_DEV_SESSION_READY_SUBSTAGE_${String(index)}`;
+      const commands = [];
+      const cpuProfile =
+        typeof scenario.cpuProfile === 'function'
+          ? scenario.cpuProfile(product, root)
+          : scenario.cpuProfile;
+      const coverage =
+        typeof scenario.coverage === 'function'
+          ? scenario.coverage(product, root)
+          : scenario.coverage;
+      const session = inspectorSession({
+        closeFailure: scenario.closeFailure,
+        commands,
+        coverage,
+        cpuProfile,
+        failMethod: scenario.failMethod,
+        marker,
+        product,
+      });
+      const profiler = await createDevReadyProfiler(
+        profilerOptions({ marker, product, profileDir }),
+        { connectInspector: async () => session },
+      );
+      await profiler.startAndResume();
+      if (scenario.removeProfileDir === true) {
+        await rm(profileDir, { force: true, recursive: true });
+      }
+      const failure = await capturedProfilerFailure(profiler.captureAtReady());
+      expect(failure.substage).toBe(scenario.substage);
+      await profiler.abort();
+    }
   });
 
   it('writes exclusive raw CPU/coverage artifacts with exact packed ranges and source-map digests', async () => {
@@ -1460,23 +1700,32 @@ async function syntheticPackedScript(root) {
 }
 
 function inspectorSession({
+  closeFailure = null,
   commands,
+  coverage,
+  cpuProfile,
   execArgv = ['--inspect-brk=127.0.0.1:21216'],
+  failMethod = null,
+  failure = new Error('expected Inspector failure'),
   marker,
   pid = 9_201,
   product,
 }) {
   const entrypoint = packedEntrypoint(product);
+  const capturedCpu = cpuProfile ?? syntheticCpuProfile(product);
+  const capturedCoverage = coverage ?? product.coverage;
   return {
     close() {
       commands.push('close');
+      if (closeFailure !== null) throw closeFailure;
     },
     identity: inspectorIdentity(pid, marker, 'owned-target'),
     invocation: pausedInvocationEvidence(entrypoint, execArgv[0]),
     async send(method) {
       commands.push(method);
-      if (method === 'Profiler.stop') return { profile: syntheticCpuProfile(product) };
-      if (method === 'Profiler.takePreciseCoverage') return product.coverage;
+      if (method === failMethod) throw failure;
+      if (method === 'Profiler.stop') return { profile: capturedCpu };
+      if (method === 'Profiler.takePreciseCoverage') return capturedCoverage;
       return {};
     },
     async startAndResume() {
@@ -1491,6 +1740,25 @@ function inspectorSession({
       }
     },
   };
+}
+
+function deferredPromise() {
+  let reject;
+  let resolve;
+  const promise = new Promise((promiseResolve, promiseReject) => {
+    reject = promiseReject;
+    resolve = promiseResolve;
+  });
+  return { promise, reject, resolve };
+}
+
+async function capturedProfilerFailure(promise) {
+  try {
+    await promise;
+  } catch (error) {
+    return devReadyProfilerCaptureFailure(error);
+  }
+  throw new Error('expected profiler capture to fail');
 }
 
 function inspectorIdentity(pid, marker, targetId) {
@@ -1830,6 +2098,7 @@ function completeProfiledObservation() {
     lifecycle: { complete: true },
     paintFenceMs: 4,
     peakRssBytes: 1_024,
+    profilerFailureSubstage: 'none',
     readinessProbe: { attempts: 1, path: '/', status: 200, transientFailures: 0 },
     readyDiagnostic: {
       diagnosticOnly: { acceptanceEligible: false },

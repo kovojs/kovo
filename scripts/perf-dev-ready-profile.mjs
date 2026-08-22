@@ -63,6 +63,11 @@ import {
   worktreeStabilityFindings,
 } from './perf-dev-generation-spike.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import {
+  createDevReadyProfilerCaptureFailure,
+  devReadyProfilerCaptureFailure,
+  normalizedDevReadyProfilerCaptureSubstage,
+} from './lib/perf-dev-ready-failure.mjs';
 import { canonicalJson, performanceHostFingerprint } from './lib/perf-host.mjs';
 import { verifyPackedKovoProductFixture } from './lib/perf-packed-kovo-product.mjs';
 import { validReadyRouteProbe } from './lib/perf-ready-route.mjs';
@@ -133,6 +138,7 @@ const CONTROLLER_FILES = Object.freeze([
   'scripts/lib/cli-entry.mjs',
   'scripts/lib/deterministic-tarball.mjs',
   'scripts/lib/pack-without-lifecycle.mjs',
+  'scripts/lib/perf-dev-ready-failure.mjs',
   'scripts/lib/perf-dev-session-evidence.mjs',
   'scripts/lib/perf-execution.mjs',
   'scripts/lib/perf-host.mjs',
@@ -423,57 +429,81 @@ export async function createDevReadyProfiler(options, dependencies = {}) {
       if (!active || closed || captured) {
         throw new Error('fresh-ready profiler has no active window to capture');
       }
-      const [cpuResult, coverageResult] = await Promise.all([
-        session.send('Profiler.stop'),
-        session.send('Profiler.takePreciseCoverage'),
-      ]);
-      await session.send('Profiler.stopPreciseCoverage');
-      active = false;
-      const cpu = validateReadyCpuProfile(cpuResult?.profile);
-      const coverage = validateReadyPreciseCoverage(coverageResult);
-      const callEvidence = exactReadyCallEvidence(coverage, { consumerRoot });
-      const attribution = captureReadyAttribution(cpu, coverage, { roots: attributionRoots });
-      const cpuArtifact = {
-        attribution: attribution.cpu,
-        binding,
-        profile: cpu,
-        schema: DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
-      };
-      const coverageArtifact = {
-        attribution: attribution.coverage,
-        binding,
-        calls: callEvidence.calls,
-        coverage,
-        product: { digest: productDigest, scriptAssets: callEvidence.scriptAssets },
-        schema: DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA,
-      };
-      const cpuBytes = serializedArtifactBytes(cpuArtifact, MAX_CPU_PROFILE_BYTES, 'CPU profile');
-      const coverageBytes = serializedArtifactBytes(
-        coverageArtifact,
-        MAX_COVERAGE_BYTES,
-        'precise coverage',
-      );
-      const artifact = reservation.write(cpuBytes, coverageBytes);
-      artifact.cpu.schema = DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA;
-      artifact.coverage.schema = DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA;
-      captured = true;
-      await closeSession();
-      return {
-        artifact,
-        attribution,
-        binding,
-        calls: callEvidence.calls,
-        diagnosticOnly: DIAGNOSTIC_ONLY_POLICY,
-        inspectorProcess: {
-          ...binding.inspectorProcess,
-        },
-        invocation,
-        product: {
-          digest: productDigest,
-          scriptAssets: callEvidence.scriptAssets,
-        },
-        schema: DEV_READY_PROFILE_WINDOW_SCHEMA,
-      };
+      let captureSubstage = 'inspector-profiler-stop';
+      try {
+        const cpuResultPromise = stagedDevReadyProfilerCapturePromise(
+          'inspector-profiler-stop',
+          session.send('Profiler.stop'),
+        );
+        captureSubstage = 'inspector-take-precise-coverage';
+        const coverageResultPromise = stagedDevReadyProfilerCapturePromise(
+          'inspector-take-precise-coverage',
+          session.send('Profiler.takePreciseCoverage'),
+        );
+        const [cpuResult, coverageResult] = await Promise.all([
+          cpuResultPromise,
+          coverageResultPromise,
+        ]);
+        captureSubstage = 'inspector-stop-precise-coverage';
+        await session.send('Profiler.stopPreciseCoverage');
+        active = false;
+        captureSubstage = 'cpu-validation';
+        const cpu = validateReadyCpuProfile(cpuResult?.profile);
+        captureSubstage = 'coverage-validation';
+        const coverage = validateReadyPreciseCoverage(coverageResult);
+        captureSubstage = 'exact-call-evidence';
+        const callEvidence = exactReadyCallEvidence(coverage, { consumerRoot });
+        captureSubstage = 'attribution-capture';
+        const attribution = captureReadyAttribution(cpu, coverage, { roots: attributionRoots });
+        const cpuArtifact = {
+          attribution: attribution.cpu,
+          binding,
+          profile: cpu,
+          schema: DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
+        };
+        const coverageArtifact = {
+          attribution: attribution.coverage,
+          binding,
+          calls: callEvidence.calls,
+          coverage,
+          product: { digest: productDigest, scriptAssets: callEvidence.scriptAssets },
+          schema: DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA,
+        };
+        captureSubstage = 'cpu-serialization';
+        const cpuBytes = serializedArtifactBytes(cpuArtifact, MAX_CPU_PROFILE_BYTES, 'CPU profile');
+        captureSubstage = 'coverage-serialization';
+        const coverageBytes = serializedArtifactBytes(
+          coverageArtifact,
+          MAX_COVERAGE_BYTES,
+          'precise coverage',
+        );
+        captureSubstage = 'artifact-write';
+        const artifact = reservation.write(cpuBytes, coverageBytes);
+        artifact.cpu.schema = DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA;
+        artifact.coverage.schema = DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA;
+        captured = true;
+        captureSubstage = 'session-close';
+        await closeSession();
+        return {
+          artifact,
+          attribution,
+          binding,
+          calls: callEvidence.calls,
+          diagnosticOnly: DIAGNOSTIC_ONLY_POLICY,
+          inspectorProcess: {
+            ...binding.inspectorProcess,
+          },
+          invocation,
+          product: {
+            digest: productDigest,
+            scriptAssets: callEvidence.scriptAssets,
+          },
+          schema: DEV_READY_PROFILE_WINDOW_SCHEMA,
+        };
+      } catch (error) {
+        const failure = devReadyProfilerCaptureFailure(error, captureSubstage);
+        throw createDevReadyProfilerCaptureFailure(failure.substage, failure.cause);
+      }
     }
 
     async function abort() {
@@ -497,6 +527,12 @@ export async function createDevReadyProfiler(options, dependencies = {}) {
     }
     throw error;
   }
+}
+
+function stagedDevReadyProfilerCapturePromise(substage, promise) {
+  return Promise.resolve(promise).catch((cause) => {
+    throw createDevReadyProfilerCaptureFailure(substage, cause);
+  });
 }
 
 export function validateReadyCpuProfile(profile) {
@@ -1812,7 +1848,11 @@ export function profiledReadyObservationFindings(observation) {
   );
   if (findings.length > 0) {
     findings.push(
-      profiledReadyObservationErrorContext(observed.error, observed.failureStage),
+      profiledReadyObservationErrorContext(
+        observed.error,
+        observed.failureStage,
+        observed.profilerFailureSubstage,
+      ),
     );
   }
   return Object.freeze(findings);
@@ -1855,11 +1895,12 @@ function boundedReadyRouteProbeObservation(value) {
   ].join(',');
 }
 
-function profiledReadyObservationErrorContext(error, failureStage) {
+function profiledReadyObservationErrorContext(error, failureStage, profilerFailureSubstage) {
   const source = typeof error === 'string' ? error : '';
   return [
     'errorContext',
     `stage=${normalizedFreshReadyFailureStage(failureStage)}`,
+    `profilerSubstage=${normalizedDevReadyProfilerCaptureSubstage(profilerFailureSubstage)}`,
     `category=${profiledReadyObservationErrorCategory(source)}`,
     `utf8Bytes=${String(Buffer.byteLength(source, 'utf8'))}`,
     `sha256=${sha256Utf8(source)}`,

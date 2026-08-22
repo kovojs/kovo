@@ -58,6 +58,7 @@ import {
 } from './dev-loop.mjs';
 import { generateCorpora } from './generate.mjs';
 import { DEV_EDIT_PROFILE_CLASSIFIER } from '../../scripts/perf-dev-edit-profile.mjs';
+import { createDevReadyProfilerCaptureFailure } from '../../scripts/lib/perf-dev-ready-failure.mjs';
 
 const roots = [];
 
@@ -2008,7 +2009,10 @@ describe('single-entrant developer-loop adapter', () => {
             captureAtReady: async () => {
               events.push('profiler');
               if (failedCapture === 'profiler') {
-                throw new Error('private profiler capture failure');
+                throw createDevReadyProfilerCaptureFailure(
+                  'cpu-validation',
+                  new Error('private profiler capture failure'),
+                );
               }
               return { schema: 'ready-profile-test/v1' };
             },
@@ -2019,6 +2023,7 @@ describe('single-entrant developer-loop adapter', () => {
       expect(events).toEqual(['rss', 'profiler']);
       expect(observation).toMatchObject({
         failureStage: `evidence-capture-${failedCapture}`,
+        profilerFailureSubstage: failedCapture === 'profiler' ? 'cpu-validation' : 'none',
         success: false,
       });
     }
