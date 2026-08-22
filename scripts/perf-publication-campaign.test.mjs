@@ -1,4 +1,17 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  linkSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -49,19 +62,68 @@ describe('metrics-blind publication campaign operator', () => {
     expect(fixture.outcomeReads).toBe(0);
   });
 
-  for (const checkpoint of [
-    'after-trigger-add',
-    'after-registration-observed',
-    'after-trigger-remove',
+  for (const [checkpoint, expectedAdds, expectedRuns] of [
+    ['before-trigger-add', 0, 0],
+    ['after-trigger-add', 1, 1],
+    ['after-registration-observed', 1, 1],
   ]) {
-    it(`resumes safely after a crash at ${checkpoint}`, async () => {
+    it(`invalidates instead of re-attributing an ambiguous pulse after ${checkpoint}`, async () => {
+      const fixture = campaignFixture({ crashCheckpoint: checkpoint });
+      await declareAndPreflight(fixture);
+      await expect(launch(fixture)).rejects.toThrow(`crash:${checkpoint}`);
+      expect(fixture.addCalls).toBe(expectedAdds);
+      expect(fixture.runs).toHaveLength(expectedRuns);
+      fixture.crashCheckpoint = null;
+      await expect(launch(fixture)).rejects.toThrow(/campaign invalidated.*fresh campaign/u);
+      expect(readState(fixture)).toMatchObject({
+        activePulse: { stage: 'armed' },
+        invalidation: { code: 'ambiguous-trigger-registration' },
+        phase: 'invalid',
+      });
+      expect(fixture.addCalls).toBe(expectedAdds);
+      expect(fixture.removeCalls).toBe(0);
+      await expect(launch(fixture)).rejects.toThrow('unavailable from campaign phase invalid');
+      expect(fixture.addCalls).toBe(expectedAdds);
+    });
+  }
+
+  for (const checkpoint of ['after-registration-journaled', 'after-trigger-remove']) {
+    it(`resumes only after an exact run was durably journaled at ${checkpoint}`, async () => {
       const fixture = campaignFixture({ crashCheckpoint: checkpoint });
       await declareAndPreflight(fixture);
       await expect(launch(fixture)).rejects.toThrow(`crash:${checkpoint}`);
       fixture.crashCheckpoint = null;
       await expect(launch(fixture)).resolves.toMatchObject({ registeredPulses: 1 });
+      expect(fixture.addCalls).toBe(1);
+      expect(fixture.removeCalls).toBe(1);
       expect(fixture.runs).toHaveLength(1);
       expect(fixture.labels).not.toContain(PERF_PUBLICATION_TRIGGER_LABEL);
+    });
+  }
+
+  for (const [activity, mutate] of [
+    ['external trigger add', (fixture) => fixture.labels.push(PERF_PUBLICATION_TRIGGER_LABEL)],
+    [
+      'external trigger removal',
+      (fixture) => {
+        fixture.labels = fixture.labels.filter((label) => label !== PERF_PUBLICATION_TRIGGER_LABEL);
+      },
+    ],
+    ['external run registration', (fixture) => fixture.runs.push(runTuple(777))],
+  ]) {
+    it(`never accepts ${String(activity)} while an armed pulse is ambiguous`, async () => {
+      const checkpoint =
+        activity === 'external trigger removal' ? 'after-trigger-add' : 'before-trigger-add';
+      const fixture = campaignFixture({ crashCheckpoint: checkpoint });
+      await declareAndPreflight(fixture);
+      await expect(launch(fixture)).rejects.toThrow(`crash:${checkpoint}`);
+      const operatorAdds = fixture.addCalls;
+      mutate(fixture);
+      fixture.crashCheckpoint = null;
+      await expect(launch(fixture)).rejects.toThrow(/campaign invalidated.*do not add again/u);
+      expect(fixture.addCalls).toBe(operatorAdds);
+      expect(fixture.removeCalls).toBe(0);
+      expect(readState(fixture).phase).toBe('invalid');
     });
   }
 
@@ -142,6 +204,93 @@ describe('metrics-blind publication campaign operator', () => {
     await expect(declare(nested)).rejects.toThrow('outside the measured checkout');
   });
 
+  it('binds state to its canonical path and rechecks that custody path on every command', async () => {
+    const fixture = campaignFixture();
+    await declare(fixture);
+    const copiedPath = path.join(fixture.root, 'copied-state.json');
+    copyFileSync(fixture.statePath, copiedPath);
+    chmodSync(copiedPath, 0o600);
+    await expect(
+      preflightPublicationCampaign({ statePath: copiedPath }, injected(fixture)),
+    ).rejects.toThrow('declared canonical custody path');
+
+    const nestedPath = path.join(fixture.checkout, 'copied-state.json');
+    copyFileSync(fixture.statePath, nestedPath);
+    chmodSync(nestedPath, 0o600);
+    await expect(
+      preflightPublicationCampaign({ statePath: nestedPath }, injected(fixture)),
+    ).rejects.toThrow(/canonical custody path|outside the measured checkout/u);
+
+    const nestedState = JSON.parse(readFileSync(fixture.statePath, 'utf8'));
+    nestedState.statePath = realpathSync(nestedPath);
+    writeFileSync(nestedPath, `${JSON.stringify(nestedState, null, 2)}\n`, { mode: 0o600 });
+    await expect(
+      preflightPublicationCampaign({ statePath: nestedPath }, injected(fixture)),
+    ).rejects.toThrow('outside the measured checkout');
+  });
+
+  it('rejects symlink swaps, hardlinks, and same-path inode replacement', async () => {
+    const symlink = campaignFixture();
+    await declare(symlink);
+    symlink.workflowRunsHook = () => {
+      symlink.workflowRunsHook = null;
+      const originalPath = path.join(symlink.root, 'original-state.json');
+      renameSync(symlink.statePath, originalPath);
+      symlinkSync(originalPath, symlink.statePath);
+    };
+    await expect(
+      preflightPublicationCampaign(stateOption(symlink), injected(symlink)),
+    ).rejects.toThrow();
+    expect(lstatSync(symlink.statePath).isSymbolicLink()).toBe(true);
+
+    const hardlink = campaignFixture();
+    await declare(hardlink);
+    linkSync(hardlink.statePath, path.join(hardlink.root, 'second-link.json'));
+    await expect(
+      preflightPublicationCampaign(stateOption(hardlink), injected(hardlink)),
+    ).rejects.toThrow('stable private regular file');
+
+    const replaced = campaignFixture();
+    await declare(replaced);
+    let replacementBytes = '';
+    replaced.workflowRunsHook = () => {
+      replaced.workflowRunsHook = null;
+      const replacement = path.join(replaced.root, 'replacement-state.json');
+      replacementBytes = `${readFileSync(replaced.statePath, 'utf8')}\n`;
+      writeFileSync(replacement, replacementBytes, { mode: 0o600 });
+      renameSync(replacement, replaced.statePath);
+    };
+    await expect(
+      preflightPublicationCampaign(stateOption(replaced), injected(replaced)),
+    ).rejects.toThrow('concurrently advanced or replaced');
+    expect(readFileSync(replaced.statePath, 'utf8')).toBe(replacementBytes);
+  });
+
+  it('serializes concurrent commands and fails closed on a stale or crashed lock', async () => {
+    const waitControl = deferredWait();
+    const concurrent = campaignFixture({
+      addRunCount: 0,
+      registrationPolls: 2,
+      waitControl,
+    });
+    await declareAndPreflight(concurrent);
+    const first = launch(concurrent);
+    await waitControl.entered;
+    await expect(launch(concurrent)).rejects.toThrow('campaign lock already exists');
+    concurrent.runs.push(runTuple(concurrent.nextRunId++));
+    waitControl.release();
+    await expect(first).resolves.toMatchObject({ registeredPulses: 1 });
+    expect(concurrent.addCalls).toBe(1);
+
+    const stale = campaignFixture();
+    await declareAndPreflight(stale);
+    const lockPath = `${stale.statePath}.lock`;
+    writeFileSync(lockPath, '{"crashed":true}\n', { mode: 0o600 });
+    await expect(launch(stale)).rejects.toThrow(/stale.*fail closed/u);
+    expect(readState(stale).phase).toBe('preflighted');
+    expect(readFileSync(lockPath, 'utf8')).toContain('crashed');
+  });
+
   it('rejects outcome-bearing fields in PR, census, and monitor projections', async () => {
     const pr = campaignFixture();
     pr.prExtra = { outcome: 'hidden' };
@@ -181,6 +330,8 @@ function campaignFixture({
   crashCheckpoint = null,
   initialRuns = 0,
   labels = [],
+  registrationPolls = 1,
+  waitControl = null,
 } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-campaign-test-'));
   roots.push(root);
@@ -197,12 +348,14 @@ function campaignFixture({
     nextRunId: 1_000,
     outcomeReads: 0,
     prExtra: {},
+    removeCalls: 0,
     root,
     runExtra: {},
     runs: Array.from({ length: initialRuns }, (_unused, index) => runTuple(index + 1)),
     statePath: path.join(root, 'campaign-state.json'),
     status: 'queued',
     statusExtra: {},
+    workflowRunsHook: null,
   };
   fixture.operations = {
     addLabel(_state, label) {
@@ -231,6 +384,7 @@ function campaignFixture({
       return { ...run, status: fixture.status, ...fixture.statusExtra };
     },
     getWorkflowRuns() {
+      fixture.workflowRunsHook?.();
       return {
         total_count: fixture.runs.length,
         workflow_runs: fixture.runs.map((run) => ({ ...run, ...fixture.runExtra })),
@@ -240,13 +394,35 @@ function campaignFixture({
       return { head: fixture.head, root: fixture.checkout, status: fixture.checkoutStatus };
     },
     pollMs: 0,
-    registrationPolls: 1,
+    registrationPolls,
     removeLabel(_state, label) {
+      fixture.removeCalls += 1;
       fixture.labels = fixture.labels.filter((entry) => entry !== label);
     },
-    async wait() {},
+    async wait() {
+      if (waitControl !== null) await waitControl.wait();
+    },
   };
   return fixture;
+}
+
+function deferredWait() {
+  let announceEntered;
+  let releaseWait;
+  const entered = new Promise((resolve) => {
+    announceEntered = resolve;
+  });
+  const blocked = new Promise((resolve) => {
+    releaseWait = resolve;
+  });
+  return {
+    entered,
+    release: releaseWait,
+    async wait() {
+      announceEntered();
+      await blocked;
+    },
+  };
 }
 
 function runTuple(id) {
@@ -267,6 +443,10 @@ function injected(fixture) {
 
 function stateOption(fixture) {
   return { statePath: fixture.statePath };
+}
+
+function readState(fixture) {
+  return JSON.parse(readFileSync(fixture.statePath, 'utf8'));
 }
 
 function declare(fixture, overrides = {}) {

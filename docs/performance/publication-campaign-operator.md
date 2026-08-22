@@ -26,9 +26,19 @@ vp exec node scripts/perf-publication-campaign.mjs preflight \
   --state /external/custody/campaign-state.json
 ```
 
-`declare` creates the state file exclusively with mode `0600`; an existing path, symlink, hardlink,
-in-repository path, dirty checkout, forbidden label, or current exact-source census plus 24 greater
-than 100 is rejected. `preflight` proves the declaration has not changed.
+`declare` creates the state file exclusively with mode `0600` and binds its canonical absolute path
+into the state. Every later command re-proves that the canonical path is unchanged and remains
+outside the measured checkout. State reads use a no-follow file descriptor with before/after file
+identity and size checks. Writes hold a sibling single-writer lock for the whole command and require
+the expected inode and content digest immediately before atomic replacement. An existing path,
+symlink, hardlink, wrong custody path, in-repository path, concurrent replacement, dirty checkout,
+forbidden label, or current exact-source census plus 24 greater than 100 is rejected. `preflight`
+proves the declaration has not changed.
+
+The lock is `<state>.lock`. A command never guesses whether an existing lock belongs to a live,
+stale, or crashed process. If the original process is still live, let that invocation finish. If it
+crashed or lock ownership cannot be authenticated, do not delete the lock or reuse the state;
+abandon that custody path and declare a fresh campaign at a new external state path.
 
 Invoke `launch-or-resume` exactly 24 times. `--execute` is required because this is the only phase
 that changes GitHub labels:
@@ -39,12 +49,23 @@ vp exec node scripts/perf-publication-campaign.mjs launch-or-resume \
   --execute
 ```
 
-Each invocation atomically journals its pre-add census, adds one trigger label, admits exactly one
-new first-attempt `pull_request` run for `Perf Realistic Tier`, records its seven immutable identity
-fields, removes the trigger, and proves removal before returning. Repeating the same command after a
-crash resumes safely across the add, registration, and removal boundaries; it does not add a second
-pulse. Zero registrations time out without inventing evidence. Multiple registrations, foreign
-identity, immutable tuple drift, or other label/source activity fail closed.
+Each invocation atomically journals its pre-add census as an **armed** pulse, adds one trigger label,
+admits exactly one new first-attempt `pull_request` run for `Perf Realistic Tier`, durably records its
+seven immutable identity fields, removes the trigger, and proves removal before returning.
+
+An armed pulse may proceed only inside the invocation that created it. If execution stops before the
+exact registered run is durably journaled—including before the add call, after a possibly successful
+add, or after observing registration—the next invocation invalidates the entire campaign without
+calling add/remove or accepting any label or run created externally. Do not retry, infer whether the
+add succeeded, or reuse that state. Restore the frozen labels under separate operator custody, then
+declare a fresh 24-pulse campaign at a new state path. This deliberately sacrifices even a provably
+pre-call pulse because the persisted state cannot authenticate which side of the GitHub mutation it
+represents.
+
+Resume is allowed only after the exact registered run was durably journaled. From that boundary the
+operator may finish trigger removal or finalize an already removed trigger without adding again.
+Zero or multiple registrations, foreign identity, immutable tuple drift, or other label/source
+activity invalidate or fail the campaign closed; none can be converted into campaign evidence.
 
 After the 24th successful invocation, seal before looking at terminal status:
 

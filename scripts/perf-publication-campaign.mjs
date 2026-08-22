@@ -6,8 +6,11 @@
  * job data, artifacts, logs, summaries, and run outcomes belong to the collector and live gate.
  */
 import { execFileSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
 import {
+  constants as fsConstants,
   closeSync,
+  fstatSync,
   fsyncSync,
   lstatSync,
   mkdtempSync,
@@ -16,6 +19,7 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
@@ -33,6 +37,7 @@ export const PERF_PUBLICATION_CPU_ALIASES = Object.freeze(['perf-baseline-cpu-am
 const MAX_CAMPAIGN_RUNS = 100;
 const DEFAULT_POLL_MS = 5_000;
 const DEFAULT_REGISTRATION_POLLS = 120;
+const MAX_STATE_BYTES = 4 * 1024 * 1024;
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
 const FOCUS_PREFIX = 'perf-baseline-focus-';
 const CPU_PREFIX = 'perf-baseline-cpu';
@@ -50,241 +55,275 @@ const PR_KEYS = Object.freeze(['headRefOid', 'isDraft', 'labels', 'number', 'sta
 
 export async function declarePublicationCampaign(options, dependencies = {}) {
   const normalized = normalizeDeclarationOptions(options);
-  const operations = campaignOperations(dependencies.operations);
-  const checkout = operations.inspectCheckout(normalized.checkout);
-  validateCheckout(checkout, normalized);
-  const pullRequest = normalizePullRequest(operations.getPullRequest(normalized));
-  validatePullRequest(pullRequest, normalized);
-  const labels = normalizeLabels(pullRequest.labels);
-  validateFrozenLabels(labels, normalized.cpuAlias);
-  const census = normalizeIdentityCensus(operations.getWorkflowRuns(normalized), normalized.source);
-  requireCensusCapacity(census, PERF_PUBLICATION_CAMPAIGN_PULSES);
-  const state = {
-    activePulse: null,
-    checkout: normalized.checkout,
-    cpuAlias: normalized.cpuAlias,
-    frozenLabels: labels,
-    initialCensus: census,
-    phase: 'declared',
-    pr: {
-      isDraft: pullRequest.isDraft,
-      number: pullRequest.number,
-      url: pullRequest.url,
-    },
-    pulseCount: PERF_PUBLICATION_CAMPAIGN_PULSES,
-    pulses: [],
-    repository: normalized.repository,
-    schema: PERF_PUBLICATION_CAMPAIGN_SCHEMA,
-    seal: null,
-    source: normalized.source,
-    workflow: { ...PERF_PUBLICATION_WORKFLOW },
-  };
-  createStateExclusive(normalized.statePath, state, normalized.checkout);
-  return publicSummary(state);
+  return withCampaignLock(normalized.statePath, async () => {
+    const operations = campaignOperations(dependencies.operations);
+    const checkout = operations.inspectCheckout(normalized.checkout);
+    validateCheckout(checkout, normalized);
+    const pullRequest = normalizePullRequest(operations.getPullRequest(normalized));
+    validatePullRequest(pullRequest, normalized);
+    const labels = normalizeLabels(pullRequest.labels);
+    validateFrozenLabels(labels, normalized.cpuAlias);
+    const census = normalizeIdentityCensus(
+      operations.getWorkflowRuns(normalized),
+      normalized.source,
+    );
+    requireCensusCapacity(census, PERF_PUBLICATION_CAMPAIGN_PULSES);
+    const state = {
+      activePulse: null,
+      checkout: normalized.checkout,
+      cpuAlias: normalized.cpuAlias,
+      frozenLabels: labels,
+      initialCensus: census,
+      invalidation: null,
+      phase: 'declared',
+      pr: {
+        isDraft: pullRequest.isDraft,
+        number: pullRequest.number,
+        url: pullRequest.url,
+      },
+      pulseCount: PERF_PUBLICATION_CAMPAIGN_PULSES,
+      pulses: [],
+      repository: normalized.repository,
+      schema: PERF_PUBLICATION_CAMPAIGN_SCHEMA,
+      seal: null,
+      source: normalized.source,
+      statePath: normalized.statePath,
+      workflow: { ...PERF_PUBLICATION_WORKFLOW },
+    };
+    createStateExclusive(normalized.statePath, state, normalized.checkout);
+    return publicSummary(state);
+  });
 }
 
 export async function preflightPublicationCampaign(options, dependencies = {}) {
-  const context = loadCampaignContext(options, dependencies);
-  requirePhase(context.state, ['declared'], 'preflight');
-  validateLiveCampaignIdentity(context);
-  const census = normalizeIdentityCensus(
-    context.operations.getWorkflowRuns(context.state),
-    context.state.source,
-  );
-  requireSameCensus(
-    census,
-    context.state.initialCensus,
-    'preflight census changed after declaration',
-  );
-  requireCensusCapacity(census, context.state.pulseCount);
-  context.state.phase = 'preflighted';
-  writeStateAtomic(context.statePath, context.state);
-  return publicSummary(context.state);
+  return withCampaignContext(options, dependencies, async (context) => {
+    requirePhase(context.state, ['declared'], 'preflight');
+    validateLiveCampaignIdentity(context);
+    const census = normalizeIdentityCensus(
+      context.operations.getWorkflowRuns(context.state),
+      context.state.source,
+    );
+    requireSameCensus(
+      census,
+      context.state.initialCensus,
+      'preflight census changed after declaration',
+    );
+    requireCensusCapacity(census, context.state.pulseCount);
+    context.state.phase = 'preflighted';
+    persistContext(context);
+    return publicSummary(context.state);
+  });
 }
 
-/** Advance exactly one pulse. Repeated invocations resume safely around every external mutation. */
+/** Advance exactly one pulse; only durably registered pulses may cross an invocation boundary. */
 export async function launchOrResumePublicationCampaign(options, dependencies = {}) {
   if (options?.execute !== true) {
     throw new TypeError('launch-or-resume requires explicit execute=true authorization');
   }
-  const context = loadCampaignContext(options, dependencies);
-  requirePhase(context.state, ['preflighted', 'launching'], 'launch-or-resume');
-  if (context.state.pulses.length >= context.state.pulseCount) {
-    throw new TypeError('all fixed campaign pulses are already registered');
-  }
-  validateCheckout(context.operations.inspectCheckout(context.state.checkout), context.state);
-  validatePullRequestIdentityOnly(context);
-
-  if (context.state.activePulse === null) {
-    const pullRequest = normalizePullRequest(context.operations.getPullRequest(context.state));
-    requireLabels(pullRequest.labels, context.state.frozenLabels, 'trigger label must be absent');
-    const before = normalizeIdentityCensus(
-      context.operations.getWorkflowRuns(context.state),
-      context.state.source,
-    );
-    requireSameCensus(before, expectedCurrentCensus(context.state), 'exact-source census drifted');
-    context.state.activePulse = {
-      before,
-      index: context.state.pulses.length + 1,
-      registeredRun: null,
-      stage: 'prepared',
-    };
-    context.state.phase = 'launching';
-    writeStateAtomic(context.statePath, context.state);
-  }
-
-  let pullRequest = normalizePullRequest(context.operations.getPullRequest(context.state));
-  validatePullRequest(pullRequest, context.state);
-  let labels = normalizeLabels(pullRequest.labels);
-  if (context.state.activePulse.registeredRun === null) {
-    const triggerPresent = labels.includes(PERF_PUBLICATION_TRIGGER_LABEL);
-    if (triggerPresent) {
-      requireLabels(
-        labels,
-        [...context.state.frozenLabels, PERF_PUBLICATION_TRIGGER_LABEL],
-        'labels changed while the trigger was present',
+  return withCampaignContext(options, dependencies, async (context) => {
+    requirePhase(context.state, ['preflighted', 'launching'], 'launch-or-resume');
+    if (context.state.pulses.length >= context.state.pulseCount) {
+      throw new TypeError('all fixed campaign pulses are already registered');
+    }
+    if (context.state.activePulse?.stage === 'armed') {
+      invalidateCampaign(
+        context,
+        'an armed pulse crossed an invocation boundary before its exact run was durably journaled',
       );
-    } else {
-      requireLabels(labels, context.state.frozenLabels, 'non-trigger labels changed before launch');
-      const observed = normalizeIdentityCensus(
+    }
+
+    validateCheckout(context.operations.inspectCheckout(context.state.checkout), context.state);
+    validatePullRequestIdentityOnly(context);
+
+    let armedHere = false;
+    if (context.state.activePulse === null) {
+      const pullRequest = normalizePullRequest(context.operations.getPullRequest(context.state));
+      requireLabels(pullRequest.labels, context.state.frozenLabels, 'trigger label must be absent');
+      const before = normalizeIdentityCensus(
         context.operations.getWorkflowRuns(context.state),
         context.state.source,
       );
-      const newRuns = censusDifference(context.state.activePulse.before, observed);
-      if (newRuns.length === 0) {
-        context.operations.addLabel(context.state, PERF_PUBLICATION_TRIGGER_LABEL);
-        context.operations.checkpoint('after-trigger-add');
-      } else {
-        const registered = requireOneRegisteredRun(context.state, observed, newRuns);
-        context.operations.checkpoint('after-registration-observed');
-        context.state.activePulse.registeredRun = registered;
-        context.state.activePulse.stage = 'registered';
-        writeStateAtomic(context.statePath, context.state);
-      }
+      requireSameCensus(
+        before,
+        expectedCurrentCensus(context.state),
+        'exact-source census drifted',
+      );
+      context.state.activePulse = {
+        before,
+        index: context.state.pulses.length + 1,
+        registeredRun: null,
+        stage: 'armed',
+      };
+      context.state.phase = 'launching';
+      persistContext(context);
+      armedHere = true;
+      context.operations.checkpoint('before-trigger-add');
     }
-  }
 
-  if (context.state.activePulse.registeredRun === null) {
-    const observed = await waitForOneRegisteredRun(context);
-    const registered = requireOneRegisteredRun(
-      context.state,
-      observed,
-      censusDifference(context.state.activePulse.before, observed),
-    );
-    context.operations.checkpoint('after-registration-observed');
-    context.state.activePulse.registeredRun = registered;
-    context.state.activePulse.stage = 'registered';
-    writeStateAtomic(context.statePath, context.state);
-  }
+    if (armedHere) {
+      const pullRequest = normalizePullRequest(context.operations.getPullRequest(context.state));
+      validatePullRequest(pullRequest, context.state);
+      requireLabels(
+        pullRequest.labels,
+        context.state.frozenLabels,
+        'non-trigger labels changed before launch',
+      );
+      const immediatelyBefore = normalizeIdentityCensus(
+        context.operations.getWorkflowRuns(context.state),
+        context.state.source,
+      );
+      if (canonicalJson(immediatelyBefore) !== canonicalJson(context.state.activePulse.before)) {
+        invalidateCampaign(context, 'exact-source census changed after the pulse was armed');
+      }
 
-  pullRequest = normalizePullRequest(context.operations.getPullRequest(context.state));
-  validatePullRequest(pullRequest, context.state);
-  labels = normalizeLabels(pullRequest.labels);
-  if (labels.includes(PERF_PUBLICATION_TRIGGER_LABEL)) {
-    requireLabels(
-      labels,
-      [...context.state.frozenLabels, PERF_PUBLICATION_TRIGGER_LABEL],
-      'labels changed before trigger removal',
-    );
-    context.operations.removeLabel(context.state, PERF_PUBLICATION_TRIGGER_LABEL);
-    context.operations.checkpoint('after-trigger-remove');
-  } else {
-    requireLabels(labels, context.state.frozenLabels, 'labels changed after trigger removal');
-  }
-  await waitForTriggerRemoval(context);
+      context.operations.addLabel(context.state, PERF_PUBLICATION_TRIGGER_LABEL);
+      context.operations.checkpoint('after-trigger-add');
 
-  const pulse = {
-    index: context.state.activePulse.index,
-    run: context.state.activePulse.registeredRun,
-  };
-  context.state.pulses.push(pulse);
-  context.state.activePulse = null;
-  writeStateAtomic(context.statePath, context.state);
-  return publicSummary(context.state);
+      let observed;
+      try {
+        observed = await waitForOneRegisteredRun(context);
+      } catch (error) {
+        invalidateCampaign(context, errorMessage(error));
+      }
+      let registered;
+      try {
+        registered = requireOneRegisteredRun(
+          context.state,
+          observed,
+          censusDifference(context.state.activePulse.before, observed),
+        );
+      } catch (error) {
+        invalidateCampaign(context, errorMessage(error));
+      }
+      context.operations.checkpoint('after-registration-observed');
+      context.state.activePulse.registeredRun = registered;
+      context.state.activePulse.stage = 'registered';
+      persistContext(context);
+      context.operations.checkpoint('after-registration-journaled');
+    }
+
+    const pullRequest = normalizePullRequest(context.operations.getPullRequest(context.state));
+    validatePullRequest(pullRequest, context.state);
+    const labels = normalizeLabels(pullRequest.labels);
+    if (labels.includes(PERF_PUBLICATION_TRIGGER_LABEL)) {
+      requireLabels(
+        labels,
+        [...context.state.frozenLabels, PERF_PUBLICATION_TRIGGER_LABEL],
+        'labels changed before trigger removal',
+      );
+      context.operations.removeLabel(context.state, PERF_PUBLICATION_TRIGGER_LABEL);
+      context.operations.checkpoint('after-trigger-remove');
+    } else {
+      requireLabels(labels, context.state.frozenLabels, 'labels changed after trigger removal');
+    }
+    await waitForTriggerRemoval(context);
+
+    const pulse = {
+      index: context.state.activePulse.index,
+      run: context.state.activePulse.registeredRun,
+    };
+    context.state.pulses.push(pulse);
+    context.state.activePulse = null;
+    persistContext(context);
+    return publicSummary(context.state);
+  });
 }
 
 export async function sealPublicationCampaign(options, dependencies = {}) {
-  const context = loadCampaignContext(options, dependencies);
-  requirePhase(context.state, ['launching'], 'seal');
-  if (
-    context.state.activePulse !== null ||
-    context.state.pulses.length !== context.state.pulseCount
-  ) {
-    throw new TypeError('seal requires exactly 24 completed pulse registrations');
-  }
-  validateLiveCampaignIdentity(context);
-  const census = normalizeIdentityCensus(
-    context.operations.getWorkflowRuns(context.state),
-    context.state.source,
-  );
-  requireSameCensus(census, expectedCurrentCensus(context.state), 'seal census drifted');
-  const runIds = context.state.pulses.map((pulse) => pulse.run.id);
-  const firstRunId = Math.min(...runIds);
-  const lastRunId = Math.max(...runIds);
-  const boundary = census.workflow_runs.filter(
-    (run) => run.id >= firstRunId && run.id <= lastRunId,
-  );
-  if (
-    boundary.length !== context.state.pulseCount ||
-    canonicalJson(boundary.map((run) => run.id)) !== canonicalJson([...runIds].sort(numericOrder))
-  ) {
-    throw new TypeError('inclusive campaign endpoints contain a missing or unexpected run');
-  }
-  context.state.seal = {
-    boundary: { firstRunId, lastRunId },
-    census,
-    runIds: [...runIds].sort(numericOrder),
-  };
-  context.state.phase = 'sealed';
-  writeStateAtomic(context.statePath, context.state);
-  return publicSummary(context.state);
+  return withCampaignContext(options, dependencies, async (context) => {
+    requirePhase(context.state, ['launching'], 'seal');
+    if (
+      context.state.activePulse !== null ||
+      context.state.pulses.length !== context.state.pulseCount
+    ) {
+      throw new TypeError('seal requires exactly 24 completed pulse registrations');
+    }
+    validateLiveCampaignIdentity(context);
+    const census = normalizeIdentityCensus(
+      context.operations.getWorkflowRuns(context.state),
+      context.state.source,
+    );
+    requireSameCensus(census, expectedCurrentCensus(context.state), 'seal census drifted');
+    const runIds = context.state.pulses.map((pulse) => pulse.run.id);
+    const firstRunId = Math.min(...runIds);
+    const lastRunId = Math.max(...runIds);
+    const boundary = census.workflow_runs.filter(
+      (run) => run.id >= firstRunId && run.id <= lastRunId,
+    );
+    if (
+      boundary.length !== context.state.pulseCount ||
+      canonicalJson(boundary.map((run) => run.id)) !== canonicalJson([...runIds].sort(numericOrder))
+    ) {
+      throw new TypeError('inclusive campaign endpoints contain a missing or unexpected run');
+    }
+    context.state.seal = {
+      boundary: { firstRunId, lastRunId },
+      census,
+      runIds: [...runIds].sort(numericOrder),
+    };
+    context.state.phase = 'sealed';
+    persistContext(context);
+    return publicSummary(context.state);
+  });
 }
 
 export async function monitorPublicationCampaign(options, dependencies = {}) {
-  const context = loadCampaignContext(options, dependencies);
-  requirePhase(context.state, ['sealed', 'terminal'], 'monitor');
-  validateLiveCampaignIdentity(context);
-  const statuses = context.state.seal.runIds.map((runId) =>
-    normalizeTerminalRun(context.operations.getRunStatus(context.state, runId)),
-  );
-  validateTerminalTupleCensus(statuses, context.state.seal.census);
-  const terminalCount = statuses.filter((run) => run.status === 'completed').length;
-  if (terminalCount === context.state.pulseCount) {
-    context.state.phase = 'terminal';
-    writeStateAtomic(context.statePath, context.state);
-  }
-  return { complete: terminalCount === context.state.pulseCount, terminalCount, total: 24 };
+  return withCampaignContext(options, dependencies, async (context) => {
+    requirePhase(context.state, ['sealed', 'terminal'], 'monitor');
+    validateLiveCampaignIdentity(context);
+    const statuses = context.state.seal.runIds.map((runId) =>
+      normalizeTerminalRun(context.operations.getRunStatus(context.state, runId)),
+    );
+    validateTerminalTupleCensus(statuses, context.state.seal.census);
+    const terminalCount = statuses.filter((run) => run.status === 'completed').length;
+    if (terminalCount === context.state.pulseCount) {
+      context.state.phase = 'terminal';
+      persistContext(context);
+    } else {
+      verifyContextUnchanged(context);
+    }
+    return { complete: terminalCount === context.state.pulseCount, terminalCount, total: 24 };
+  });
 }
 
 /** Final metrics-blind check immediately before invoking the existing collector. */
 export async function collectorHandoff(options, dependencies = {}) {
-  const context = loadCampaignContext(options, dependencies);
-  requirePhase(context.state, ['terminal'], 'handoff');
-  validateLiveCampaignIdentity(context);
-  const census = normalizeIdentityCensus(
-    context.operations.getWorkflowRuns(context.state),
-    context.state.source,
-  );
-  requireSameCensus(census, context.state.seal.census, 'complete tuple census changed after seal');
-  const statuses = context.state.seal.runIds.map((runId) =>
-    normalizeTerminalRun(context.operations.getRunStatus(context.state, runId)),
-  );
-  validateTerminalTupleCensus(statuses, context.state.seal.census);
-  if (statuses.some((run) => run.status !== 'completed')) {
-    throw new TypeError('collector handoff requires all fixed campaign runs to be terminal');
-  }
-  return {
-    campaignFirstRunId: context.state.seal.boundary.firstRunId,
-    campaignLastRunId: context.state.seal.boundary.lastRunId,
-    campaignPulses: context.state.pulseCount,
-    runArguments: context.state.seal.runIds.flatMap((runId) => ['--run', String(runId)]),
-    runIds: [...context.state.seal.runIds],
-  };
+  return withCampaignContext(options, dependencies, async (context) => {
+    requirePhase(context.state, ['terminal'], 'handoff');
+    validateLiveCampaignIdentity(context);
+    const census = normalizeIdentityCensus(
+      context.operations.getWorkflowRuns(context.state),
+      context.state.source,
+    );
+    requireSameCensus(
+      census,
+      context.state.seal.census,
+      'complete tuple census changed after seal',
+    );
+    const statuses = context.state.seal.runIds.map((runId) =>
+      normalizeTerminalRun(context.operations.getRunStatus(context.state, runId)),
+    );
+    validateTerminalTupleCensus(statuses, context.state.seal.census);
+    if (statuses.some((run) => run.status !== 'completed')) {
+      throw new TypeError('collector handoff requires all fixed campaign runs to be terminal');
+    }
+    verifyContextUnchanged(context);
+    return {
+      campaignFirstRunId: context.state.seal.boundary.firstRunId,
+      campaignLastRunId: context.state.seal.boundary.lastRunId,
+      campaignPulses: context.state.pulseCount,
+      runArguments: context.state.seal.runIds.flatMap((runId) => ['--run', String(runId)]),
+      runIds: [...context.state.seal.runIds],
+    };
+  });
 }
 
 function normalizeDeclarationOptions(options) {
   const checkout = canonicalDirectory(requiredString(options?.checkout, '--checkout'));
-  const statePath = path.resolve(requiredString(options?.statePath, '--state'));
+  const statePath = canonicalStatePath(requiredString(options?.statePath, '--state'));
+  if (containedBy(checkout, statePath)) {
+    throw new TypeError('--state must remain outside the measured checkout');
+  }
   const repository = requiredString(options?.repository, '--repository');
   if (repository !== 'kovojs/kovo') throw new TypeError('--repository must be kovojs/kovo');
   const source = requiredString(options?.source, '--source');
@@ -300,10 +339,25 @@ function normalizeDeclarationOptions(options) {
 }
 
 function loadCampaignContext(options, dependencies) {
-  const statePath = path.resolve(requiredString(options?.statePath, '--state'));
-  const state = readState(statePath);
+  const statePath = canonicalStatePath(requiredString(options?.statePath, '--state'));
+  const loaded = readState(statePath);
+  const state = loaded.state;
   validateState(state);
-  return { operations: campaignOperations(dependencies.operations), state, statePath };
+  validateStateLocation(state, statePath);
+  return {
+    operations: campaignOperations(dependencies.operations),
+    snapshot: loaded.snapshot,
+    state,
+    statePath,
+  };
+}
+
+async function withCampaignContext(options, dependencies, operation) {
+  const statePath = canonicalStatePath(requiredString(options?.statePath, '--state'));
+  return withCampaignLock(statePath, async () => {
+    const context = loadCampaignContext({ statePath }, dependencies);
+    return operation(context);
+  });
 }
 
 function campaignOperations(operations) {
@@ -634,6 +688,24 @@ function requirePhase(state, allowed, operation) {
   }
 }
 
+function invalidateCampaign(context, reason) {
+  context.state.invalidation = {
+    code: 'ambiguous-trigger-registration',
+    guidance:
+      'abandon this state and declare a fresh campaign at a new external state path after separately restoring the frozen labels',
+    reason,
+  };
+  context.state.phase = 'invalid';
+  persistContext(context);
+  throw new TypeError(
+    `${reason}; campaign invalidated: do not add again, accept an external run, or reuse this state; declare a fresh campaign at a new state path`,
+  );
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function validateState(state) {
   const topLevelKeys = [
     'activePulse',
@@ -641,6 +713,7 @@ function validateState(state) {
     'cpuAlias',
     'frozenLabels',
     'initialCensus',
+    'invalidation',
     'phase',
     'pr',
     'pulseCount',
@@ -649,6 +722,7 @@ function validateState(state) {
     'schema',
     'seal',
     'source',
+    'statePath',
     'workflow',
   ];
   if (
@@ -660,8 +734,11 @@ function validateState(state) {
     !COMMIT_PATTERN.test(state.source ?? '') ||
     !Array.isArray(state.pulses) ||
     state.pulses.length > state.pulseCount ||
-    !['declared', 'preflighted', 'launching', 'sealed', 'terminal'].includes(state.phase) ||
+    !['declared', 'invalid', 'preflighted', 'launching', 'sealed', 'terminal'].includes(
+      state.phase,
+    ) ||
     typeof state.checkout !== 'string' ||
+    typeof state.statePath !== 'string' ||
     canonicalJson(state.workflow) !== canonicalJson(PERF_PUBLICATION_WORKFLOW)
   ) {
     throw new TypeError('campaign state is malformed');
@@ -704,8 +781,8 @@ function validateState(state) {
       !record(active) ||
       !exactKeys(active, ['before', 'index', 'registeredRun', 'stage']) ||
       active.index !== state.pulses.length + 1 ||
-      !['prepared', 'registered'].includes(active.stage) ||
-      (active.stage === 'prepared' && active.registeredRun !== null) ||
+      !['armed', 'registered'].includes(active.stage) ||
+      (active.stage === 'armed' && active.registeredRun !== null) ||
       (active.stage === 'registered' && active.registeredRun === null)
     ) {
       throw new TypeError('campaign active pulse state is malformed');
@@ -717,6 +794,20 @@ function validateState(state) {
   }
   if (state.phase === 'declared' && (state.pulses.length !== 0 || state.activePulse !== null)) {
     throw new TypeError('declared campaign already contains pulse state');
+  }
+  if (state.phase === 'invalid') {
+    if (
+      state.activePulse?.stage !== 'armed' ||
+      !record(state.invalidation) ||
+      !exactKeys(state.invalidation, ['code', 'guidance', 'reason']) ||
+      state.invalidation.code !== 'ambiguous-trigger-registration' ||
+      typeof state.invalidation.reason !== 'string' ||
+      typeof state.invalidation.guidance !== 'string'
+    ) {
+      throw new TypeError('invalidated campaign state is malformed');
+    }
+  } else if (state.invalidation !== null) {
+    throw new TypeError('active campaign contains an invalidation record');
   }
   if (['sealed', 'terminal'].includes(state.phase)) {
     if (
@@ -747,17 +838,37 @@ function validateState(state) {
   }
 }
 
+function validateStateLocation(state, statePath) {
+  if (state.statePath !== statePath) {
+    throw new TypeError('campaign state path differs from its declared canonical custody path');
+  }
+  const checkout = canonicalDirectory(state.checkout);
+  if (checkout !== state.checkout || containedBy(checkout, statePath)) {
+    throw new TypeError('campaign state must remain outside the measured checkout');
+  }
+}
+
 function createStateExclusive(statePath, state, checkout) {
   const parent = canonicalDirectory(path.dirname(statePath));
   const canonicalCheckout = canonicalDirectory(checkout);
-  if (containedBy(canonicalCheckout, path.join(parent, path.basename(statePath)))) {
+  if (containedBy(canonicalCheckout, statePath)) {
     throw new TypeError('--state must remain outside the measured checkout');
   }
   let descriptor;
   try {
-    descriptor = openSync(statePath, 'wx', 0o600);
-    writeFileSync(descriptor, stateBytes(state));
+    descriptor = openSync(
+      statePath,
+      fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | requiredNoFollowFlag(),
+      0o600,
+    );
+    const bytes = stateBytes(state);
+    writeFileSync(descriptor, bytes);
     fsyncSync(descriptor);
+    requireSecureRegularFile(
+      fstatSync(descriptor, { bigint: true }),
+      'campaign state',
+      bytes.length,
+    );
   } finally {
     if (descriptor !== undefined) closeSync(descriptor);
   }
@@ -765,34 +876,199 @@ function createStateExclusive(statePath, state, checkout) {
 }
 
 function readState(statePath) {
-  const metadata = lstatSync(statePath);
-  if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1) {
-    throw new TypeError('campaign state must be one regular single-link file');
+  let descriptor;
+  try {
+    descriptor = openSync(statePath, fsConstants.O_RDONLY | requiredNoFollowFlag());
+    const before = fstatSync(descriptor, { bigint: true });
+    requireSecureRegularFile(before, 'campaign state');
+    const bytes = readFileSync(descriptor);
+    const after = fstatSync(descriptor, { bigint: true });
+    requireSecureRegularFile(after, 'campaign state', bytes.length);
+    requireMetadataIdentity(before, after, 'campaign state changed while it was read');
+    const pathname = lstatSync(statePath, { bigint: true });
+    requireSecureRegularFile(pathname, 'campaign state', bytes.length);
+    requireMetadataIdentity(after, pathname, 'campaign state path changed while it was read');
+    return {
+      snapshot: stateSnapshot(after, bytes),
+      state: JSON.parse(bytes.toString('utf8')),
+    };
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
   }
-  return JSON.parse(readFileSync(statePath, 'utf8'));
 }
 
-function writeStateAtomic(statePath, state) {
-  const current = lstatSync(statePath);
-  if (!current.isFile() || current.isSymbolicLink() || current.nlink !== 1) {
-    throw new TypeError('campaign state changed type or link identity');
-  }
+function persistContext(context) {
+  validateState(context.state);
+  validateStateLocation(context.state, context.statePath);
+  context.snapshot = writeStateAtomic(context.statePath, context.state, context.snapshot);
+}
+
+function verifyContextUnchanged(context) {
+  const current = readState(context.statePath);
+  requireSnapshot(
+    current.snapshot,
+    context.snapshot,
+    'campaign state changed during a read-only command',
+  );
+}
+
+function writeStateAtomic(statePath, state, expectedSnapshot) {
   const parent = canonicalDirectory(path.dirname(statePath));
   const stageRoot = mkdtempSync(path.join(parent, '.kovo-campaign-state-'));
   const stage = path.join(stageRoot, 'state.json');
+  const bytes = stateBytes(state);
   try {
-    const descriptor = openSync(stage, 'wx', 0o600);
+    const first = readState(statePath);
+    requireSnapshot(
+      first.snapshot,
+      expectedSnapshot,
+      'campaign state was concurrently advanced or replaced',
+    );
+    const descriptor = openSync(
+      stage,
+      fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | requiredNoFollowFlag(),
+      0o600,
+    );
     try {
-      writeFileSync(descriptor, stateBytes(state));
+      writeFileSync(descriptor, bytes);
       fsyncSync(descriptor);
+      requireSecureRegularFile(
+        fstatSync(descriptor, { bigint: true }),
+        'staged campaign state',
+        bytes.length,
+      );
     } finally {
       closeSync(descriptor);
     }
+    const immediatelyBeforeRename = readState(statePath);
+    requireSnapshot(
+      immediatelyBeforeRename.snapshot,
+      expectedSnapshot,
+      'campaign state was concurrently advanced or replaced',
+    );
     renameSync(stage, statePath);
     fsyncDirectory(parent);
+    const committed = readState(statePath);
+    if (committed.snapshot.digest !== sha256(bytes)) {
+      throw new TypeError('committed campaign state differs from the staged bytes');
+    }
+    return committed.snapshot;
   } finally {
     rmSync(stageRoot, { force: true, recursive: true });
   }
+}
+
+async function withCampaignLock(statePath, operation) {
+  const lock = acquireCampaignLock(statePath);
+  try {
+    return await operation();
+  } finally {
+    releaseCampaignLock(lock);
+  }
+}
+
+function acquireCampaignLock(statePath) {
+  const parent = canonicalDirectory(path.dirname(statePath));
+  const lockPath = `${statePath}.lock`;
+  let descriptor;
+  try {
+    descriptor = openSync(
+      lockPath,
+      fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | requiredNoFollowFlag(),
+      0o600,
+    );
+  } catch (error) {
+    if (error?.code === 'EEXIST') {
+      throw new TypeError(
+        'campaign lock already exists; concurrent, stale, and crashed locks fail closed—do not remove it or reuse this state; declare a fresh campaign at a new state path',
+      );
+    }
+    throw error;
+  }
+  try {
+    const bytes = Buffer.from(
+      `${JSON.stringify({
+        createdAt: new Date().toISOString(),
+        nonce: randomBytes(16).toString('hex'),
+        pid: process.pid,
+        statePath,
+      })}\n`,
+      'utf8',
+    );
+    writeFileSync(descriptor, bytes);
+    fsyncSync(descriptor);
+    const metadata = fstatSync(descriptor, { bigint: true });
+    requireSecureRegularFile(metadata, 'campaign lock', bytes.length);
+    fsyncDirectory(parent);
+    return { descriptor, lockPath, metadata, parent };
+  } catch (error) {
+    closeSync(descriptor);
+    throw error;
+  }
+}
+
+function releaseCampaignLock(lock) {
+  try {
+    const descriptorMetadata = fstatSync(lock.descriptor, { bigint: true });
+    requireMetadataIdentity(lock.metadata, descriptorMetadata, 'campaign lock changed while held');
+    const pathMetadata = lstatSync(lock.lockPath, { bigint: true });
+    requireSecureRegularFile(pathMetadata, 'campaign lock');
+    requireMetadataIdentity(
+      descriptorMetadata,
+      pathMetadata,
+      'campaign lock path was replaced while held',
+    );
+    unlinkSync(lock.lockPath);
+    fsyncDirectory(lock.parent);
+  } finally {
+    closeSync(lock.descriptor);
+  }
+}
+
+function requiredNoFollowFlag() {
+  if (!Number.isInteger(fsConstants.O_NOFOLLOW)) {
+    throw new TypeError('this host cannot enforce O_NOFOLLOW for campaign custody files');
+  }
+  return fsConstants.O_NOFOLLOW;
+}
+
+function requireSecureRegularFile(metadata, label, byteLength) {
+  if (
+    !metadata.isFile() ||
+    metadata.isSymbolicLink() ||
+    metadata.nlink !== 1n ||
+    (metadata.mode & 0o077n) !== 0n ||
+    metadata.size > BigInt(MAX_STATE_BYTES) ||
+    (byteLength !== undefined && metadata.size !== BigInt(byteLength))
+  ) {
+    throw new TypeError(`${label} must be one stable private regular file`);
+  }
+}
+
+function requireMetadataIdentity(actual, expected, message) {
+  const keys = ['ctimeNs', 'dev', 'ino', 'mode', 'mtimeNs', 'nlink', 'size'];
+  if (keys.some((key) => actual[key] !== expected[key])) throw new TypeError(message);
+}
+
+function stateSnapshot(metadata, bytes) {
+  return {
+    ctimeNs: String(metadata.ctimeNs),
+    dev: String(metadata.dev),
+    digest: sha256(bytes),
+    ino: String(metadata.ino),
+    mode: String(metadata.mode),
+    mtimeNs: String(metadata.mtimeNs),
+    nlink: String(metadata.nlink),
+    size: String(metadata.size),
+  };
+}
+
+function requireSnapshot(actual, expected, message) {
+  if (canonicalJson(actual) !== canonicalJson(expected)) throw new TypeError(message);
+}
+
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 function stateBytes(state) {
@@ -816,6 +1092,12 @@ function publicSummary(state) {
     sealed: state.seal !== null,
     source: state.source,
   };
+}
+
+function canonicalStatePath(value) {
+  const resolved = path.resolve(value);
+  const parent = canonicalDirectory(path.dirname(resolved));
+  return path.join(parent, path.basename(resolved));
 }
 
 function canonicalDirectory(value) {
