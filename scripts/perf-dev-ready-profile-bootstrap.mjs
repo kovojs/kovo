@@ -7,7 +7,7 @@
  * then starts the dependency-bearing controller module from that tree. Evidence is staged until
  * the source HEAD/ref guards and every bound source/snapshot file survive the child run.
  */
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
   chmodSync,
@@ -278,7 +278,14 @@ export async function runReadyProfileBootstrap(argv = process.argv.slice(2), dep
     dependencies,
   );
   const materialized = materializeReadyProfileController(authenticated, dependencies);
-  const nonce = randomBytes(12).toString('hex');
+  const bindingDigest = /^sha256:([0-9a-f]{64})$/u.exec(materialized.bindingSha256)?.[1];
+  if (bindingDigest === undefined) {
+    throw new Error('materialized controller binding digest is malformed');
+  }
+  // The private controller root is already created exclusively by mkdtemp and is part of this
+  // authenticated binding. Its digest supplies a run-unique staging suffix without adding a
+  // second crypto-authority acquisition; exclusive publication still owns collision safety.
+  const nonce = bindingDigest.slice(0, 24);
   const stagedOut = path.join(
     path.dirname(targets.out),
     `.${path.basename(targets.out)}.${nonce}.controller-stage`,

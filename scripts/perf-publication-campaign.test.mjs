@@ -12,6 +12,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -276,6 +277,23 @@ describe('metrics-blind publication campaign operator', () => {
     await declareAndPreflight(concurrent);
     const first = launch(concurrent);
     await waitControl.entered;
+    const liveLock = JSON.parse(readFileSync(`${concurrent.statePath}.lock`, 'utf8'));
+    expect(liveLock).toEqual({
+      createdAt: expect.any(String),
+      ownerDigest: expect.stringMatching(/^[0-9a-f]{64}$/u),
+      pid: process.pid,
+      statePath: realpathSync(concurrent.statePath),
+    });
+    expect(liveLock.ownerDigest).toBe(
+      createHash('sha256')
+        .update(
+          Buffer.from(
+            `${String(liveLock.pid)}\0${liveLock.createdAt}\0${liveLock.statePath}`,
+            'utf8',
+          ),
+        )
+        .digest('hex'),
+    );
     await expect(launch(concurrent)).rejects.toThrow('campaign lock already exists');
     concurrent.runs.push(runTuple(concurrent.nextRunId++));
     waitControl.release();

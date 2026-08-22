@@ -6,7 +6,7 @@
  * job data, artifacts, logs, summaries, and run outcomes belong to the collector and live gate.
  */
 import { execFileSync } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import {
   constants as fsConstants,
   closeSync,
@@ -986,10 +986,14 @@ function acquireCampaignLock(statePath) {
     throw error;
   }
   try {
+    const createdAt = new Date().toISOString();
+    const ownerDigest = sha256(
+      Buffer.from(`${String(process.pid)}\0${createdAt}\0${statePath}`, 'utf8'),
+    );
     const bytes = Buffer.from(
       `${JSON.stringify({
-        createdAt: new Date().toISOString(),
-        nonce: randomBytes(16).toString('hex'),
+        createdAt,
+        ownerDigest,
         pid: process.pid,
         statePath,
       })}\n`,

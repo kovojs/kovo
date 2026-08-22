@@ -824,6 +824,14 @@
       "review": "Exact non-keyed SHA-256 digests bind packed Kovo manifests, tarballs, package contents, and verified product bytes used by measurements; no entropy or keyed operation is acquired."
     },
     {
+      "id": "crypto-door-perf-publication-policy",
+      "file": "scripts/lib/perf-publication-policy.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind the prospectively committed publication policy bytes into workload identity; no entropy, key material, or keyed operation is acquired."
+    },
+    {
       "id": "crypto-door-perf-provenance",
       "file": "scripts/lib/perf-provenance.mjs",
       "kind": "digest",
@@ -944,6 +952,22 @@
       "review": "Exact non-keyed SHA-1/SHA-256 Git-object and workload digests bind generated development corpora and spike evidence; no entropy, key material, or keyed operation is acquired."
     },
     {
+      "id": "crypto-door-perf-dev-ready-profile-bootstrap",
+      "file": "scripts/perf-dev-ready-profile-bootstrap.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind immutable controller source, snapshots, raw-profile seals, and publication attestations; the staging suffix derives from the already-exclusive materialized binding, and no entropy or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-dev-ready-profile",
+      "file": "scripts/perf-dev-ready-profile.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind cold-ready Inspector process, packed-product, raw profile, coverage, attribution, and artifact-seal evidence; no entropy, key material, or keyed operation is acquired."
+    },
+    {
       "id": "crypto-door-perf-gate",
       "file": "scripts/perf-gate.mjs",
       "kind": "digest",
@@ -958,6 +982,14 @@
       "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact non-keyed SHA-256 digests bind loader-memo A/B source, rendered document, and profile evidence bytes; no entropy or keyed operation is acquired."
+    },
+    {
+      "id": "crypto-door-perf-publication-campaign",
+      "file": "scripts/perf-publication-campaign.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind metrics-blind campaign state and lock-owner metadata; exclusive filesystem identity, not digest unpredictability, owns lock authority, and no entropy or keyed operation is acquired."
     },
     {
       "id": "crypto-door-perf-publication-collect",
