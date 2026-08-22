@@ -165,40 +165,40 @@
       "sha512": "sha512-w4rYH4YbzDl2NJ8skmeN5KDEfBOGIPC98g9cL3QjpvVbtmFjYICvB4CONL/rBECluA4crZnrjxvPHga7FuV3zw=="
     },
     {
-      "path": "@kovojs/compiler/dist/app-contract-project-BJGc8Irt.mjs",
-      "sha512": "sha512-bll73y2Fh+A0qt9qoHNPhR4Sr94SkpVJjnJUVVbP2mkaO4wohJTwk1pMQ4QwHcYVEzIqomvsv8H5IDSFDEhQzg=="
+      "path": "@kovojs/compiler/dist/app-contract-project-rgD0yydY.mjs",
+      "sha512": "sha512-rGP8hyXCwfxsXfoZmb06O+CMv5HDZzFX8Co6RyAqJltyv9PAdipNE2El9La8amPrD9zaudwEQggPeTEI9Y0/Jw=="
     },
     {
-      "path": "@kovojs/compiler/dist/app-graph-CiwCvcLq.mjs",
-      "sha512": "sha512-I6V9RwU/9TdKkwJ8f/G+Ad2tC1IS4advOnYacGlQ4l7t4MTi85blcGKCb5tzCQzevwL6PbzBJHm3dx/AsbYWbw=="
+      "path": "@kovojs/compiler/dist/app-graph-BbmrdPm-.mjs",
+      "sha512": "sha512-pi4oOMTfyw3IQi7B08pRbSQ/pldLq2MiMgIw75UYfVSnR2xDheeqtJJcIZyfAyayFDbtBEHz7BPKPVBFtauA3Q=="
     },
     {
-      "path": "@kovojs/compiler/dist/compile-DdfJi4wz.mjs",
-      "sha512": "sha512-K/QQM/qr3e/8Hkp4P86WNJxaV3ruKd7H4xJS88+MYGSVhoHesAPZrhhrm7rSEcmG6HQBg3okp09oMUziDqwHyg=="
+      "path": "@kovojs/compiler/dist/compile-XFSSUwv8.mjs",
+      "sha512": "sha512-WcZAdHoBX/huL3lWtBvAV3vSkhqCSOqcwBZdwM4nyAZQwGhzSagXYFmdLcFb8Jxmdr18SpqDUXvf3hSLI1vJSA=="
     },
     {
       "path": "@kovojs/compiler/dist/compile.mjs",
-      "sha512": "sha512-bU1Ux7PUj8CtDryGfaG+1mfhddMjcoUn3xzjTVp6lW8fqQ+ATHDbvk/us6MQXMX6daPJ9eP5niNDtxecDlOWww=="
+      "sha512": "sha512-tfz5xOXA9ei33gr+4uciVCep6g4NC/APMUnTHUR90W5WYELWWz/AefH8RQUQvCXZPM3MR/iNOKAMPWIDk2kWIA=="
     },
     {
       "path": "@kovojs/compiler/dist/graph.mjs",
-      "sha512": "sha512-bVZ9COTPqQgJn1ZH67rHoD778f/1KZsfcu5hKDMqwFVxaEcnfVX5pTXr2lA/GFDWAsJmvUARmmZOKHR9qLjV7g=="
+      "sha512": "sha512-0GRQgNZvntr5R4UTnbfMveTJBN1qmhLXObv8ALXaYsr2qncK6HZe4BBlQGQ7OJtJsEJP9AXfBy1fN9a0OEzK4Q=="
     },
     {
       "path": "@kovojs/compiler/dist/index.mjs",
-      "sha512": "sha512-WW7XRNOr9Lont8pWaRAZ8my5YN1o8ckG2RTrJJhm2CJRhjGkb4JXooJyXfkWm7knX9W+0BZFxV4ItsMSd27Tyw=="
+      "sha512": "sha512-8oG9toYX6u7o+lMGlHDZYUiF9N1/KkJ+YUlzuhxV8s88ltnENQeB09G/HWR7VP1GVPaBj2ksRer2fNjk5z8how=="
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-/RYNnpkTYfOsFuqQU95cvLB721+VHWwQOymSTfyX0EMRHEtiEb/u63J4BOZK2BPtsc5KtyfRV6HNBewPSB+v5g=="
+      "sha512": "sha512-1M8TNABb5gn+gx6AhAbq4GGW4OvCEZIgJihrqr+jRTj1WGk6uBc3UAH7HIB7L4QIkJxOL9ibecpot91FIOVscQ=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
-      "sha512": "sha512-Nhc36wOSfZoKMXEgJiYNYzcDtYL/qFtI+VcdXW+2UyG8TFI1ThPbsmDdweTC3cyiFw8slxTmWT5JumZLuMbFWw=="
+      "sha512": "sha512-Yhl24B+3O4JluU1sHM9tjLnpo2s/P0D1W8EiVyovqQSJEIP1lLUUb6tLXHTwriCzFuAhQxCfn3Duyc6YIEhYBw=="
     },
     {
       "path": "@kovojs/compiler/dist/package-styles.mjs",
-      "sha512": "sha512-1/qhd/s/TT665yo617CuqAahUBS7c+wV6qopWOT0L9Ab4Nj1PZZva/jUuzG5cnY+O6W/ldiCTmTGEt4PFqTQ0Q=="
+      "sha512": "sha512-DkdQe/fkwY2V445NwRcEDoZhr/iF4Gbewqi3Ep+xAny/ZxpOK4PMtbE0fD++7QpxgKQxbGnHYeY9V+fWeNjsOA=="
     },
     {
       "path": "@kovojs/compiler/dist/security-bootstrap.mjs",
@@ -213,12 +213,12 @@
       "sha512": "sha512-9pmd1nNEa3vmxEoPpsso7rGmWa3eF+WnynYv/hMv9mvesAP9aLxFgrH1tLQMPPFCDW9mWTXOeWtRzGDPHF4bDQ=="
     },
     {
-      "path": "@kovojs/compiler/dist/vite-DdHUr-ca.mjs",
-      "sha512": "sha512-XGLg/8RZCQSne48blfmJvCe7NTcE6e6vI69LRQhU2neBD1tXUcueIXBM7/VZowBXQOmd8WMNOhbcOgHjSRE/Ow=="
+      "path": "@kovojs/compiler/dist/vite-Bitq5iCK.mjs",
+      "sha512": "sha512-k2+L3j8GsQFWXsZODxUMI++XA93UuVp7Qzb+JQkbLE4O2/eIFuG/ZEcnJw7IsijMvCq+KP8lji9S3p0AIxVNlA=="
     },
     {
       "path": "@kovojs/compiler/dist/vite-config.mjs",
-      "sha512": "sha512-Sxa0F8tV1y3+us/BGAzQ0z+Bs6GsFJPtTS0kKWN0cWb4h9tg/farL2Q9qU1Dz2aneqBvkIzx8VoebLjRbweMjA=="
+      "sha512": "sha512-1DLWD9VeNGM/QsQqsGcV3LVDNZgCCB/q7ZZmzTg69a+g6Vl6RdF+d1wCwDz8Pd6VSQYIMyQjF9rUwDA3q3bfmg=="
     },
     {
       "path": "@kovojs/core/dist/audit-text-CmsLNB8H.mjs",
@@ -233,8 +233,8 @@
       "sha512": "sha512-TuHIj4w/TkzTTLbAAzm/nW0Db/St469J6HHMiWa4THKdi3VJKsxkE8mmZKwApXlYIjrBPEIp2oxi6+alPk94Pw=="
     },
     {
-      "path": "@kovojs/core/dist/framework-identity-CbNM_tRO.mjs",
-      "sha512": "sha512-z6jBO0Ii4mHI/US49J7vJluCidX99vszFwfcbQ/TPVRjrVxjEBbQBcX+QhWAguPu3jKSrw//dyWYb8dCs4+pww=="
+      "path": "@kovojs/core/dist/framework-identity-C5uTA8to.mjs",
+      "sha512": "sha512-cXKwX9QSPCCsTraLeFnpYwjU90JdAIaWCRscGCaDgAaqrawH2GbccdGlYXnyddaoySgGwS0Ygzno8uumrTT0CQ=="
     },
     {
       "path": "@kovojs/core/dist/generated.mjs",
@@ -302,7 +302,7 @@
     },
     {
       "path": "@kovojs/core/dist/internal/framework-identity.mjs",
-      "sha512": "sha512-HpDbQ4QmNEbIEENb5MTF2iHDrtOVRf82JSNsXc8KCMArgRdVBtTth/aQKcrFuEDnnddFaGd/SRwRIbLiW6BiZQ=="
+      "sha512": "sha512-1QnBg4RIj3WryECXc19tCaalIxzCe+GB/NjkwBEKEUat3sRiYsLwIxi1huakt58KVP5uZ9ST0ffF+TRnWKwf1w=="
     },
     {
       "path": "@kovojs/core/dist/internal/graph.mjs",
@@ -330,7 +330,7 @@
     },
     {
       "path": "@kovojs/core/dist/internal/query-shape-source.mjs",
-      "sha512": "sha512-/XSa58knsoefkRrQkQT1F7TI/MVbtP8z5S5A8OS6i9/MMyr3ti6jcA017bV+3XhIBDniklNTfUeNW/JaWoiVNA=="
+      "sha512": "sha512-+sW7lRr/2B216cwg94GoYzLm9lYo6UPr4FKaTbK5O7lmA5tJTPqx3TpAQ8O7xPYE5+4BogmHt2cFp2AOHxSDhQ=="
     },
     {
       "path": "@kovojs/core/dist/internal/render-plan-token-intrinsics.mjs",
@@ -2642,15 +2642,15 @@
       "reason": "contains computed dynamic import; runtime-selected dependency loads require §4.6 lexical authority coverage"
     },
     {
-      "module": "@kovojs/compiler/dist/app-contract-project-BJGc8Irt.mjs",
+      "module": "@kovojs/compiler/dist/app-contract-project-rgD0yydY.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/app-graph-CiwCvcLq.mjs",
+      "module": "@kovojs/compiler/dist/app-graph-BbmrdPm-.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/compile-DdfJi4wz.mjs",
+      "module": "@kovojs/compiler/dist/compile-XFSSUwv8.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
@@ -2690,11 +2690,11 @@
       "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-DdHUr-ca.mjs",
+      "module": "@kovojs/compiler/dist/vite-Bitq5iCK.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-DdHUr-ca.mjs",
+      "module": "@kovojs/compiler/dist/vite-Bitq5iCK.mjs",
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {

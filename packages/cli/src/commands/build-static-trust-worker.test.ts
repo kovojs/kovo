@@ -93,6 +93,12 @@ function successfulTrust(
     unregisteredSinks: [],
   };
   const approvedSourceFiles = [{ fileName: 'app.ts', source: 'export default {};' }];
+  const sourceFrame = approvedSourceFiles
+    .map(
+      (file) =>
+        `${Buffer.byteLength(file.fileName)}:${file.fileName}${Buffer.byteLength(file.source)}:${file.source}`,
+    )
+    .join('');
   return {
     approvedSourceFiles,
     capabilityClosure: {
@@ -123,6 +129,21 @@ function successfulTrust(
     files: approvedSourceFiles,
     sourceGraphFacts: {
       components,
+      compilerFacts: {
+        appContractStaticFacts: [],
+        frameworkIdentityFacts: approvedSourceFiles.map((file) => ({
+          fileName: file.fileName,
+          sourceDigest: `sha256:${createHash('sha256').update(file.source, 'utf8').digest('hex')}`,
+          sourceLength: file.source.length,
+        })),
+        projectMutationFacts: {
+          mutationBindings: [],
+          mutationInputs: {},
+          requiresOptimisticModuleDerivation: false,
+        },
+        schema: 'kovo-build-compiler-facts/v2',
+        sourceSetDigest: `sha256:${createHash('sha256').update(sourceFrame, 'utf8').digest('hex')}`,
+      },
       domainDeclarationNames: [],
       registryDeclarationAnchors: [],
       routeOutcomes: [],
@@ -666,6 +687,27 @@ describe('static-trust worker protocol', () => {
               files: approvedSourceFiles,
               sourceGraphFacts: {
                 components: [],
+                compilerFacts: {
+                  appContractStaticFacts: [],
+                  frameworkIdentityFacts: [
+                    {
+                      fileName: 'app.ts',
+                      sourceDigest: `sha256:${createHash('sha256')
+                        .update('export default {};', 'utf8')
+                        .digest('hex')}`,
+                      sourceLength: 'export default {};'.length,
+                    },
+                  ],
+                  projectMutationFacts: {
+                    mutationBindings: [],
+                    mutationInputs: {},
+                    requiresOptimisticModuleDerivation: false,
+                  },
+                  schema: 'kovo-build-compiler-facts/v2',
+                  sourceSetDigest: `sha256:${createHash('sha256')
+                    .update(sourceFrame, 'utf8')
+                    .digest('hex')}`,
+                },
                 domainDeclarationNames: [],
                 registryDeclarationAnchors: [
                   ['route', null],

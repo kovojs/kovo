@@ -1,4 +1,5 @@
 import { navigationStandaloneHrefLowering } from './lower/navigation.js';
+import type { FrameworkIdentityProject } from '@kovojs/core/internal/framework-identity';
 import { lowerStructuralJsx } from './lower/structural-jsx.js';
 import { componentSourceDerivedRegistryReplacements } from './source-derived-lowering.js';
 import {
@@ -7,7 +8,11 @@ import {
   type CompileFactSnapshot,
 } from './compile-fact-ledger.js';
 import { applyModelPatchPlanPass, type ComponentPipelineState } from './model-pipeline.js';
-import { parseComponentModule, type ComponentModuleModel } from './scan/parse.js';
+import {
+  parseComponentModule,
+  type ComponentModuleModel,
+  type ParsedComponentProject,
+} from './scan/parse.js';
 import {
   composeSourceOffsetMaps,
   SourceReplacementAccumulator,
@@ -30,10 +35,16 @@ import type { CompileComponentOptions } from './types.js';
 type StyleExtraction = ReturnType<typeof extractKovoStyles>;
 type StructuralLowering = ReturnType<typeof lowerStructuralJsx>;
 
+interface LoweringPipelineOptions extends CompileComponentOptions {
+  readonly componentProject?: ParsedComponentProject;
+  readonly extraFiles?: readonly { readonly fileName: string; readonly source: string }[];
+  readonly frameworkIdentityProject?: FrameworkIdentityProject;
+}
+
 interface LoweringPipelineContext {
   readonly fileName: string;
   readonly componentName: string;
-  readonly options: CompileComponentOptions;
+  readonly options: LoweringPipelineOptions;
   state: ComponentPipelineState<ComponentModuleModel>;
   ledger: CompileFactLedger;
   pending: SourceReplacementAccumulator;
@@ -70,12 +81,11 @@ function reparse(ctx: LoweringPipelineContext): void {
   ctx.pending.clear();
 }
 
-function parseComponentProjectOptions(options: CompileComponentOptions) {
-  const extraFiles = (
-    options as {
-      readonly extraFiles?: readonly { readonly fileName: string; readonly source: string }[];
-    }
-  ).extraFiles;
+function parseComponentProjectOptions(options: LoweringPipelineOptions) {
+  if (options.frameworkIdentityProject !== undefined) {
+    return { frameworkIdentityProject: options.frameworkIdentityProject };
+  }
+  const extraFiles = options.extraFiles;
   return extraFiles?.length ? { frameworkIdentityFiles: extraFiles } : {};
 }
 
@@ -250,7 +260,7 @@ export interface LoweringPipelineResult {
 export function runLoweringPipeline(
   originalState: ComponentPipelineState<ComponentModuleModel>,
   componentName: string,
-  options: CompileComponentOptions,
+  options: LoweringPipelineOptions,
 ): LoweringPipelineResult {
   const ctx: LoweringPipelineContext = {
     fileName: originalState.fileName,

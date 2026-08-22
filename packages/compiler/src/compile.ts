@@ -14,6 +14,8 @@ import {
   expressionResolvesToFrameworkExport,
   frameworkExport,
   registerFrameworkIdentityProject,
+  resetFrameworkIdentityProject,
+  type FrameworkIdentityProject,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
@@ -108,6 +110,7 @@ import {
   jsxExpressions,
   normalizeComponentFileName,
   parseComponentModule as parseComponentModuleModel,
+  parseComponentProject,
   parseDiagnosticsForSourceFile,
   parseSharedSnapshotEntry,
   shareSnapshotEntryParseOrigin,
@@ -123,6 +126,8 @@ import {
   type ComponentModel,
   type ComponentModuleModel,
   type ObjectLiteralEntry,
+  type ParseComponentProjectFile,
+  type ParsedComponentProject,
   type TaskCompositionEdgeModel,
 } from './scan/parse.js';
 import {
@@ -299,7 +304,9 @@ interface CompileComponentProjectFile {
 }
 
 interface CompileComponentProjectOptions extends CompileComponentOptions {
+  readonly componentProject?: ParsedComponentProject;
   readonly extraFiles?: readonly CompileComponentProjectFile[];
+  readonly frameworkIdentityProject?: FrameworkIdentityProject;
   readonly packagePrefixDiscoveryBoundary?: string;
   readonly packagePrefixDiscoveryRootWitness?: import('./source-filesystem.js').CompilerSourceRootWitness;
 }
@@ -315,9 +322,95 @@ interface CompileComponentProjectOptions extends CompileComponentOptions {
  * so the pipeline reaches a fixpoint (SPEC.md §5.2; hand-authored lowered IR is KV235).
  */
 export function compileComponentModule(rawOptions: CompileComponentOptions): CompileResult {
-  const parsed = parseComponentPhase(
-    shareSnapshotExtraFileParseOrigins(rawOptions, snapshotCompileComponentOptions(rawOptions)),
+  return compileComponentModuleFromPreparedProject(rawOptions);
+}
+
+/** @internal Shared options for one immutable source-project compilation. */
+export interface CompileComponentProjectEntriesOptions {
+  readonly registryFacts?: RegistryFacts;
+  readonly sourceProvenance?: 'app';
+  readonly withEntryResolutions?: <Value>(
+    fileName: string,
+    source: string,
+    operation: () => Value,
+  ) => Value;
+}
+
+/** @internal Data results aligned with the exact source-project input order. */
+export interface CompileComponentProjectEntriesResult {
+  readonly components: readonly CompileResult[];
+  readonly parsedModules: readonly ComponentModuleModel[];
+}
+
+/**
+ * @internal Compile every entry of one immutable source snapshot with one parsed
+ * framework-identity project. Each transformed root is attached to the invocation-scoped lookup
+ * in O(1), replacing the former N per-entry O(N) map registrations without persisting ASTs beyond
+ * this synchronous source-proof call (SPEC §5.2 rules 6/9).
+ */
+export function compileComponentProjectEntries(
+  files: readonly ParseComponentProjectFile[],
+  options: CompileComponentProjectEntriesOptions = {},
+): CompileComponentProjectEntriesResult {
+  const parsedProject = parseComponentProject(files);
+  const sourceFiles = parsedProject.files;
+  const components: CompileResult[] = [];
+  try {
+    for (let index = 0; index < sourceFiles.length; index += 1) {
+      const file = sourceFiles[index]!;
+      const compileEntry = (): CompileResult =>
+        compileComponentModuleFromPreparedProject(
+          {
+            fileName: file.fileName,
+            ...(options.registryFacts === undefined
+              ? {}
+              : { registryFacts: options.registryFacts }),
+            source: file.source,
+            ...(options.sourceProvenance === undefined
+              ? {}
+              : { sourceProvenance: options.sourceProvenance }),
+          },
+          {
+            componentProject: parsedProject,
+            model: parsedProject.models[index]!,
+          },
+        );
+      compilerArrayAppend(
+        components,
+        options.withEntryResolutions === undefined
+          ? compileEntry()
+          : options.withEntryResolutions(file.fileName, file.source, compileEntry),
+        'Component project compile results',
+      );
+    }
+    return { components, parsedModules: parsedProject.models };
+  } finally {
+    // The transformed-root overlay is a synchronous compile capability, not ambient project
+    // state. Restore base source lookup before parsed models leave this invocation.
+    resetFrameworkIdentityProject(parsedProject.frameworkIdentityProject);
+  }
+}
+
+function compileComponentModuleFromPreparedProject(
+  rawOptions: CompileComponentOptions,
+  prepared?: {
+    readonly componentProject: ParsedComponentProject;
+    readonly model: ComponentModuleModel;
+  },
+): CompileResult {
+  const snapshotted = shareSnapshotExtraFileParseOrigins(
+    rawOptions,
+    snapshotCompileComponentOptions(rawOptions),
   );
+  const options: CompileComponentProjectOptions =
+    prepared === undefined
+      ? snapshotted
+      : {
+          ...snapshotted,
+          componentProject: prepared.componentProject,
+          frameworkIdentityProject: prepared.componentProject.frameworkIdentityProject,
+        };
+  const parsed = parseComponentPhase(options, prepared?.model);
   if (parsed.kind === 'compiler-ir') return compilerIrPassThroughResult(parsed);
   if (parsed.kind === 'parse-error') return parseErrorResult(parsed);
 
@@ -1066,7 +1159,10 @@ interface VerifyComponentPhaseResult {
   readonly renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
 }
 
-function parseComponentPhase(rawOptions: CompileComponentOptions): ParseComponentPhaseResult {
+function parseComponentPhase(
+  rawOptions: CompileComponentOptions,
+  preparedModel?: ComponentModuleModel,
+): ParseComponentPhaseResult {
   const projectOptions = rawOptions as CompileComponentProjectOptions;
   const options: CompileComponentProjectOptions = {
     ...projectOptions,
@@ -1081,11 +1177,21 @@ function parseComponentPhase(rawOptions: CompileComponentOptions): ParseComponen
     };
   }
 
-  const originalModel = parseComponentModuleModel(
-    options.fileName,
-    options.source,
-    parseComponentProjectOptions(options),
-  );
+  const originalModel =
+    preparedModel ??
+    parseComponentModuleModel(
+      options.fileName,
+      options.source,
+      parseComponentProjectOptions(options),
+    );
+  if (
+    originalModel.sourceFile.fileName !== options.fileName ||
+    originalModel.sourceFile.text !== options.source
+  ) {
+    throw new TypeError(
+      `Compiler project entry ${options.fileName} does not match its prepared source model.`,
+    );
+  }
   registerFrameworkIdentityProjectForOptions(originalModel.sourceFile, options);
   const parseDiagnostics = parseDiagnosticsForSourceFile(originalModel.sourceFile, options.source);
   if (parseDiagnostics.length > 0) return { kind: 'parse-error', options, parseDiagnostics };
@@ -1151,6 +1257,10 @@ function registerFrameworkIdentityProjectForOptions(
   sourceFile: TS.SourceFile,
   options: CompileComponentProjectOptions,
 ): void {
+  if (options.frameworkIdentityProject !== undefined) {
+    registerFrameworkIdentityProject(sourceFile, options.frameworkIdentityProject);
+    return;
+  }
   if (!options.extraFiles?.length) return;
   registerFrameworkIdentityProject(
     sourceFile,
@@ -1164,6 +1274,9 @@ function registerFrameworkIdentityProjectForOptions(
 }
 
 function parseComponentProjectOptions(options: CompileComponentProjectOptions) {
+  if (options.frameworkIdentityProject !== undefined) {
+    return { frameworkIdentityProject: options.frameworkIdentityProject };
+  }
   return options.extraFiles?.length ? { frameworkIdentityFiles: options.extraFiles } : {};
 }
 
@@ -1626,6 +1739,9 @@ function verifyComponentPhase(
     ...(parsed.compileOptions.extraFiles?.length
       ? { extraFiles: parsed.compileOptions.extraFiles }
       : {}),
+    ...(parsed.compileOptions.frameworkIdentityProject === undefined
+      ? {}
+      : { frameworkIdentityProject: parsed.compileOptions.frameworkIdentityProject }),
     ...(parsed.compileOptions.registryFacts
       ? { registryFacts: parsed.compileOptions.registryFacts }
       : {}),

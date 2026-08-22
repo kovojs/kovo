@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   canonicalFrameworkExportForExpression,
+  createFrameworkIdentityProject,
   expressionAtSpan,
   frameworkCatalogExportForModuleSpecifier,
   frameworkCatalogExportsForModule,
   frameworkExport,
   frameworkIdentityExpressionKindRows,
   registerFrameworkIdentityProject,
+  resetFrameworkIdentityProject,
   resolveFrameworkIdentityProjectSourceFile,
 } from './framework-identity.js';
 
@@ -372,6 +374,100 @@ describe('framework identity resolver', () => {
         callExpressionByText(usage, 'safeHtml[key]').expression,
       ),
     ).toBeUndefined();
+  });
+
+  it('shadows the immutable project root with each transformed root reparse', () => {
+    const originalRoot = sourceFile(
+      '/app/browser-root.ts',
+      "export { trustedHtml as html } from '@kovojs/browser';",
+    );
+    const barrel = sourceFile('/app/browser-barrel.ts', "export * from './browser-root';");
+    const transformedRoot = sourceFile(
+      '/app/browser-root.ts',
+      [
+        "export { trustedHtml as html } from '@kovojs/browser';",
+        'export const compilerGenerated = true;',
+      ].join('\n'),
+    );
+    const project = createFrameworkIdentityProject([originalRoot, barrel]);
+
+    expect(resolveFrameworkIdentityProjectSourceFile(barrel, './browser-root')).toBe(originalRoot);
+
+    registerFrameworkIdentityProject(transformedRoot, project);
+
+    expect(resolveFrameworkIdentityProjectSourceFile(barrel, './browser-root.js')).toBe(
+      transformedRoot,
+    );
+    expect(resolveFrameworkIdentityProjectSourceFile(transformedRoot, './browser-barrel')).toBe(
+      barrel,
+    );
+
+    resetFrameworkIdentityProject(project);
+    expect(resolveFrameworkIdentityProjectSourceFile(barrel, './browser-root')).toBe(originalRoot);
+  });
+
+  it.each([
+    ['TypeScript then TSX', false],
+    ['TSX then TypeScript', true],
+  ] as const)(
+    'fails closed for extensionless aliases in either project order: %s',
+    (_label, reverse) => {
+      const typescript = sourceFile(
+        '/app/choice.ts',
+        "export { trustedHtml as html } from '@kovojs/browser';",
+      );
+      const tsx = sourceFile('/app/choice.tsx', 'export const html = String;');
+      const usage = sourceFile('/app/usage.tsx', "export { html } from './choice';");
+      const choices = reverse ? [tsx, typescript] : [typescript, tsx];
+      const project = createFrameworkIdentityProject([...choices, usage]);
+
+      expect(resolveFrameworkIdentityProjectSourceFile(usage, './choice')).toBeUndefined();
+      expect(resolveFrameworkIdentityProjectSourceFile(usage, './choice.js')).toBeUndefined();
+      expect(resolveFrameworkIdentityProjectSourceFile(usage, './choice.ts')).toBe(typescript);
+      expect(resolveFrameworkIdentityProjectSourceFile(usage, './choice.tsx')).toBe(tsx);
+
+      const legacyUsage = sourceFile('/app/legacy-usage.tsx', "export { html } from './choice';");
+      registerFrameworkIdentityProject(legacyUsage, choices);
+      expect(resolveFrameworkIdentityProjectSourceFile(legacyUsage, './choice')).toBeUndefined();
+      expect(resolveFrameworkIdentityProjectSourceFile(legacyUsage, './choice.js')).toBeUndefined();
+      expect(resolveFrameworkIdentityProjectSourceFile(legacyUsage, './choice.ts')).toBe(
+        typescript,
+      );
+      expect(resolveFrameworkIdentityProjectSourceFile(legacyUsage, './choice.tsx')).toBe(tsx);
+
+      resetFrameworkIdentityProject(project);
+    },
+  );
+
+  it('keeps a current-root re-export cycle ambiguous while overlaying exact paths', () => {
+    const originalRoot = sourceFile(
+      '/app/browser-root.ts',
+      "export { trustedHtml as html } from '@kovojs/browser';",
+    );
+    const collidingRoot = sourceFile('/app/browser-root.tsx', 'export const html = String;');
+    const barrel = sourceFile('/app/browser-barrel.ts', "export * from './browser-root';");
+    const transformedRoot = sourceFile(
+      '/app/browser-root.ts',
+      [
+        "export { trustedHtml as html } from '@kovojs/browser';",
+        "export * from './browser-barrel';",
+      ].join('\n'),
+    );
+    const project = createFrameworkIdentityProject([originalRoot, collidingRoot, barrel]);
+
+    registerFrameworkIdentityProject(transformedRoot, project);
+
+    expect(resolveFrameworkIdentityProjectSourceFile(barrel, './browser-root')).toBeUndefined();
+    expect(resolveFrameworkIdentityProjectSourceFile(barrel, './browser-root.js')).toBeUndefined();
+    expect(resolveFrameworkIdentityProjectSourceFile(barrel, './browser-root.ts')).toBe(
+      transformedRoot,
+    );
+    expect(resolveFrameworkIdentityProjectSourceFile(barrel, './browser-root.tsx')).toBe(
+      collidingRoot,
+    );
+
+    resetFrameworkIdentityProject(project);
+    expect(resolveFrameworkIdentityProjectSourceFile(barrel, './browser-root')).toBeUndefined();
   });
 
   it('resolves local export declarations and fails closed for unsupported expression kinds', () => {

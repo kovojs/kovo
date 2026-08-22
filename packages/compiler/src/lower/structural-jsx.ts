@@ -53,6 +53,7 @@ import {
   type JsxElementModel,
   type JsxExpressionModel,
   type ObjectLiteralEntry,
+  type ParsedComponentProject,
   type SourceSpan,
 } from '../scan/parse.js';
 /* Parser-owned intrinsic identity is mandatory for the component traversal below. */
@@ -149,6 +150,8 @@ export type StructuralJsxLoweringOptions = Pick<
   CompileComponentOptions,
   'fileName' | 'queryShapeFacts' | 'queryShapes' | 'registryFacts' | 'source'
 > & {
+  /** @internal One compiler-owned immutable project shared by all prepared entry compilations. */
+  componentProject?: ParsedComponentProject;
   /** @internal Project files pinned by the compiler/Vite caller for source component proof. */
   extraFiles?: readonly { readonly fileName: string; readonly source: string }[];
   skipInlineAttributeDeriveSpans?: readonly SourceSpan[];
@@ -963,6 +966,8 @@ export interface MutationDocumentReachableControl {
 }
 
 interface MutationComponentProjectCacheEntry {
+  readonly approvedExtraSourceFiles: number;
+  readonly componentProject?: ParsedComponentProject;
   readonly extraFiles: readonly { readonly fileName: string; readonly source: string }[];
   readonly fileName: string;
   readonly root: MutationComponentSource;
@@ -996,7 +1001,7 @@ export function mutationComponentProjectWorkForTesting(
   return entry === undefined
     ? undefined
     : {
-        approvedExtraSourceFiles: entry.extraFiles.length,
+        approvedExtraSourceFiles: entry.approvedExtraSourceFiles,
         parsedExtraSourceFiles: entry.parsedExtraSourceFiles,
         projectBuilds: entry.projectBuilds,
         snapshotRevision: entry.snapshotRevision,
@@ -1011,6 +1016,29 @@ function mutationComponentProject(
   if (entry.project !== undefined) return entry.project;
   const root = entry.root;
   const files: MutationComponentSource[] = [root];
+  const componentProject = entry.componentProject;
+  if (componentProject !== undefined) {
+    // Prepared build/check compilation already parsed this exact immutable project once. Reuse
+    // its aligned source/model carriers directly; do not reconstruct an N-file source array or
+    // reparse N-1 extras for each entry.
+    for (let index = 0; index < componentProject.files.length; index += 1) {
+      const file = componentProject.files[index]!;
+      const fileName = normalizeComponentFileName(file.fileName);
+      if (fileName === root.fileName) continue;
+      appendCompilerFact(
+        files,
+        {
+          fileName,
+          model: componentProject.models[index]!,
+          source: file.source,
+        },
+        'Prepared mutation component project models',
+      );
+    }
+    entry.projectBuilds += 1;
+    entry.project = { files, root };
+    return entry.project;
+  }
   const extraFiles = entry.extraFiles;
   // Parse and register the exact extra-source snapshot once. The former per-module path reparsed
   // every identity file for every extra model, turning N approved files into N² ASTs each time the
@@ -1050,11 +1078,22 @@ function mutationComponentProjectEntry(
 ): MutationComponentProjectCacheEntry {
   const cached = cachedMutationComponentProjectEntry(model, options);
   if (cached !== undefined) return cached;
-  const extraFiles = snapshotMutationComponentProjectFiles(options.extraFiles ?? []);
+  const componentProject = options.componentProject;
+  const extraFiles =
+    componentProject === undefined
+      ? snapshotMutationComponentProjectFiles(options.extraFiles ?? [])
+      : [];
   let bySnapshot = compilerWeakMapGet(mutationComponentProjectCache, model);
   const snapshotKey = mutationComponentProjectSnapshotKey(options);
   const prior = bySnapshot === undefined ? undefined : compilerWeakMapGet(bySnapshot, snapshotKey);
   const entry: MutationComponentProjectCacheEntry = {
+    approvedExtraSourceFiles:
+      componentProject === undefined
+        ? extraFiles.length
+        : componentProject.files.length === 0
+          ? 0
+          : componentProject.files.length - 1,
+    ...(componentProject === undefined ? {} : { componentProject }),
     extraFiles,
     fileName: normalizeComponentFileName(options.fileName),
     parsedExtraSourceFiles: 0,
@@ -1090,7 +1129,7 @@ function cachedMutationComponentProjectEntry(
 }
 
 function mutationComponentProjectSnapshotKey(options: StructuralJsxLoweringOptions): object {
-  return options.extraFiles ?? emptyMutationComponentProjectSnapshot;
+  return options.componentProject ?? options.extraFiles ?? emptyMutationComponentProjectSnapshot;
 }
 
 function snapshotMutationComponentProjectFiles(
@@ -1123,6 +1162,9 @@ function mutationComponentProjectSnapshotMatches(
     entry.source !== options.source
   ) {
     return false;
+  }
+  if (options.componentProject !== undefined || entry.componentProject !== undefined) {
+    return options.componentProject === entry.componentProject;
   }
   const files = compilerSnapshotDenseArray(
     options.extraFiles ?? [],

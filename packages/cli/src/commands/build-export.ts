@@ -73,7 +73,9 @@ import { deriveAppGraph } from '@kovojs/compiler/graph';
 import {
   analyzeCapabilityClosure,
   collectCapabilityPackageRequests,
+  compileComponentProjectEntries,
   compilerOwnedProjectMutationRegistryFactsFromFiles,
+  compilerOwnedProjectMutationRegistryFactsFromProject,
   componentTaskBSourceOperationFacts,
   type CompilerClientModuleHandoffInstaller,
   compilerGeneratedCapabilityDependencies,
@@ -95,6 +97,7 @@ import {
   type CompilerOwnedViteClientModuleRole,
   type CompilerOwnedAppContractProject,
   type CompilerOwnedAppContractStaticFact,
+  type MutationInputFieldFact,
   type ProjectMutationRegistryFacts,
   type QueryShapeFact,
   type AnalyzeCapabilityClosureResult,
@@ -790,6 +793,39 @@ export interface KovoBuildOneShotApprovedConfig {
   readonly path: string;
 }
 
+const KOVO_BUILD_COMPILER_FACTS_SCHEMA = 'kovo-build-compiler-facts/v2' as const;
+
+/** Source bytes stay in the authenticated source snapshot and are bound here by digest. */
+export type KovoBuildAppContractStaticFact = Omit<CompilerOwnedAppContractStaticFact, 'source'>;
+
+/**
+ * @internal Pure mutation-authority facts authenticated across source proof. Optimistic client
+ * modules are executable compiler output and are therefore regenerated from current source only
+ * after deployment proof begins.
+ */
+export interface KovoBuildProjectMutationFacts {
+  readonly mutationBindings: ProjectMutationRegistryFacts['mutationBindings'];
+  readonly mutationInputs: ProjectMutationRegistryFacts['mutationInputs'];
+  readonly requiresOptimisticModuleDerivation: boolean;
+}
+
+/**
+ * Data-only compiler facts retained across the source-proof/deployment-proof process boundary.
+ * Programs, SourceFiles, resolver sessions, and lowered/executable IR are not members of this
+ * capsule; deployment regenerates executable optimism from revalidated current source when needed.
+ */
+export interface KovoBuildCompilerFacts {
+  readonly appContractStaticFacts: readonly KovoBuildAppContractStaticFact[];
+  readonly frameworkIdentityFacts: readonly {
+    readonly fileName: string;
+    readonly sourceDigest: string;
+    readonly sourceLength: number;
+  }[];
+  readonly projectMutationFacts: KovoBuildProjectMutationFacts;
+  readonly schema: typeof KOVO_BUILD_COMPILER_FACTS_SCHEMA;
+  readonly sourceSetDigest: string;
+}
+
 /** Serializable proof output from the fresh one-shot analysis process. */
 export interface KovoBuildOneShotAnalysis {
   readonly approvedConfig?: KovoBuildOneShotApprovedConfig;
@@ -798,6 +834,7 @@ export interface KovoBuildOneShotAnalysis {
   readonly buildStylesheetCss: Awaited<ReturnType<typeof kovoBuildStylesheetCss>>;
   readonly checkGraph: CoreGraph.KovoCheckInput;
   readonly clientEntry?: BuildCheckSourceFile;
+  readonly compilerFacts: KovoBuildCompilerFacts;
   readonly dependencyCapabilities: AppDependencyCapabilityManifest;
   readonly phaseCensus?: KovoSourceCheckPhaseCensus;
   readonly queryShapeFacts: readonly QueryShapeFact[];
@@ -1460,6 +1497,7 @@ export async function produceKovoBuildOneShotAnalysis(
       ...(loadAndCheck.approvedClientEntry === undefined
         ? {}
         : { clientEntry: loadAndCheck.approvedClientEntry }),
+      compilerFacts: loadAndCheck.compilerFacts,
       dependencyCapabilities: loadAndCheck.dependencyCapabilities,
       ...(phaseCensus === undefined ? {} : { phaseCensus }),
       queryShapeFacts: loadAndCheck.queryShapeFacts,
@@ -1604,6 +1642,7 @@ export async function runBuildCommand(
         checkGraph,
         cloudflare,
         compilerClientModuleBuildInstaller,
+        compilerFacts,
         dependencyCapabilities,
         declaredKovoAppId,
         deriveClosedKovoApp,
@@ -1625,16 +1664,24 @@ export async function runBuildCommand(
         provenance: artifactProvenance,
       };
       const clientRoot = kovoClientBuildRoot(resolvedAppModulePath, invocationRoot);
-      const clientProjectMutationFacts = projectMutationRegistryFactsForBuild(
+      const deploymentProjectMutationFacts = deploymentProjectMutationFactsFromCompilerFacts(
+        approvedSourceFiles,
+        compilerFacts.projectMutationFacts,
+        invocationRoot,
+      );
+      const clientProjectMutationFacts = projectMutationRegistryFactsForBuildFromExactFacts(
         resolvedAppModulePath,
         clientRoot,
         approvedSourceFiles,
+        deploymentProjectMutationFacts,
         invocationRoot,
       );
-      const serverProjectMutationFacts = projectMutationRegistryFactsForBuild(
+      const serverProjectMutationFacts = projectMutationRegistryFactsForBuildFromExactFacts(
         resolvedAppModulePath,
         invocationRoot,
         approvedSourceFiles,
+        deploymentProjectMutationFacts,
+        invocationRoot,
       );
       // Reuse the exact entry-reachable source proof. Re-censusing dirname(app) here used to admit
       // and repeatedly analyze every unimported copied UI module, making the documented full-catalog
@@ -1946,16 +1993,24 @@ export async function produceKovoBuildOneShotClientPhase(
       provenance: analysis.artifactProvenance,
     };
     const clientRoot = kovoClientBuildRoot(resolvedAppModulePath, invocationRoot);
-    const clientProjectMutationFacts = projectMutationRegistryFactsForBuild(
+    const deploymentProjectMutationFacts = deploymentProjectMutationFactsFromCompilerFacts(
+      approvedSourceFiles,
+      analysis.compilerFacts.projectMutationFacts,
+      invocationRoot,
+    );
+    const clientProjectMutationFacts = projectMutationRegistryFactsForBuildFromExactFacts(
       resolvedAppModulePath,
       clientRoot,
       approvedSourceFiles,
+      deploymentProjectMutationFacts,
       invocationRoot,
     );
-    const serverProjectMutationFacts = projectMutationRegistryFactsForBuild(
+    const serverProjectMutationFacts = projectMutationRegistryFactsForBuildFromExactFacts(
       resolvedAppModulePath,
       invocationRoot,
       approvedSourceFiles,
+      deploymentProjectMutationFacts,
+      invocationRoot,
     );
     const staticRuntimeRegistry = analysis.runtimeRegistry;
     if (app.document.csp !== undefined) {
@@ -2390,16 +2445,24 @@ export async function runBuildCommandFromOneShotAnalysis(
       provenance: analysis.artifactProvenance,
     };
     const clientRoot = kovoClientBuildRoot(resolvedAppModulePath, invocationRoot);
-    const clientProjectMutationFacts = projectMutationRegistryFactsForBuild(
+    const deploymentProjectMutationFacts = deploymentProjectMutationFactsFromCompilerFacts(
+      approvedSourceFiles,
+      analysis.compilerFacts.projectMutationFacts,
+      invocationRoot,
+    );
+    const clientProjectMutationFacts = projectMutationRegistryFactsForBuildFromExactFacts(
       resolvedAppModulePath,
       clientRoot,
       approvedSourceFiles,
+      deploymentProjectMutationFacts,
       invocationRoot,
     );
-    const serverProjectMutationFacts = projectMutationRegistryFactsForBuild(
+    const serverProjectMutationFacts = projectMutationRegistryFactsForBuildFromExactFacts(
       resolvedAppModulePath,
       invocationRoot,
       approvedSourceFiles,
+      deploymentProjectMutationFacts,
+      invocationRoot,
     );
     const staticRuntimeRegistry = analysis.runtimeRegistry;
     if (app.document.csp !== undefined) {
@@ -2837,6 +2900,7 @@ function requireKovoBuildOneShotAnalysis(value: unknown): KovoBuildOneShotAnalys
     'artifactProvenance',
     'buildStylesheetCss',
     'checkGraph',
+    'compilerFacts',
     'dependencyCapabilities',
     'queryShapeFacts',
     'runtimeRegistry',
@@ -2866,9 +2930,13 @@ function requireKovoBuildOneShotAnalysis(value: unknown): KovoBuildOneShotAnalys
   ) {
     throw new TypeError('Kovo build handoff analysis has invalid collection fields.');
   }
-  validateStaticTrustSourceFiles(
+  const approvedSourceFiles = validateStaticTrustSourceFiles(
     buildOwnDataValue(value, 'approvedSourceFiles', 'Kovo build handoff analysis'),
     'Kovo build handoff approved source files',
+  );
+  validateKovoBuildCompilerFacts(
+    buildOwnDataValue(value, 'compilerFacts', 'Kovo build handoff analysis'),
+    approvedSourceFiles,
   );
   const clientEntry = buildOwnDataProperty(value, 'clientEntry', 'Kovo build handoff analysis');
   if (clientEntry.present) {
@@ -3362,6 +3430,7 @@ async function loadAndCheckBuildApp(
     checkGraph: buildCheck.graph,
     cloudflare,
     compilerClientModuleBuildInstaller: loadedBuildApp.compilerClientModuleBuildInstaller,
+    compilerFacts: preEvaluationStaticTrust.sourceGraphFacts.compilerFacts,
     dependencyCapabilities: preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
     declaredKovoAppId,
     deriveClosedKovoApp,
@@ -3764,6 +3833,7 @@ interface PreEvaluationStaticTrustAnalysis extends Omit<
 type StaticTrustSourceGraphFacts = Pick<
   SourceGraphFacts,
   | 'components'
+  | 'compilerFacts'
   | 'domainDeclarationNames'
   | 'registryDeclarationAnchors'
   | 'routeOutcomes'
@@ -4301,6 +4371,7 @@ function staticTrustSuccessPayload(
     files: trust.files,
     sourceGraphFacts: {
       components: trust.sourceGraphFacts.components,
+      compilerFacts: trust.sourceGraphFacts.compilerFacts,
       domainDeclarationNames: trust.sourceGraphFacts.domainDeclarationNames,
       registryDeclarationAnchors: sortedStaticTrustMapEntries(
         trust.sourceGraphFacts.registryDeclarationAnchors,
@@ -5466,6 +5537,10 @@ function validateStaticTrustSuccess(
   ) {
     throw new TypeError('Kovo static-trust worker returned invalid source-graph facts.');
   }
+  validateKovoBuildCompilerFacts(
+    buildOwnDataValue(sourceGraphValue, 'compilerFacts', 'Static-trust source-graph facts'),
+    files,
+  );
   const registryDeclarationAnchors = staticTrustMap(
     buildOwnDataValue(
       sourceGraphValue,
@@ -5498,6 +5573,7 @@ function validateStaticTrustSuccess(
     sourceGraphValue,
     [
       'components',
+      'compilerFacts',
       'domainDeclarationNames',
       'registryDeclarationAnchors',
       'routeOutcomes',
@@ -5927,6 +6003,451 @@ function validateStaticTrustSourceFiles(value: unknown, label: string): BuildChe
     }
   }
   return files;
+}
+
+function kovoBuildCompilerSourceFiles(
+  files: readonly BuildCheckSourceFile[],
+): BuildCheckSourceFile[] {
+  return buildFilterDense(
+    files,
+    'Build compiler source module files',
+    (file) => buildRegExpExec(/\.[cm]?[jt]sx?$/u, file.fileName) !== null,
+  );
+}
+
+/**
+ * Authenticate the data shape that survives source proof. The private worker/one-shot envelopes
+ * authenticate who produced these facts; this validator additionally binds every path, span, and
+ * source digest to the immutable approved module snapshot before deployment projection consumes
+ * it (SPEC §5.2 rules 6/9). It deliberately does not rebuild a Program.
+ */
+function validateKovoBuildCompilerFacts(
+  value: unknown,
+  approvedFiles: readonly BuildCheckSourceFile[],
+): KovoBuildCompilerFacts {
+  requireKovoBuildOneShotExactKeys(
+    value,
+    [
+      'appContractStaticFacts',
+      'frameworkIdentityFacts',
+      'projectMutationFacts',
+      'schema',
+      'sourceSetDigest',
+    ],
+    'compiler facts',
+  );
+  if (
+    buildOwnDataValue(value, 'schema', 'Kovo build compiler facts') !==
+    KOVO_BUILD_COMPILER_FACTS_SCHEMA
+  ) {
+    throw new TypeError('Kovo build compiler facts use an unsupported schema.');
+  }
+  const sources = kovoBuildCompilerSourceFiles(
+    buildSnapshotDenseArray(approvedFiles, 'Kovo build compiler approved sources'),
+  );
+  const approvedByPath = buildCreateMap<string, string>();
+  for (let index = 0; index < sources.length; index += 1) {
+    const source = sources[index]!;
+    if (buildMapHas(approvedByPath, source.fileName)) {
+      throw new TypeError(
+        `Kovo build compiler facts received duplicate source ${source.fileName}.`,
+      );
+    }
+    buildMapSet(approvedByPath, source.fileName, source.source);
+  }
+  const identityFacts = buildSnapshotDenseArray(
+    buildOwnDataValue(value, 'frameworkIdentityFacts', 'Kovo build compiler facts') as readonly {
+      readonly fileName: string;
+      readonly sourceDigest: string;
+      readonly sourceLength: number;
+    }[],
+    'Kovo build compiler framework-identity facts',
+  );
+  if (identityFacts.length !== sources.length) {
+    throw new TypeError('Kovo build compiler facts omitted a framework-identity source.');
+  }
+  const seenIdentityPaths = buildCreateSet<string>();
+  for (let index = 0; index < identityFacts.length; index += 1) {
+    const fact = identityFacts[index] as unknown;
+    requireKovoBuildOneShotExactKeys(
+      fact,
+      ['fileName', 'sourceDigest', 'sourceLength'],
+      `compiler framework-identity fact[${index}]`,
+    );
+    const fileName = buildOwnDataValue(
+      fact,
+      'fileName',
+      `Kovo build compiler framework-identity fact[${index}]`,
+    );
+    const sourceDigest = buildOwnDataValue(
+      fact,
+      'sourceDigest',
+      `Kovo build compiler framework-identity fact[${index}]`,
+    );
+    const sourceLength = buildOwnDataValue(
+      fact,
+      'sourceLength',
+      `Kovo build compiler framework-identity fact[${index}]`,
+    );
+    if (typeof fileName !== 'string' || buildSetHas(seenIdentityPaths, fileName)) {
+      throw new TypeError('Kovo build compiler facts contain a duplicate source identity.');
+    }
+    buildSetAdd(seenIdentityPaths, fileName);
+    const expected = sources[index]!;
+    if (
+      fileName !== expected.fileName ||
+      sourceLength !== expected.source.length ||
+      sourceDigest !== staticTrustDigest(expected.source)
+    ) {
+      throw new TypeError(
+        `Kovo build compiler facts contain a stale source digest or path for ${String(fileName)}.`,
+      );
+    }
+  }
+  if (
+    buildOwnDataValue(value, 'sourceSetDigest', 'Kovo build compiler facts') !==
+    staticTrustSourceDigest(sources)
+  ) {
+    throw new TypeError('Kovo build compiler facts contain a stale source-set digest.');
+  }
+  validateKovoBuildAppContractStaticFacts(
+    buildOwnDataValue(value, 'appContractStaticFacts', 'Kovo build compiler facts'),
+    approvedByPath,
+  );
+  validateKovoBuildProjectMutationFacts(
+    buildOwnDataValue(value, 'projectMutationFacts', 'Kovo build compiler facts'),
+    approvedByPath,
+  );
+  return value as KovoBuildCompilerFacts;
+}
+
+function validateKovoBuildAppContractStaticFacts(
+  value: unknown,
+  approvedByPath: ReadonlyMap<string, string>,
+): void {
+  const facts = buildSnapshotDenseArray(
+    value as readonly KovoBuildAppContractStaticFact[],
+    'Kovo build compiler app-contract facts',
+  );
+  const seen = buildCreateSet<string>();
+  for (let index = 0; index < facts.length; index += 1) {
+    const fact = facts[index] as unknown;
+    requireKovoBuildOneShotExactKeys(
+      fact,
+      ['declaration', 'end', 'fileName', 'memberName', 'ownerKey', 'start'],
+      `compiler app-contract fact[${index}]`,
+      ['end', 'fileName', 'memberName', 'ownerKey', 'start'],
+    );
+    const fileName = buildOwnDataValue(
+      fact,
+      'fileName',
+      `Kovo build compiler app-contract fact[${index}]`,
+    );
+    const start = buildOwnDataValue(
+      fact,
+      'start',
+      `Kovo build compiler app-contract fact[${index}]`,
+    );
+    const end = buildOwnDataValue(fact, 'end', `Kovo build compiler app-contract fact[${index}]`);
+    const memberName = buildOwnDataValue(
+      fact,
+      'memberName',
+      `Kovo build compiler app-contract fact[${index}]`,
+    );
+    const ownerKey = buildOwnDataValue(
+      fact,
+      'ownerKey',
+      `Kovo build compiler app-contract fact[${index}]`,
+    );
+    const approvedSource =
+      typeof fileName === 'string' ? buildMapGet(approvedByPath, fileName) : undefined;
+    if (
+      approvedSource === undefined ||
+      !staticTrustNonNegativeInteger(start) ||
+      !staticTrustNonNegativeInteger(end) ||
+      start >= end ||
+      end > approvedSource.length ||
+      !kovoBuildAppContractMemberName(memberName) ||
+      typeof ownerKey !== 'string' ||
+      buildStringTrim(ownerKey).length === 0
+    ) {
+      throw new TypeError('Kovo build compiler facts contain an invalid app-contract fact.');
+    }
+    const identity = `${fileName}\0${String(start)}\0${String(end)}\0${memberName}`;
+    if (buildSetHas(seen, identity)) {
+      throw new TypeError('Kovo build compiler facts contain a duplicate app-contract fact.');
+    }
+    buildSetAdd(seen, identity);
+    const declaration = buildOwnDataProperty(
+      fact,
+      'declaration',
+      `Kovo build compiler app-contract fact[${index}]`,
+    );
+    if (!declaration.present) continue;
+    requireKovoBuildOneShotExactKeys(
+      declaration.value,
+      ['end', 'kind', 'name', 'start'],
+      `compiler app-contract declaration[${index}]`,
+    );
+    const declarationStart = buildOwnDataValue(
+      declaration.value,
+      'start',
+      `Kovo build compiler app-contract declaration[${index}]`,
+    );
+    const declarationEnd = buildOwnDataValue(
+      declaration.value,
+      'end',
+      `Kovo build compiler app-contract declaration[${index}]`,
+    );
+    const kind = buildOwnDataValue(
+      declaration.value,
+      'kind',
+      `Kovo build compiler app-contract declaration[${index}]`,
+    );
+    const name = buildOwnDataValue(
+      declaration.value,
+      'name',
+      `Kovo build compiler app-contract declaration[${index}]`,
+    );
+    if (
+      !staticTrustNonNegativeInteger(declarationStart) ||
+      !staticTrustNonNegativeInteger(declarationEnd) ||
+      declarationStart > start ||
+      declarationEnd < end ||
+      declarationStart >= declarationEnd ||
+      declarationEnd > approvedSource.length ||
+      (kind !== 'mutation' && kind !== 'page' && kind !== 'query' && kind !== 'task') ||
+      typeof name !== 'string' ||
+      name.length === 0
+    ) {
+      throw new TypeError('Kovo build compiler facts contain an invalid app-contract span.');
+    }
+  }
+}
+
+function kovoBuildAppContractMemberName(
+  value: unknown,
+): value is CompilerOwnedAppContractStaticFact['memberName'] {
+  return (
+    value === 'agent' ||
+    value === 'all' ||
+    value === 'assemble' ||
+    value === 'authenticated' ||
+    value === 'endpoint' ||
+    value === 'integrateMutation' ||
+    value === 'layout' ||
+    value === 'mutation' ||
+    value === 'owns' ||
+    value === 'publicAccess' ||
+    value === 'query' ||
+    value === 'rateLimit' ||
+    value === 'role' ||
+    value === 'route' ||
+    value === 'task' ||
+    value === 'verifiedAccess'
+  );
+}
+
+function validateKovoBuildProjectMutationFacts(
+  value: unknown,
+  approvedByPath: ReadonlyMap<string, string>,
+): void {
+  requireKovoBuildOneShotExactKeys(
+    value,
+    ['mutationBindings', 'mutationInputs', 'requiresOptimisticModuleDerivation'],
+    'compiler project-mutation facts',
+  );
+  if (
+    typeof buildOwnDataValue(
+      value,
+      'requiresOptimisticModuleDerivation',
+      'Kovo build compiler project-mutation facts',
+    ) !== 'boolean'
+  ) {
+    throw new TypeError(
+      'Kovo build compiler facts contain invalid optimistic derivation metadata.',
+    );
+  }
+  const mutationInputs = buildOwnDataValue(
+    value,
+    'mutationInputs',
+    'Kovo build compiler project-mutation facts',
+  );
+  if (!isRecord(mutationInputs)) {
+    throw new TypeError('Kovo build compiler facts contain invalid mutation inputs.');
+  }
+  const mutationInputKeys = buildSnapshotDenseArray(
+    buildObjectKeys(mutationInputs),
+    'Kovo build compiler mutation input keys',
+  );
+  for (let index = 0; index < mutationInputKeys.length; index += 1) {
+    const key = mutationInputKeys[index]!;
+    if (key.length === 0) {
+      throw new TypeError('Kovo build compiler facts contain an empty mutation input key.');
+    }
+    validateKovoBuildMutationInputFields(
+      buildOwnDataValue(mutationInputs, key, `Kovo build compiler mutation input ${key}`),
+      approvedByPath,
+      `mutation input ${key}`,
+    );
+  }
+  const bindings = buildSnapshotDenseArray(
+    buildOwnDataValue(
+      value,
+      'mutationBindings',
+      'Kovo build compiler project-mutation facts',
+    ) as ProjectMutationRegistryFacts['mutationBindings'],
+    'Kovo build compiler mutation bindings',
+  );
+  const seenBindings = buildCreateSet<string>();
+  for (let index = 0; index < bindings.length; index += 1) {
+    const binding = bindings[index] as unknown;
+    requireKovoBuildOneShotExactKeys(
+      binding,
+      ['fileName', 'key', 'localName', 'source'],
+      `compiler mutation binding[${index}]`,
+    );
+    const fileName = buildOwnDataValue(
+      binding,
+      'fileName',
+      `Kovo build compiler mutation binding[${index}]`,
+    );
+    const key = buildOwnDataValue(binding, 'key', `Kovo build compiler mutation binding[${index}]`);
+    const localName = buildOwnDataValue(
+      binding,
+      'localName',
+      `Kovo build compiler mutation binding[${index}]`,
+    );
+    const source = buildOwnDataValue(
+      binding,
+      'source',
+      `Kovo build compiler mutation binding[${index}]`,
+    );
+    requireKovoBuildOneShotExactKeys(
+      source,
+      ['exportName', 'fileName', 'kind'],
+      `compiler mutation binding source[${index}]`,
+    );
+    const sourceFileName = buildOwnDataValue(
+      source,
+      'fileName',
+      `Kovo build compiler mutation binding source[${index}]`,
+    );
+    const exportName = buildOwnDataValue(
+      source,
+      'exportName',
+      `Kovo build compiler mutation binding source[${index}]`,
+    );
+    const kind = buildOwnDataValue(
+      source,
+      'kind',
+      `Kovo build compiler mutation binding source[${index}]`,
+    );
+    if (
+      typeof fileName !== 'string' ||
+      !buildMapHas(approvedByPath, fileName) ||
+      typeof sourceFileName !== 'string' ||
+      !buildMapHas(approvedByPath, sourceFileName) ||
+      typeof key !== 'string' ||
+      key.length === 0 ||
+      typeof localName !== 'string' ||
+      localName.length === 0 ||
+      typeof exportName !== 'string' ||
+      exportName.length === 0 ||
+      (kind !== 'better-auth-sign-in' &&
+        kind !== 'better-auth-sign-out' &&
+        kind !== 'kovo-mutation')
+    ) {
+      throw new TypeError('Kovo build compiler facts contain an invalid mutation binding.');
+    }
+    const identity = `${fileName}\0${localName}`;
+    if (buildSetHas(seenBindings, identity)) {
+      throw new TypeError('Kovo build compiler facts contain a duplicate mutation binding.');
+    }
+    buildSetAdd(seenBindings, identity);
+  }
+}
+
+function validateKovoBuildMutationInputFields(
+  value: unknown,
+  approvedByPath: ReadonlyMap<string, string>,
+  label: string,
+): readonly MutationInputFieldFact[] {
+  const fields = buildSnapshotDenseArray(
+    value as readonly MutationInputFieldFact[],
+    `Kovo build compiler ${label} fields`,
+  );
+  const seen = buildCreateSet<string>();
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index] as unknown;
+    requireKovoBuildOneShotExactKeys(
+      field,
+      ['coercion', 'defaulted', 'name', 'optional', 'provenance', 'required', 'source'],
+      `compiler ${label} field[${index}]`,
+      ['coercion', 'defaulted', 'name', 'optional', 'provenance', 'required'],
+    );
+    const coercion = buildOwnDataValue(field, 'coercion', `Kovo build compiler ${label}`);
+    const defaulted = buildOwnDataValue(field, 'defaulted', `Kovo build compiler ${label}`);
+    const name = buildOwnDataValue(field, 'name', `Kovo build compiler ${label}`);
+    const optional = buildOwnDataValue(field, 'optional', `Kovo build compiler ${label}`);
+    const provenance = buildOwnDataValue(field, 'provenance', `Kovo build compiler ${label}`);
+    const required = buildOwnDataValue(field, 'required', `Kovo build compiler ${label}`);
+    if (
+      (coercion !== 'boolean' &&
+        coercion !== 'file' &&
+        coercion !== 'number' &&
+        coercion !== 'string' &&
+        coercion !== 'unknown') ||
+      typeof defaulted !== 'boolean' ||
+      typeof name !== 'string' ||
+      name.length === 0 ||
+      buildSetHas(seen, name) ||
+      typeof optional !== 'boolean' ||
+      (provenance !== 'local-mutation' && provenance !== 'registry') ||
+      typeof required !== 'boolean'
+    ) {
+      throw new TypeError(`Kovo build compiler facts contain an invalid ${label} field.`);
+    }
+    buildSetAdd(seen, name);
+    const source = buildOwnDataProperty(field, 'source', `Kovo build compiler ${label}`);
+    if (!source.present) continue;
+    requireKovoBuildOneShotExactKeys(
+      source.value,
+      ['fileName', 'length', 'start'],
+      `compiler ${label} field source`,
+      ['fileName'],
+    );
+    const fileName = buildOwnDataValue(
+      source.value,
+      'fileName',
+      `Kovo build compiler ${label} field source`,
+    );
+    const approvedSource =
+      typeof fileName === 'string' ? buildMapGet(approvedByPath, fileName) : undefined;
+    const start = buildOwnDataProperty(
+      source.value,
+      'start',
+      `Kovo build compiler ${label} field source`,
+    );
+    const length = buildOwnDataProperty(
+      source.value,
+      'length',
+      `Kovo build compiler ${label} field source`,
+    );
+    if (approvedSource === undefined || start.present !== length.present) {
+      throw new TypeError(`Kovo build compiler facts contain a stale ${label} field source.`);
+    }
+    if (
+      start.present &&
+      length.present &&
+      (!staticTrustNonNegativeInteger(start.value) ||
+        !staticTrustNonNegativeInteger(length.value) ||
+        start.value + length.value > approvedSource.length)
+    ) {
+      throw new TypeError(`Kovo build compiler facts contain a stale ${label} field source.`);
+    }
+  }
+  return fields;
 }
 
 function assertStaticTrustSourceSubset(
@@ -7749,6 +8270,7 @@ function compareBuildRevealFacts(
 
 interface SourceGraphFacts {
   appContractStaticFacts: readonly CompilerOwnedAppContractStaticFact[];
+  compilerFacts: KovoBuildCompilerFacts;
   compilerDependencies: CompilerGeneratedCapabilityDependency[];
   compilerSecuritySemanticSources: CompilerSecuritySemanticSource[];
   compilerTaskBFiniteVerdict: CompilerTaskBFiniteVerdict;
@@ -8023,6 +8545,106 @@ function withBuildAppContractResolutions<Value>(
   });
 }
 
+function createKovoBuildCompilerFacts(
+  files: readonly BuildCheckSourceFile[],
+  appContractStaticFacts: readonly CompilerOwnedAppContractStaticFact[],
+  projectMutationFacts: ProjectMutationRegistryFacts,
+): KovoBuildCompilerFacts {
+  const sources = buildSnapshotDenseArray(files, 'Build compiler fact source files');
+  const compactAppContractStaticFacts: KovoBuildAppContractStaticFact[] = [];
+  for (let index = 0; index < appContractStaticFacts.length; index += 1) {
+    const fact = appContractStaticFacts[index]!;
+    buildSecurityArrayAppend(
+      compactAppContractStaticFacts,
+      {
+        ...(fact.declaration === undefined ? {} : { declaration: fact.declaration }),
+        end: fact.end,
+        fileName: fact.fileName,
+        memberName: fact.memberName,
+        ownerKey: fact.ownerKey,
+        start: fact.start,
+      },
+      'Build compiler app-contract facts',
+    );
+  }
+  const frameworkIdentityFacts: KovoBuildCompilerFacts['frameworkIdentityFacts'][number][] = [];
+  for (let index = 0; index < sources.length; index += 1) {
+    const file = sources[index]!;
+    buildSecurityArrayAppend(
+      frameworkIdentityFacts,
+      {
+        fileName: file.fileName,
+        sourceDigest: staticTrustDigest(file.source),
+        sourceLength: file.source.length,
+      },
+      'Build compiler framework-identity facts',
+    );
+  }
+  return {
+    appContractStaticFacts: compactAppContractStaticFacts,
+    frameworkIdentityFacts,
+    projectMutationFacts: kovoBuildProjectMutationFacts(projectMutationFacts),
+    schema: KOVO_BUILD_COMPILER_FACTS_SCHEMA,
+    sourceSetDigest: staticTrustSourceDigest(sources),
+  };
+}
+
+function kovoBuildProjectMutationFacts(
+  facts: ProjectMutationRegistryFacts,
+): KovoBuildProjectMutationFacts {
+  const optimisticModules =
+    facts.optimisticModules === undefined
+      ? []
+      : buildSnapshotDenseArray(facts.optimisticModules, 'Build compiler optimistic modules');
+  const optimismKeys =
+    facts.mutationOptimism === undefined
+      ? []
+      : buildSnapshotDenseArray(
+          buildObjectKeys(facts.mutationOptimism),
+          'Build compiler optimistic mutation keys',
+        );
+  if ((optimisticModules.length === 0) !== (optimismKeys.length === 0)) {
+    throw new TypeError(
+      'Build compiler mutation facts contain inconsistent optimistic module metadata.',
+    );
+  }
+  return {
+    mutationBindings: facts.mutationBindings,
+    mutationInputs: facts.mutationInputs,
+    requiresOptimisticModuleDerivation: optimisticModules.length > 0,
+  };
+}
+
+/** @internal Regression seam for the exact compiler-facts capsule producer. */
+export function snapshotKovoBuildCompilerFactsForTests(
+  files: readonly BuildCheckSourceFile[],
+  rootDirectory: string = process.cwd(),
+): KovoBuildCompilerFacts {
+  const sourceFiles = buildSnapshotDenseArray(files, 'Test build compiler fact source files');
+  const project = compilerOwnedAppContractProjectForBuild(sourceFiles, rootDirectory);
+  const projectMutationFacts =
+    project?.projectMutationRegistryFacts(sourceFiles) ??
+    projectMutationRegistryFactsFromFiles(sourceFiles);
+  const deploymentProjectMutationFacts =
+    project === undefined
+      ? projectMutationFacts
+      : compilerOwnedProjectMutationRegistryFactsFromProject(project, sourceFiles, rootDirectory);
+  const appContractStaticFacts = project?.staticFacts(sourceFiles) ?? [];
+  return createKovoBuildCompilerFacts(
+    sourceFiles,
+    appContractStaticFacts,
+    deploymentProjectMutationFacts,
+  );
+}
+
+/** @internal Regression seam for adversarial handoff validation. */
+export function adoptKovoBuildCompilerFactsForTests(
+  value: unknown,
+  approvedFiles: readonly BuildCheckSourceFile[],
+): KovoBuildCompilerFacts {
+  return validateKovoBuildCompilerFacts(value, approvedFiles);
+}
+
 function sourceGraphFactsFromFiles(
   files: readonly BuildCheckSourceFile[],
   rootDirectory: string = process.cwd(),
@@ -8045,41 +8667,46 @@ function sourceGraphFactsFromFiles(
   const projectMutationFacts =
     appContractProject?.projectMutationRegistryFacts(sourceFiles) ??
     projectMutationRegistryFactsFromFiles(sourceFiles);
+  // Source lowering retains project-relative registry identity. Deployment compilation has
+  // historically derived identity from absolute Program roots, then remapped only source paths.
+  // Preserve both proof domains byte-for-byte while reusing this exact Program: the capsule carries
+  // the deployment projection, and source graph compilation consumes the relative facts below.
+  const deploymentProjectMutationFacts =
+    appContractProject === undefined
+      ? projectMutationFacts
+      : compilerOwnedProjectMutationRegistryFactsFromProject(
+          appContractProject,
+          sourceFiles,
+          rootDirectory,
+        );
   const appContractStaticFacts = appContractProject?.staticFacts(sourceFiles) ?? [];
+  const compilerFacts = createKovoBuildCompilerFacts(
+    sourceFiles,
+    appContractStaticFacts,
+    deploymentProjectMutationFacts,
+  );
+  // Parse and compile the complete immutable framework-identity project once. The former
+  // per-entry path reconstructed and registered an N-file lookup for every original and lowered
+  // model. This compiler-owned entry builds one invocation-scoped lookup; reparsed roots attach
+  // to it in O(1), and no Program/SourceFile crosses the analysis handoff (SPEC §5.2 rules 6/9).
+  const compiledProject = compileComponentProjectEntries(sourceFiles, {
+    ...(projectMutationFacts.mutationBindings.length === 0
+      ? {}
+      : { registryFacts: projectMutationFacts }),
+    sourceProvenance: 'app',
+    withEntryResolutions: (fileName, source, operation) =>
+      withBuildAppContractResolutions(appContractProject, fileName, source, operation),
+  });
   collectAppContractDeclarationAnchors(registryDeclarationAnchors, appContractStaticFacts);
   for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
     const file = sourceFiles[fileIndex]!;
-    // Every identity input comes from the same descriptor-bound source census. Supplying the
-    // other snapshotted files lets the compiler resolve exact local imports without reopening the
-    // filesystem after authority approval.
-    const extraFiles = buildSnapshotDenseArray(
-      buildFilterDense(
-        sourceFiles,
-        `Same-snapshot framework-identity files for ${file.fileName}`,
-        (candidate) => candidate.fileName !== file.fileName,
-      ),
-      `Framework-identity files for ${file.fileName}`,
-    );
-    const componentOptions = {
-      ...(extraFiles.length === 0 ? {} : { extraFiles }),
-      fileName: file.fileName,
-      ...(projectMutationFacts.mutationBindings.length === 0
-        ? {}
-        : { registryFacts: projectMutationFacts }),
-      source: file.source,
-      sourceProvenance: 'app',
-    } as const;
     const resolvedCompilation = withBuildAppContractResolutions(
       appContractProject,
       file.fileName,
       file.source,
       () => ({
-        component: compileComponentModule(componentOptions),
-        parsedModule: parseComponentModule(
-          file.fileName,
-          file.source,
-          extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
-        ),
+        component: compiledProject.components[fileIndex]!,
+        parsedModule: compiledProject.parsedModules[fileIndex]!,
         routePage: compileRouteModule({ fileName: file.fileName, source: file.source }),
         standaloneRegistrySource: lowerStandaloneSourceDerivedRegistryDeclarations({
           fileName: file.fileName,
@@ -8236,6 +8863,7 @@ function sourceGraphFactsFromFiles(
 
   return {
     appContractStaticFacts,
+    compilerFacts,
     compilerDependencies,
     compilerSecuritySemanticSources,
     compilerTaskBFiniteVerdict:
@@ -12263,6 +12891,81 @@ export function projectMutationRegistryFactsForBuild(
 ): ProjectMutationRegistryFacts {
   const files = buildSnapshotDenseArray(sourceFiles, 'Project mutation build source files');
   const exactFacts = compilerOwnedProjectMutationRegistryFactsFromFiles(files, sourceIdentityRoot);
+  return projectMutationRegistryFactsForBuildFromExactFacts(
+    appModulePath,
+    buildRoot,
+    files,
+    exactFacts,
+    sourceIdentityRoot,
+  );
+}
+
+function deploymentProjectMutationFactsFromCompilerFacts(
+  sourceFiles: readonly BuildCheckSourceFile[],
+  authenticatedFacts: KovoBuildProjectMutationFacts,
+  sourceIdentityRoot: string,
+): ProjectMutationRegistryFacts {
+  const files = buildSnapshotDenseArray(
+    sourceFiles,
+    'Deployment project mutation compiler-fact source files',
+  );
+  if (!authenticatedFacts.requiresOptimisticModuleDerivation) {
+    // The compiler-owned Program conventionally returns present-but-empty optimism collections.
+    // Preserve that exact downstream shape without allocating a deployment Program on the common
+    // no-optimism path.
+    return {
+      mutationBindings: authenticatedFacts.mutationBindings,
+      mutationInputs: authenticatedFacts.mutationInputs,
+      mutationOptimism:
+        buildCreateNullRecord<
+          NonNullable<ProjectMutationRegistryFacts['mutationOptimism']>[string]
+        >(),
+      optimisticModules: [],
+    };
+  }
+
+  // Optimistic modules are executable compiler output, not source-proof facts. Recreate them from
+  // the already revalidated current source snapshot after deployment proof begins. The pure subset
+  // must still match the authenticated source-worker result before any emitted module is accepted.
+  const freshFacts = compilerOwnedProjectMutationRegistryFactsFromFiles(files, sourceIdentityRoot);
+  if (
+    kovoBuildOneShotDigest(kovoBuildProjectMutationFacts(freshFacts)) !==
+    kovoBuildOneShotDigest(authenticatedFacts)
+  ) {
+    throw new TypeError(
+      'Kovo deployment compiler produced mutation facts inconsistent with authenticated source proof.',
+    );
+  }
+  const optimisticModules = buildSnapshotDenseArray(
+    freshFacts.optimisticModules ?? [],
+    'Fresh deployment optimistic modules',
+  );
+  const mutationOptimism = freshFacts.mutationOptimism;
+  if (
+    optimisticModules.length === 0 ||
+    mutationOptimism === undefined ||
+    buildObjectKeys(mutationOptimism).length === 0
+  ) {
+    throw new TypeError(
+      'Kovo deployment compiler omitted optimism required by authenticated source proof.',
+    );
+  }
+  return {
+    mutationBindings: authenticatedFacts.mutationBindings,
+    mutationInputs: authenticatedFacts.mutationInputs,
+    mutationOptimism,
+    optimisticModules,
+  };
+}
+
+function projectMutationRegistryFactsForBuildFromExactFacts(
+  _appModulePath: string,
+  buildRoot: string,
+  sourceFiles: readonly BuildCheckSourceFile[],
+  exactFacts: ProjectMutationRegistryFacts,
+  sourceIdentityRoot: string = buildRoot,
+): ProjectMutationRegistryFacts {
+  const files = buildSnapshotDenseArray(sourceFiles, 'Project mutation build source files');
   const projectFileName = (fileName: string): string =>
     kovoBuildFilterFileName(resolve(sourceIdentityRoot, fileName), buildRoot);
   const mutationInputs = buildCreateNullRecord<
@@ -12425,6 +13128,29 @@ export function projectMutationRegistryFactsForBuild(
     ...(mutationOptimism === undefined ? {} : { mutationOptimism }),
     ...(optimisticModules === undefined ? {} : { optimisticModules }),
   };
+}
+
+/** @internal Regression seam proving deployment projection consumes authenticated pure facts. */
+export function projectMutationRegistryFactsFromCompilerFactsForTests(
+  appModulePath: string,
+  buildRoot: string,
+  sourceFiles: readonly BuildCheckSourceFile[],
+  value: unknown,
+  sourceIdentityRoot: string = buildRoot,
+): ProjectMutationRegistryFacts {
+  const compilerFacts = validateKovoBuildCompilerFacts(value, sourceFiles);
+  const deploymentFacts = deploymentProjectMutationFactsFromCompilerFacts(
+    sourceFiles,
+    compilerFacts.projectMutationFacts,
+    sourceIdentityRoot,
+  );
+  return projectMutationRegistryFactsForBuildFromExactFacts(
+    appModulePath,
+    buildRoot,
+    sourceFiles,
+    deploymentFacts,
+    sourceIdentityRoot,
+  );
 }
 
 function kovoBuildFilterFileName(fileName: string, root: string): string {
