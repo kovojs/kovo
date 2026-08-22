@@ -298,7 +298,10 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     started. The retained report/digests and mandatory new-seal disposition are in the same record.
   - Replacement evidence: `01b2c7594..b2f18ab18` passed independent resolver/security review and
     the repaired direct-child seal has tree `8ab4b1cd0f`, stable patch ID `0944365d5d`, and an exact
-    20-path census. Fresh N=24/N=216 reports remain required; no attempt-1 timing is admissible.
+    20-path census. Its fresh 20-cell N=24 report is unproven because graph diagnostics and seven
+    output paths differ across lanes; it also measured only +0.4268% wall median with CI crossing
+    zero. N=216 did not start because N=24 cannot meet the all-corpora rule. Exact custody is in the
+    decision record; neither attempt is admissible or eligible for integration.
 
 ## Phase 3 — production runtime
 

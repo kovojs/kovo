@@ -1,6 +1,6 @@
 # Build compiler-facts candidate
 
-Status: repaired candidate sealed and independently approved; fresh N=24/N=216 timing pending.
+Status: repaired candidate N=24 evidence unproven and below the performance floor; not integrated.
 
 This spike tests whether reusing one immutable parsed project and carrying a data-only compiler-facts
 capsule across source proof removes enough repeated build work to meet the production-build first
@@ -52,6 +52,29 @@ topped up, relabeled, or combined with later samples.
 The superseded seal remains available at
 `refs/heads/perf-spike/build-compiler-facts-sealed-20260822` (`c81817ac8`) solely to authenticate
 attempt 1. It is not the candidate for the fresh run.
+
+## Attempt 2 disposition
+
+The repaired seal completed the exact 20-cell N=24 schedule on the same quiet Apple M4 host. The
+retained report is
+`/private/tmp/kovo-build-compiler-facts-v2-n24-GdBUEO/report.json` (SHA-256
+`95d9dc6f96395a0f1b4014f62aa528ae15eff30cad8e839eff4cf6be1d622ee4`); its 20 raw reports have
+sorted-digest aggregate
+`bf0621ccdd426b1cc56437cec734129fbbeb18c9884e9da84064fef046ed28c7`.
+
+The run is **unproven**, not accepted or relabeled as a clean timing rejection. Every lane was
+internally stable, but the cross-lane exactness gate found different build-graph diagnostics and
+different 13,954,081-byte output trees: baseline artifact digest
+`sha256:a4653684012d07679e2d452f69a831fc49a6c4ab820013f7f22274cbb1928daa`, candidate
+`sha256:baecc3b862c90ae0486b89118cafe7942647edf4127b85583e12067f04abbcb5`. Seven exact paths differed:
+the certificate policy, certificate, escape census, escape obligations, graph, and the two copies
+of the emitted server handler. The harness therefore refused correctness and artifact claims.
+
+The disclosed timing also cannot meet the preregistered floor: wall medians were 32,340.83 ms and
+32,202.79 ms, only 0.4268% faster, with paired baseline-minus-candidate 95% CI
+`[-1.59, 268.81]` ms. Wall p95 improved 0.7498%; peak-RSS median/p95 improved 0.4719%/0.2846%.
+Because N=24 can no longer satisfy the required ≥10% win and positive CI, N=216 did not start and
+cannot rescue this candidate. Attempt 2 will not be rerun, topped up, or combined with later work.
 
 ## Security and correctness boundary
 
