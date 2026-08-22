@@ -135,7 +135,7 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
 
 ## Phase 1 — developer loop
 
-- [x] Ratify current-head dev ready/edit/error/recovery/RSS baselines against matched Next at N=24
+- [x] Ratify the pre-change dev ready/edit/error/recovery/RSS baselines against matched Next at N=24
       and N=216; use 15 fresh starts and 30 measured edits after three warmups per edit class.
   - Evidence: the ratified `dev-n24-baseline.json` and `dev-n216-baseline.json` in
     `reports/performance-publication-2026-08-21/evidence/` each bind five clean reports with 15
@@ -227,6 +227,11 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     measured Vite path: only modules with query-plan bootstrap metadata invoke the resolver, and the
     three query-bearing N=216 modules still take the unchanged dependency-analysis path. Exact ref,
     patch custody, and production call-chain proof are in the same decision record.
+- [ ] Reach the remaining developer first milestones at both N=24 and N=216: cold ready at least
+      30% better than the pre-change Kovo baseline, leaf and entry edit-to-paint at least 20% better
+      with zero misses/state loss, and authenticated `check --watch` closure edits at most 5 seconds.
+      Apply the full serialized correctness, paired-confidence, p95, and RSS contract; retain any
+      stronger Kovo-vs-Next misses as follow-on results rather than weakening these milestones.
 - [ ] Reach the syntax-error/recovery first milestone at both N=24 and N=216: syntax p95 at most
       1 second, recovery p95 at most 2 seconds, zero lost/silent revisions, and no greater than 5%
       p95 latency or process-tree RSS regression. Accept an implementation only under the plan's
@@ -264,6 +269,9 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
   - Decision: not warranted. The authenticated assessment in
     `reports/performance-publication-2026-08-21/performance-publication.md` bounds the N=216
     unchanged/edit residual upper shares at 2.06%/2.13%, both below the preregistered 10% threshold.
+- [ ] Re-derive the foreground build/watch decision from final-source N=24/N=216 budgets. If its
+      preregistered disposition becomes `profile-required` or `warranted`, complete that branch
+      before publication rather than carrying forward the source-specific `01b2c7594` decision.
 - [ ] Gate build wall, p95, RSS, and artifact size on the realistic corpus; reach the first milestone
       before attempting the competitive target.
 
@@ -344,15 +352,15 @@ packages/server/src/node.test.ts --reporter=dot` passed 88/88 and covers private
       matched dev edits, browser cells, builds, and throughput on a quiet pinned nightly runner.
   - Evidence: `faf00c5de`; `pnpm exec vitest --run scripts/perf-ci-policy.test.mjs
 --reporter=dot` passed and proves PR smoke plus labeled/scheduled realistic matrices.
-- [x] Authenticate one exact-final-source `Production bytes` job and its one-member
+- [ ] Authenticate one exact-final-source `Production bytes` job and its one-member
       `kovo-perf-bytes` artifact as a required publication sidecar. Re-evaluate the exact five
       deterministic metrics against the measured commit's `perf-budgets.json`; publication must
       block on any failed byte budget and remain unproven on missing, malformed, dirty,
       source-unstable, wrong-lock, wrong-workload, or wrong-producer evidence. This is not an eighth
       statistically ratified family.
-  - Evidence: run `32446745655`, one-member artifact `9434348014`, passed all five exact budgets at
-    measured source `01b2c7594`; the v9 gate authenticated source/workflow/job/artifact/report and
-    committed-budget identities before admitting it.
+  - Historical evidence only: run `32446745655`, one-member artifact `9434348014`, passed all five
+    exact budgets at pre-change source `01b2c7594`. The final campaign must replace this with an
+    exact-final-source sidecar; the v9 artifact cannot satisfy the prospective claim.
 - [x] Store raw reports as CI artifacts and commit only a clean reviewed baseline summary. A dirty,
       null, load-shed, wrong-posture, or integrity-failed run cannot update budgets.
   - Evidence: all raw reports and archives remain immutable CI/external artifacts; only the
@@ -416,5 +424,7 @@ scripts/perf-{baseline-ratify,regression-check,ci-policy}.test.mjs --reporter=do
 - `pnpm exec vitest --run packages/server/src/{mutation-wire,vite-dev,vite-hmr-client-security,
 vite-dev-intrinsics,vite-dev-middleware,vite}.test.ts --reporter=dot` — 102 passed; generated-app
   replay without `KOVO_LIVE_TARGET_SECRET` returned HMR 200 and preserved component/navigation state.
+- `vp exec pnpm exec vitest --run scripts/perf-publication-campaign.test.mjs --reporter=dot` — 20
+  passed at `8fe7ce264`; independent review approved its metrics-blind, fixed-24, fail-closed custody.
 - Browser run integrity: zero page errors, zero rate limits, zero null Lighthouse samples, and HTTP
   statuses observed for every probe; two browser-originated favicon 404s were separately disclosed.
