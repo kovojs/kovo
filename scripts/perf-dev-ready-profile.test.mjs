@@ -142,7 +142,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
       'readinessProbe: expected an exact successful root-route probe; observed object(keys=3,attempts=number(1),path=undefined,status=number(500),transientFailures=number(0))',
       `readyDiagnostic.schema: expected ${DEV_READY_PROFILE_WINDOW_SCHEMA}; observed string(length=${String(secretSchema.length)})`,
       'readyDiagnostic.diagnosticOnly.acceptanceEligible: expected false; observed true',
-      `errorContext,category=other,utf8Bytes=0,sha256=${sha256(Buffer.from(''))}`,
+      `errorContext,stage=none,category=other,utf8Bytes=0,sha256=${sha256(Buffer.from(''))}`,
     ]);
     const message = (() => {
       try {
@@ -160,26 +160,49 @@ describe('authenticated cold-first-ready diagnostic', () => {
   it('adds bounded deterministic error context only after an existing observation failure', () => {
     const valid = completeProfiledObservation();
     valid.error = `dev process exited before ready: ${'VALID_SECRET'.repeat(1_000)}`;
+    valid.failureStage = 'ready-wait';
     expect(profiledReadyObservationFindings(valid)).toEqual([]);
     expect(validateProfiledReadyObservation(valid)).toBe(valid);
 
     const cases = [
-      ['dev process exited before ready: PRIVATE_LOG_TAIL', 'process-exited-before-ready'],
-      ['dev ready timed out: PRIVATE_SELECTOR', 'dev-ready-timeout'],
-      ['dev ready shared deadline expired during browser navigation', 'shared-deadline'],
-      ['dev ready route probe timed out: PRIVATE_RESPONSE', 'route-probe-timeout'],
-      ['unclassified; browser telemetry recorded 1 request failures', 'browser'],
-      ['fresh-ready diagnostic abort: PRIVATE_INSPECTOR_FAILURE', 'profiler'],
-      ['fresh ready did not produce process-tree RSS evidence', 'rss'],
-      ['PRIVATE_OTHER_FAILURE_雪', 'other'],
+      [
+        'dev process exited before ready: PRIVATE_LOG_TAIL',
+        'ready-wait',
+        'process-exited-before-ready',
+      ],
+      ['dev ready timed out: PRIVATE_SELECTOR', 'ready-wait', 'dev-ready-timeout'],
+      [
+        'dev ready shared deadline expired during browser navigation',
+        'ready-wait',
+        'shared-deadline',
+      ],
+      [
+        'dev ready route probe timed out: PRIVATE_RESPONSE',
+        'ready-wait',
+        'route-probe-timeout',
+      ],
+      ['unclassified; browser telemetry recorded 1 request failures', 'telemetry', 'browser'],
+      [
+        'fresh-ready diagnostic abort: PRIVATE_INSPECTOR_FAILURE',
+        'cleanup-profiler-abort',
+        'profiler',
+      ],
+      [
+        'fresh ready did not produce process-tree RSS evidence',
+        'evidence-capture-rss',
+        'rss',
+      ],
+      ['PRIVATE_OTHER_FAILURE_雪', 'not-framework-owned', 'other'],
     ];
     expect(Buffer.byteLength(cases.at(-1)[0], 'utf8')).toBeGreaterThan(cases.at(-1)[0].length);
-    for (const [error, category] of cases) {
+    for (const [error, failureStage, category] of cases) {
       const invalid = completeProfiledObservation();
       invalid.success = false;
       invalid.error = error;
+      invalid.failureStage = failureStage;
       const expectedContext = [
         'errorContext',
+        `stage=${failureStage === 'not-framework-owned' ? 'unknown' : failureStage}`,
         `category=${category}`,
         `utf8Bytes=${String(Buffer.byteLength(error, 'utf8'))}`,
         `sha256=${sha256(Buffer.from(error))}`,
@@ -1803,6 +1826,7 @@ function completeProfiledObservation() {
     browser: { requestFailedCount: 0, unexpectedErrorCount: 0 },
     browserContextClosed: true,
     durationMs: 123,
+    failureStage: 'none',
     lifecycle: { complete: true },
     paintFenceMs: 4,
     peakRssBytes: 1_024,

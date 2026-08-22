@@ -60,6 +60,20 @@ export const DEV_LOOP_REPORT_SCHEMA = 'kovo-dev-loop-report/v1';
 export const DEV_PROFILED_PROCESS_INVOCATION_SCHEMA = 'kovo-profiled-process-invocation/v1';
 export const DEV_SESSION_HANDOFF_SCHEMA = 'kovo-dev-session-handoff/v2';
 export const DEV_SOCKET_OWNER_EVIDENCE_SCHEMA = 'kovo-dev-socket-owner-evidence/v1';
+export const FRESH_READY_FAILURE_STAGES = Object.freeze([
+  'none',
+  'browser-context',
+  'browser-page',
+  'telemetry',
+  'ready-wait',
+  'evidence-capture',
+  'evidence-capture-rss',
+  'evidence-capture-profiler',
+  'cleanup-profiler-abort',
+  'cleanup-browser-context',
+  'cleanup-lifecycle',
+  'unknown',
+]);
 
 const EDIT_CLASSES = Object.freeze(['leaf', 'entry', 'data']);
 const ALL_EDIT_CLASSES = Object.freeze([...EDIT_CLASSES, 'syntaxError', 'recovery']);
@@ -82,6 +96,8 @@ const DEV_SOCKET_EVIDENCE_MAX_BYTES = 1024 * 1024;
 const DEV_SOCKET_EVIDENCE_MAX_FDS = 65_536;
 const DEV_SOCKET_EVIDENCE_MAX_PROCESSES = 4_096;
 const DEV_SOCKET_EVIDENCE_MAX_RECORDS = 256;
+const FRESH_READY_FAILURE_STAGE_SET = new Set(FRESH_READY_FAILURE_STAGES);
+const FRESH_READY_STAGED_FAILURES = new WeakMap();
 export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v4';
 let atomicCorpusSourceWrite = 0;
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
@@ -426,6 +442,10 @@ export function devLoopVerdictStatus(integrityComplete, diagnosticProfileRequest
     : 'unproven';
 }
 
+export function normalizedFreshReadyFailureStage(stage) {
+  return FRESH_READY_FAILURE_STAGE_SET.has(stage) ? stage : 'unknown';
+}
+
 export async function measureFreshReady(
   {
     appRoot,
@@ -461,13 +481,17 @@ export async function measureFreshReady(
   let observation;
   let readinessProbe = null;
   let telemetry;
+  let activeFailureStage = 'browser-context';
   try {
     context = await browser.newContext();
+    activeFailureStage = 'browser-page';
     const page = await context.newPage();
+    activeFailureStage = 'telemetry';
     telemetry = collectPageTelemetry(page, command.origin, {
       framework: manifest.framework,
       intentionalSyntaxErrorFile: manifest.dev.edits.syntaxError.file,
     });
+    activeFailureStage = 'ready-wait';
     const paint = await waitForReady({
       deadlineMs: started + readyTimeoutMs,
       origin: command.origin,
@@ -478,17 +502,30 @@ export async function measureFreshReady(
     });
     const durationMs = now() - started;
     readinessProbe = paint.readinessProbe;
+    activeFailureStage = 'telemetry';
     telemetry.markReady();
     browserEvidence = telemetry.snapshot();
-    const [rssEvidence, diagnosticEvidence] = await Promise.all([
+    activeFailureStage = 'evidence-capture-rss';
+    const rssEvidencePromise = stagedFreshReadyEvidencePromise(
+      'evidence-capture-rss',
       stopRss(),
+    );
+    activeFailureStage = 'evidence-capture-profiler';
+    const diagnosticEvidencePromise = stagedFreshReadyEvidencePromise(
+      'evidence-capture-profiler',
       readyDiagnostic === null ? null : readyDiagnostic.captureAtReady(),
+    );
+    activeFailureStage = 'evidence-capture';
+    const [rssEvidence, diagnosticEvidence] = await Promise.all([
+      rssEvidencePromise,
+      diagnosticEvidencePromise,
     ]);
     const hasRss = rssEvidence.sampleCount > 0 && rssEvidence.peakRssBytes > 0;
     observation = {
       browser: browserEvidence,
       durationMs,
       error: hasRss ? null : 'fresh ready did not produce process-tree RSS evidence',
+      failureStage: hasRss ? 'none' : 'evidence-capture-rss',
       iteration,
       paintFenceMs: paint.paintFenceMs,
       peakRssBytes: rssEvidence.peakRssBytes,
@@ -498,12 +535,22 @@ export async function measureFreshReady(
       ...(diagnosticEvidence === null ? {} : { readyDiagnostic: diagnosticEvidence }),
     };
   } catch (error) {
-    const rssEvidence = await stopRss();
+    const failure = freshReadyFailure(error, activeFailureStage);
+    const stoppedRss = await stoppedFreshReadyRss(stopRss);
+    const rssEvidence = stoppedRss.evidence;
     browserEvidence = telemetry?.snapshot() ?? browserEvidence;
     observation = {
       browser: browserEvidence,
       durationMs: null,
-      error: errorMessage(error),
+      error: [
+        freshReadyErrorMessage(failure.cause),
+        stoppedRss.error !== null && stoppedRss.error !== failure.cause
+          ? `process-tree RSS stop: ${freshReadyErrorMessage(stoppedRss.error)}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join('; '),
+      failureStage: failure.stage,
       iteration,
       paintFenceMs: null,
       peakRssBytes: rssEvidence.peakRssBytes,
@@ -518,6 +565,7 @@ export async function measureFreshReady(
         browser: browserEvidence,
         durationMs: null,
         error: 'fresh ready did not produce an observation',
+        failureStage: 'unknown',
         iteration,
         paintFenceMs: null,
         peakRssBytes: 0,
@@ -527,6 +575,7 @@ export async function measureFreshReady(
       };
       observation.error = [observation.error, diagnosticAbortError].filter(Boolean).join('; ');
       observation.success = false;
+      claimFreshReadyFailureStage(observation, 'cleanup-profiler-abort');
     }
     const contextCloseError = await browserContextCloseError(context);
     const lifecycle = await session.stop();
@@ -535,6 +584,7 @@ export async function measureFreshReady(
       browser: browserEvidence,
       durationMs: null,
       error: 'fresh ready did not produce an observation',
+      failureStage: 'unknown',
       iteration,
       paintFenceMs: null,
       peakRssBytes: 0,
@@ -547,6 +597,7 @@ export async function measureFreshReady(
     if (contextCloseError !== null) {
       observation.error = [observation.error, contextCloseError].filter(Boolean).join('; ');
       observation.success = false;
+      claimFreshReadyFailureStage(observation, 'cleanup-browser-context');
     }
     if (browserEvidence.requestFailedCount > 0 || browserEvidence.unexpectedErrorCount > 0) {
       observation.error = [
@@ -556,14 +607,66 @@ export async function measureFreshReady(
         .filter(Boolean)
         .join('; ');
       observation.success = false;
+      claimFreshReadyFailureStage(observation, 'telemetry');
     }
     observation.lifecycle = lifecycle;
     if (!lifecycle.complete) {
       observation.error = [observation.error, lifecycle.error].filter(Boolean).join('; ');
       observation.success = false;
+      claimFreshReadyFailureStage(observation, 'cleanup-lifecycle');
     }
   }
   return observation;
+}
+
+function stagedFreshReadyEvidencePromise(stage, evidencePromise) {
+  return Promise.resolve(evidencePromise).catch((cause) => {
+    const stagedFailure = Object.freeze({});
+    FRESH_READY_STAGED_FAILURES.set(
+      stagedFailure,
+      Object.freeze({
+        cause,
+        stage: normalizedFreshReadyFailureStage(stage),
+      }),
+    );
+    throw stagedFailure;
+  });
+}
+
+function freshReadyFailure(error, fallbackStage) {
+  if (error !== null && (typeof error === 'object' || typeof error === 'function')) {
+    const stagedFailure = FRESH_READY_STAGED_FAILURES.get(error);
+    if (stagedFailure !== undefined) return stagedFailure;
+  }
+  return {
+    cause: error,
+    stage: normalizedFreshReadyFailureStage(fallbackStage),
+  };
+}
+
+function freshReadyErrorMessage(error) {
+  try {
+    return errorMessage(error);
+  } catch {
+    return 'unreadable fresh-ready failure';
+  }
+}
+
+function claimFreshReadyFailureStage(observation, stage) {
+  if (observation.failureStage === 'none') {
+    observation.failureStage = normalizedFreshReadyFailureStage(stage);
+  }
+}
+
+async function stoppedFreshReadyRss(stopRss) {
+  try {
+    return { error: null, evidence: await stopRss() };
+  } catch (error) {
+    return {
+      error,
+      evidence: { peakRssBytes: 0, sampleCount: 0 },
+    };
+  }
 }
 
 async function readyDiagnosticAbortError(readyDiagnostic) {
@@ -578,7 +681,7 @@ async function readyDiagnosticAbortError(readyDiagnostic) {
     await readyDiagnostic.abort();
     return null;
   } catch (error) {
-    return `fresh-ready diagnostic abort: ${errorMessage(error)}`;
+    return `fresh-ready diagnostic abort: ${freshReadyErrorMessage(error)}`;
   }
 }
 
@@ -727,7 +830,7 @@ async function browserContextCloseError(context) {
     await context.close();
     return null;
   } catch (error) {
-    return `browser context close: ${errorMessage(error)}`;
+    return `browser context close: ${freshReadyErrorMessage(error)}`;
   }
 }
 

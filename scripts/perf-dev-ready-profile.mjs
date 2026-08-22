@@ -38,6 +38,7 @@ import {
   loadCorpusManifest,
   materializeEntrantCommand,
   measureFreshReady,
+  normalizedFreshReadyFailureStage,
   verifyCorpusSources,
 } from '../benchmarks/corpora/dev-loop.mjs';
 import { DEV_SESSION_PORT_STRIDE } from '../benchmarks/corpora/generate.mjs';
@@ -1810,7 +1811,9 @@ export function profiledReadyObservationFindings(observation) {
     observed.readyDiagnostic?.diagnosticOnly?.acceptanceEligible,
   );
   if (findings.length > 0) {
-    findings.push(profiledReadyObservationErrorContext(observed.error));
+    findings.push(
+      profiledReadyObservationErrorContext(observed.error, observed.failureStage),
+    );
   }
   return Object.freeze(findings);
 }
@@ -1852,10 +1855,11 @@ function boundedReadyRouteProbeObservation(value) {
   ].join(',');
 }
 
-function profiledReadyObservationErrorContext(error) {
+function profiledReadyObservationErrorContext(error, failureStage) {
   const source = typeof error === 'string' ? error : '';
   return [
     'errorContext',
+    `stage=${normalizedFreshReadyFailureStage(failureStage)}`,
     `category=${profiledReadyObservationErrorCategory(source)}`,
     `utf8Bytes=${String(Buffer.byteLength(source, 'utf8'))}`,
     `sha256=${sha256Utf8(source)}`,

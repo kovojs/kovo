@@ -1862,6 +1862,7 @@ describe('single-entrant developer-loop adapter', () => {
     expect(observation).toMatchObject({
       browserContextClosed: true,
       durationMs: 125,
+      failureStage: 'none',
       success: true,
     });
     expect(lifecycleStops).toBe(1);
@@ -1912,6 +1913,170 @@ describe('single-entrant developer-loop adapter', () => {
     expect(events).toContain('diagnostic-abort-noop');
   });
 
+  it('attributes browser setup, telemetry, and ready-wait failures to finite framework stages', async () => {
+    const cases = [
+      {
+        options: {
+          beforeNewContext: async () => {
+            throw new Error('private browser context failure');
+          },
+        },
+        stage: 'browser-context',
+      },
+      {
+        options: {
+          closeContext: async () => undefined,
+          newPage: async () => {
+            throw new Error('private browser page failure');
+          },
+        },
+        stage: 'browser-page',
+      },
+      {
+        options: {
+          closeContext: async () => undefined,
+          page: {
+            on() {
+              throw new Error('private telemetry failure');
+            },
+          },
+        },
+        stage: 'telemetry',
+      },
+      {
+        dependencies: {
+          waitForReadyPage: async () => {
+            throw new Error('private ready failure');
+          },
+        },
+        options: { closeContext: async () => undefined },
+        stage: 'ready-wait',
+      },
+    ];
+
+    for (const testCase of cases) {
+      const observation = await measureFreshReady(
+        freshReadyMeasurementOptions(testCase.options),
+        freshReadyMeasurementDependencies(testCase.dependencies),
+      );
+      expect(observation).toMatchObject({
+        browserContextClosed: true,
+        failureStage: testCase.stage,
+        lifecycle: { complete: true },
+        success: false,
+      });
+    }
+
+    const unreadableFailure = new Proxy(Object.create(null), {
+      get() {
+        throw new Error('proxy getter must not run');
+      },
+      getPrototypeOf() {
+        throw new Error('proxy prototype trap must not escape');
+      },
+    });
+    const unreadable = await measureFreshReady(
+      freshReadyMeasurementOptions({
+        beforeNewContext: async () => {
+          throw unreadableFailure;
+        },
+      }),
+      freshReadyMeasurementDependencies(),
+    );
+    expect(unreadable).toMatchObject({
+      error: 'unreadable fresh-ready failure',
+      failureStage: 'browser-context',
+      success: false,
+    });
+  });
+
+  it('preserves concurrent evidence capture while distinguishing RSS and profiler failures', async () => {
+    for (const failedCapture of ['rss', 'profiler']) {
+      const events = [];
+      const observation = await measureFreshReady(
+        freshReadyMeasurementOptions({ closeContext: async () => undefined }),
+        freshReadyMeasurementDependencies({
+          createRssSampler: () => ({
+            stop: async () => {
+              events.push('rss');
+              if (failedCapture === 'rss') throw new Error('private RSS capture failure');
+              return { peakRssBytes: 1_024, sampleCount: 2 };
+            },
+          }),
+          readyDiagnostic: {
+            abort: async () => undefined,
+            captureAtReady: async () => {
+              events.push('profiler');
+              if (failedCapture === 'profiler') {
+                throw new Error('private profiler capture failure');
+              }
+              return { schema: 'ready-profile-test/v1' };
+            },
+          },
+        }),
+      );
+
+      expect(events).toEqual(['rss', 'profiler']);
+      expect(observation).toMatchObject({
+        failureStage: `evidence-capture-${failedCapture}`,
+        success: false,
+      });
+    }
+  });
+
+  it('attributes profiler-abort and lifecycle append failures without replacing prior stages', async () => {
+    const aborted = await measureFreshReady(
+      freshReadyMeasurementOptions({ closeContext: async () => undefined }),
+      freshReadyMeasurementDependencies({
+        readyDiagnostic: {
+          abort: async () => {
+            throw new Error('private abort failure');
+          },
+          captureAtReady: async () => ({ schema: 'ready-profile-test/v1' }),
+        },
+      }),
+    );
+    expect(aborted).toMatchObject({
+      failureStage: 'cleanup-profiler-abort',
+      success: false,
+    });
+
+    const lifecycle = await measureFreshReady(
+      freshReadyMeasurementOptions({ closeContext: async () => undefined }),
+      freshReadyMeasurementDependencies({
+        startDevSession: () => ({
+          pid: 123,
+          stop: async () => ({
+            ...completeLifecycleFixture(),
+            complete: false,
+            error: 'private lifecycle failure',
+          }),
+        }),
+      }),
+    );
+    expect(lifecycle).toMatchObject({
+      failureStage: 'cleanup-lifecycle',
+      success: false,
+    });
+
+    const readyThenCleanup = await measureFreshReady(
+      freshReadyMeasurementOptions({
+        closeContext: async () => {
+          throw new Error('private cleanup failure');
+        },
+      }),
+      freshReadyMeasurementDependencies({
+        waitForReadyPage: async () => {
+          throw new Error('private ready failure');
+        },
+      }),
+    );
+    expect(readyThenCleanup).toMatchObject({
+      failureStage: 'ready-wait',
+      success: false,
+    });
+  });
+
   it('fails the observation and stops later starts when browser-context teardown rejects', async () => {
     let lifecycleStops = 0;
     const observation = await measureFreshReady(
@@ -1942,6 +2107,7 @@ describe('single-entrant developer-loop adapter', () => {
     expect(observation).toMatchObject({
       browserContextClosed: false,
       error: expect.stringContaining('browser context close: context still busy'),
+      failureStage: 'cleanup-browser-context',
       lifecycle: { complete: true },
       success: false,
     });
@@ -1978,6 +2144,7 @@ describe('single-entrant developer-loop adapter', () => {
       browser: { requestFailedCount: 1, unexpectedErrorCount: 1 },
       browserContextClosed: true,
       error: expect.stringContaining('browser telemetry recorded 1 request failures'),
+      failureStage: 'telemetry',
       success: false,
     });
     const integrity = {
@@ -2313,6 +2480,7 @@ function completePortAllocationFixture(basePort, ports, inspectorPorts = []) {
 function freshReadyMeasurementOptions({
   beforeNewContext = async () => undefined,
   closeContext,
+  newPage,
   page = new FakePage(),
 }) {
   return {
@@ -2322,7 +2490,7 @@ function freshReadyMeasurementOptions({
         await beforeNewContext();
         return {
           close: closeContext,
-          newPage: async () => page,
+          newPage: newPage ?? (async () => page),
         };
       },
     },
@@ -2337,6 +2505,21 @@ function freshReadyMeasurementOptions({
     },
     readyTimeoutMs: 1_000,
     spawnProcess: () => undefined,
+  };
+}
+
+function freshReadyMeasurementDependencies(overrides = {}) {
+  return {
+    createRssSampler: () => ({
+      stop: async () => ({ peakRssBytes: 1_024, sampleCount: 2 }),
+    }),
+    now: () => 10,
+    startDevSession: () => ({ pid: 123, stop: async () => completeLifecycleFixture() }),
+    waitForReadyPage: async () => ({
+      paintFenceMs: 2,
+      readinessProbe: completeReadinessProbe(),
+    }),
+    ...overrides,
   };
 }
 
