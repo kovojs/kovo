@@ -120,7 +120,12 @@ const CONTROLLER_FILES = Object.freeze([
   'benchmarks/corpora/dev-process-marker.mjs',
   'benchmarks/corpora/generate.mjs',
   'benchmarks/harness/dev-port-allocation.mjs',
+  'packages/icons/scripts/icon-plan.mjs',
+  'scripts/component-catalog-schema.mjs',
+  'scripts/lib/bounded-regular-file.mjs',
   'scripts/lib/cli-entry.mjs',
+  'scripts/lib/deterministic-tarball.mjs',
+  'scripts/lib/pack-without-lifecycle.mjs',
   'scripts/lib/perf-dev-session-evidence.mjs',
   'scripts/lib/perf-execution.mjs',
   'scripts/lib/perf-host.mjs',
@@ -128,10 +133,15 @@ const CONTROLLER_FILES = Object.freeze([
   'scripts/lib/perf-provenance.mjs',
   'scripts/lib/perf-ready-route.mjs',
   'scripts/lib/process-tree-rss.mjs',
+  'scripts/lib/repo-root.mjs',
+  'scripts/package-exports.mjs',
+  'scripts/perf-cli-startup-benchmark.mjs',
   'scripts/perf-dev-edit-profile.mjs',
   'scripts/perf-dev-generation-spike.mjs',
   'scripts/perf-dev-ready-profile-bootstrap.mjs',
   'scripts/perf-dev-ready-profile.mjs',
+  'scripts/public-packages.mjs',
+  'scripts/release-packages.mjs',
 ]);
 const CONTROLLER_MANIFEST_FILE = 'package.json';
 const CONTROLLER_BOUND_PATHS = Object.freeze(
@@ -815,6 +825,7 @@ export async function runDevReadyProfile(options = {}, dependencies = {}) {
   const prepared = await prepare(
     {
       baselineRoot: policy.baselineRoot,
+      candidateRepository: policy.spikeRoot,
       installTimeoutMs: policy.installTimeoutMs,
       size: 216,
       spikeRoot: policy.spikeRoot,
@@ -822,7 +833,7 @@ export async function runDevReadyProfile(options = {}, dependencies = {}) {
     dependencies.preparationDependencies ?? {},
   );
   try {
-    assertPreparedReadyProfile(prepared);
+    assertPreparedReadyProfile(prepared, policy);
     assertEvidenceOutsideMeasuredRoots(policy, prepared);
     mkdirSync(policy.profileDir, { mode: 0o700, recursive: false });
 
@@ -1304,11 +1315,13 @@ function normalizeReadyProfileOptions(options) {
   };
 }
 
-function assertPreparedReadyProfile(prepared) {
+function assertPreparedReadyProfile(prepared, policy) {
   if (
     prepared?.candidateBinding?.schema !== DEV_GENERATION_CANDIDATE_BINDING_SCHEMA ||
     prepared.candidateBinding.baseline?.commit !== DEV_CRITICAL_PATH_CANDIDATE.parent ||
     prepared.candidateBinding.spike?.commit !== DEV_CRITICAL_PATH_CANDIDATE.commit ||
+    prepared.candidateBinding.baseline?.root !== policy.baselineRoot ||
+    prepared.candidateBinding.spike?.root !== policy.spikeRoot ||
     prepared.corpus?.baseline?.modules !== 216 ||
     prepared.corpus?.spike?.modules !== 216 ||
     canonicalJson(prepared.corpus.baseline) !== canonicalJson(prepared.corpus.spike) ||

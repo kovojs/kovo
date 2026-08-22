@@ -15,6 +15,7 @@ import {
   constants as fsConstants,
   existsSync,
   fstatSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -22,9 +23,10 @@ import {
   readdirSync,
   readSync,
   realpathSync,
-  renameSync,
+  rmdirSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
@@ -47,7 +49,12 @@ const CONTROLLER_FILES = Object.freeze([
   'benchmarks/corpora/dev-process-marker.mjs',
   'benchmarks/corpora/generate.mjs',
   'benchmarks/harness/dev-port-allocation.mjs',
+  'packages/icons/scripts/icon-plan.mjs',
+  'scripts/component-catalog-schema.mjs',
+  'scripts/lib/bounded-regular-file.mjs',
   'scripts/lib/cli-entry.mjs',
+  'scripts/lib/deterministic-tarball.mjs',
+  'scripts/lib/pack-without-lifecycle.mjs',
   'scripts/lib/perf-dev-session-evidence.mjs',
   'scripts/lib/perf-execution.mjs',
   'scripts/lib/perf-host.mjs',
@@ -55,10 +62,15 @@ const CONTROLLER_FILES = Object.freeze([
   'scripts/lib/perf-provenance.mjs',
   'scripts/lib/perf-ready-route.mjs',
   'scripts/lib/process-tree-rss.mjs',
+  'scripts/lib/repo-root.mjs',
+  'scripts/package-exports.mjs',
+  'scripts/perf-cli-startup-benchmark.mjs',
   'scripts/perf-dev-edit-profile.mjs',
   'scripts/perf-dev-generation-spike.mjs',
   'scripts/perf-dev-ready-profile-bootstrap.mjs',
   'scripts/perf-dev-ready-profile.mjs',
+  'scripts/public-packages.mjs',
+  'scripts/release-packages.mjs',
 ]);
 const BOUND_PATHS = Object.freeze([MANIFEST_FILE, ...LOCK_FILES, ...CONTROLLER_FILES].sort());
 const MAX_BOUND_FILE_BYTES = 32 * 1024 * 1024;
@@ -261,7 +273,10 @@ export function materializeReadyProfileController(authenticated, dependencies = 
 
 export async function runReadyProfileBootstrap(argv = process.argv.slice(2), dependencies = {}) {
   const targets = parseEvidenceTargets(argv);
-  const authenticated = authenticateReadyProfileControllerSource({}, dependencies);
+  const authenticated = authenticateReadyProfileControllerSource(
+    { root: dependencies.controllerRoot ?? sourceRoot },
+    dependencies,
+  );
   const materialized = materializeReadyProfileController(authenticated, dependencies);
   const nonce = randomBytes(12).toString('hex');
   const stagedOut = path.join(
@@ -273,6 +288,10 @@ export async function runReadyProfileBootstrap(argv = process.argv.slice(2), dep
     `.${path.basename(targets.profileDir)}.${nonce}.controller-stage`,
   );
   const childArgv = rewriteEvidenceTargets(argv, stagedOut, stagedProfiles);
+  let completed = false;
+  let publishedProfile = null;
+  let publishedReport = null;
+  let report = null;
   try {
     const child = (dependencies.spawnController ?? spawnSync)(
       process.execPath,
@@ -302,7 +321,7 @@ export async function runReadyProfileBootstrap(argv = process.argv.slice(2), dep
       MAX_REPORT_BYTES,
       'staged diagnostic report',
     );
-    const report = JSON.parse(stagedReport.bytes.toString('utf8'));
+    report = JSON.parse(stagedReport.bytes.toString('utf8'));
     if (
       report?.schema !== 'kovo-dev-ready-profile/v1' ||
       report.controller?.before?.commit !== authenticated.commit ||
@@ -311,48 +330,84 @@ export async function runReadyProfileBootstrap(argv = process.argv.slice(2), dep
     ) {
       throw new Error('staged diagnostic report is not bound to the bootstrap commit');
     }
-    verifyStagedArtifactCustody(report, stagedProfiles);
+    verifyProfileArtifactCustody(report, stagedProfiles);
+    const controllerArtifactSealSha256 = sha256(Buffer.from(canonicalJson(report.artifactSeal)));
     report.controller.bootstrap = {
       bindingSha256: sha256(Buffer.from(canonicalJson(publicBinding(materialized.binding)))),
       commit: authenticated.commit,
-      headStableThroughPublication: true,
+      controllerArtifactSealSha256,
+      headStableThroughPublication: false,
       schema: DEV_READY_PROFILE_BOOTSTRAP_ATTESTATION_SCHEMA,
       tree: authenticated.tree,
     };
-    const finalBytes = Buffer.from(`${JSON.stringify(report, null, 2)}\n`);
-    const finalStage = `${stagedOut}.sealed`;
-    writeFileSync(finalStage, finalBytes, { flag: 'wx', mode: 0o600 });
-    const stagedFinalReport = readBootstrapStableFile(
-      finalStage,
-      MAX_REPORT_BYTES,
-      'bootstrap-sealed diagnostic report',
-    );
-    if (!stagedFinalReport.bytes.equals(finalBytes)) {
-      throw new Error('bootstrap-sealed diagnostic report changed before publication');
-    }
+    dependencies.afterPrepublicationVerification?.({
+      authenticated,
+      materialized,
+      report,
+      stagedProfiles,
+    });
     verifyReadyProfileControllerSource(authenticated, dependencies);
     verifyPrivateController(
       materialized.binding,
       dependencies.readStable ?? readBootstrapStableFile,
     );
-    verifyStagedArtifactCustody(report, stagedProfiles);
-    if (existsSync(targets.out) || existsSync(targets.profileDir)) {
-      throw new Error('diagnostic evidence target appeared before publication');
-    }
+    verifyProfileArtifactCustody(report, stagedProfiles);
     rmSync(stagedOut, { force: true });
-    renameSync(stagedProfiles, targets.profileDir);
-    renameSync(finalStage, targets.out);
-    process.stdout.write(finalBytes);
+    publishedProfile = publishReadyProfileArtifacts(report, stagedProfiles, targets.profileDir, {
+      beforeTargetCreate: dependencies.beforeProfilePublication,
+    });
+    report.controller.bootstrap.artifactPublication = publishedProfile.attestation;
+    dependencies.afterProfilePublication?.({ publishedProfile, report });
+    verifyReadyProfileControllerSource(authenticated, dependencies);
+    verifyPrivateController(
+      materialized.binding,
+      dependencies.readStable ?? readBootstrapStableFile,
+    );
+    verifyProfileArtifactCustody(report, targets.profileDir);
+    report.controller.bootstrap.headStableThroughPublication = true;
+    const finalBytes = Buffer.from(`${JSON.stringify(report, null, 2)}\n`);
+    dependencies.beforeReportPublication?.({ publishedProfile, report, targets });
+    publishedReport = writeExclusiveBootstrapFile(
+      targets.out,
+      finalBytes,
+      MAX_REPORT_BYTES,
+      'published diagnostic report',
+    );
+    dependencies.afterReportPublication?.({ publishedProfile, publishedReport, report });
+    verifyReadyProfileControllerSource(authenticated, dependencies);
+    verifyPrivateController(
+      materialized.binding,
+      dependencies.readStable ?? readBootstrapStableFile,
+    );
+    verifyProfileArtifactCustody(report, targets.profileDir);
+    const observedReport = readBootstrapStableFile(
+      targets.out,
+      MAX_REPORT_BYTES,
+      'published diagnostic report',
+    );
+    if (
+      !observedReport.bytes.equals(finalBytes) ||
+      canonicalJson(observedReport.identity) !== canonicalJson(publishedReport.identity)
+    ) {
+      throw new Error('published diagnostic report changed during final verification');
+    }
+    completed = true;
+    (dependencies.writeStdout ?? ((bytes) => process.stdout.write(bytes)))(finalBytes);
     return report.verdict?.status === 'diagnostic-only' ? 0 : 1;
   } finally {
+    if (!completed) {
+      if (publishedReport !== null) rollbackPublishedReport(targets.out, publishedReport);
+      if (publishedProfile !== null && report !== null) {
+        rollbackPublishedProfile(report, targets.profileDir);
+      }
+    }
     rmSync(stagedOut, { force: true });
-    rmSync(`${stagedOut}.sealed`, { force: true });
     rmSync(stagedProfiles, { force: true, recursive: true });
     materialized.cleanup();
   }
 }
 
-function verifyStagedArtifactCustody(report, profileDir) {
+export function verifyProfileArtifactCustody(report, profileDir, dependencies = {}) {
   const seal = report.artifactSeal;
   const expectedFiles = seal?.directory?.files;
   const reportCells = report.cells;
@@ -371,7 +426,7 @@ function verifyStagedArtifactCustody(report, profileDir) {
   ) {
     throw new Error('staged report omitted the exact artifact seal');
   }
-  const root = canonicalDirectory(profileDir, 'staged profile directory');
+  const root = canonicalDirectory(profileDir, 'profile artifact directory');
   const directoryBefore = lstatSync(root, { bigint: true });
   if (canonicalJson(identity(directoryBefore)) !== canonicalJson(seal.directory?.identity)) {
     throw new Error('staged profile directory identity differs from its controller seal');
@@ -382,6 +437,7 @@ function verifyStagedArtifactCustody(report, profileDir) {
   ) {
     throw new Error('staged profile directory differs from its exact eight-file seal');
   }
+  dependencies.afterDirectoryCensus?.({ profileDir: root, report });
   const inodes = new Set();
   for (const [cellIndex, cell] of seal.cells.entries()) {
     const reportCell = reportCells[cellIndex];
@@ -451,6 +507,266 @@ function verifyStagedArtifactCustody(report, profileDir) {
   ) {
     throw new Error('staged profile directory changed during bootstrap custody verification');
   }
+  return identity(directoryAfter);
+}
+
+/** Publish the exact eight controller files without replacing an appearing target. */
+export function publishReadyProfileArtifacts(
+  report,
+  stagedProfileDir,
+  targetProfileDir,
+  dependencies = {},
+) {
+  const stagedRoot = canonicalDirectory(stagedProfileDir, 'staged profile directory');
+  const target = canonicalTarget(targetProfileDir, 'published profile directory');
+  verifyProfileArtifactCustody(report, stagedRoot);
+  const controllerSeal = JSON.parse(JSON.stringify(report.artifactSeal));
+  const expectedFiles = [...controllerSeal.directory.files].sort((left, right) =>
+    left.localeCompare(right),
+  );
+  dependencies.beforeTargetCreate?.({ stagedRoot, target });
+  let targetCreated = false;
+  const linked = [];
+  let targetCreationIdentity = null;
+  try {
+    mkdirSync(target, { mode: 0o700, recursive: false });
+    targetCreated = true;
+    targetCreationIdentity = identity(lstatSync(target, { bigint: true }));
+    dependencies.afterTargetCreate?.({ stagedRoot, target });
+    for (const file of expectedFiles) {
+      linkSync(path.join(stagedRoot, file), path.join(target, file));
+      linked.push(file);
+    }
+    dependencies.afterArtifactLinks?.({ stagedRoot, target });
+    for (const file of expectedFiles) unlinkSync(path.join(stagedRoot, file));
+    rmdirSync(stagedRoot);
+    rebindPublishedProfileArtifacts(report, controllerSeal, target, dependencies);
+    const finalIdentity = verifyProfileArtifactCustody(report, target, {
+      afterDirectoryCensus: dependencies.afterFinalDirectoryCensus,
+    });
+    return {
+      attestation: {
+        controllerDirectoryIdentity: controllerSeal.directory.identity,
+        controllerSealSha256: sha256(Buffer.from(canonicalJson(controllerSeal))),
+        finalDirectoryIdentity: finalIdentity,
+        originalArtifactIdentity: 'dev+ino+bytes+sha256+mode+mtime',
+        publication: 'exclusive-directory-plus-hardlinks/v1',
+      },
+      directoryIdentity: finalIdentity,
+      target,
+    };
+  } catch (error) {
+    if (targetCreated) {
+      rollbackLinkedProfileTarget(target, linked, controllerSeal, targetCreationIdentity);
+    }
+    throw error;
+  }
+}
+
+function rebindPublishedProfileArtifacts(report, controllerSeal, target, dependencies) {
+  const updates = [];
+  const inodes = new Set();
+  for (const [cellIndex, controllerCell] of controllerSeal.cells.entries()) {
+    for (const [kind, artifact] of Object.entries(controllerCell.artifacts)) {
+      const observed = readBootstrapStableFile(
+        path.join(target, artifact.file),
+        kind === 'cpu' ? 256 * 1024 * 1024 : 128 * 1024 * 1024,
+        `published ${kind} artifact`,
+      );
+      const inode = `${observed.identity.dev}:${observed.identity.ino}`;
+      if (
+        inodes.has(inode) ||
+        observed.bytes.byteLength !== artifact.bytes ||
+        observed.identity.dev !== artifact.dev ||
+        observed.identity.ino !== artifact.ino ||
+        observed.identity.mode !== artifact.mode ||
+        observed.identity.mtimeNs !== artifact.mtimeNs ||
+        observed.identity.nlink !== 1 ||
+        sha256(observed.bytes) !== artifact.sha256
+      ) {
+        throw new Error('published artifact does not preserve its controller inode and bytes');
+      }
+      const envelope = JSON.parse(observed.bytes.toString('utf8'));
+      if (
+        envelope?.schema !== artifact.schema ||
+        canonicalJson(envelope.binding) !== canonicalJson(controllerCell.binding)
+      ) {
+        throw new Error('published artifact schema or envelope binding changed');
+      }
+      inodes.add(inode);
+      updates.push({
+        cellIndex,
+        evidence: {
+          ...artifact,
+          ctimeNs: observed.identity.ctimeNs,
+          dev: observed.identity.dev,
+          ino: observed.identity.ino,
+          mode: observed.identity.mode,
+          mtimeNs: observed.identity.mtimeNs,
+          nlink: observed.identity.nlink,
+          sealed: true,
+        },
+        kind,
+      });
+    }
+  }
+  if (updates.length !== 8 || inodes.size !== 8) {
+    throw new Error('published artifact rebind omitted or aliased an artifact');
+  }
+  dependencies.afterArtifactReopen?.({ report, target, updates });
+  const directoryBefore = lstatSync(target, { bigint: true });
+  if (!directoryBefore.isDirectory() || directoryBefore.isSymbolicLink()) {
+    throw new Error('published profile target changed before final sealing');
+  }
+  for (const update of updates) {
+    const reportEvidence = { ...update.evidence };
+    delete reportEvidence.sealed;
+    report.cells[update.cellIndex].profile.artifact[update.kind] = reportEvidence;
+    report.artifactSeal.cells[update.cellIndex].artifacts[update.kind] = update.evidence;
+  }
+  report.artifactSeal.directory = {
+    controllerIdentity: controllerSeal.directory.identity,
+    files: [...controllerSeal.directory.files],
+    identity: identity(directoryBefore),
+    publication: 'exclusive-directory-plus-hardlinks/v1',
+  };
+  dependencies.afterFinalIdentity?.({ report, target });
+}
+
+function writeExclusiveBootstrapFile(file, bytes, maximum, label) {
+  if (bytes.byteLength < 1 || bytes.byteLength > maximum) {
+    throw new Error(`${label} exceeds its byte bound`);
+  }
+  const target = canonicalTarget(file, label);
+  let descriptor;
+  let created = false;
+  let failure;
+  let evidence;
+  let ownershipIdentity;
+  try {
+    descriptor = openSync(
+      target,
+      fsConstants.O_WRONLY |
+        fsConstants.O_CREAT |
+        fsConstants.O_EXCL |
+        (fsConstants.O_NOFOLLOW ?? 0),
+      0o600,
+    );
+    created = true;
+    ownershipIdentity = identity(fstatSync(descriptor, { bigint: true }));
+    writeFileSync(descriptor, bytes);
+    const handle = fstatSync(descriptor, { bigint: true });
+    const pathStat = lstatSync(target, { bigint: true });
+    if (!handle.isFile() || handle.nlink !== 1n || !sameStat(handle, pathStat)) {
+      throw new Error(`${label} changed identity while being written`);
+    }
+    evidence = { bytes: bytes.byteLength, identity: identity(handle), sha256: sha256(bytes) };
+  } catch (error) {
+    failure = error;
+  } finally {
+    if (descriptor !== undefined) {
+      try {
+        closeSync(descriptor);
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+  }
+  if (failure !== undefined) {
+    if (created) rollbackOwnedFile(target, ownershipIdentity);
+    throw failure;
+  }
+  return evidence;
+}
+
+function rollbackOwnedFile(file, ownershipIdentity) {
+  try {
+    const stat = lstatSync(file, { bigint: true });
+    if (
+      !stat.isSymbolicLink() &&
+      String(stat.dev) === ownershipIdentity?.dev &&
+      String(stat.ino) === ownershipIdentity?.ino &&
+      String(stat.mode) === ownershipIdentity?.mode &&
+      Number(stat.nlink) === 1
+    ) {
+      unlinkSync(file);
+    }
+  } catch {}
+}
+
+function rollbackPublishedReport(file, evidence) {
+  if (evidence === undefined) return;
+  try {
+    const observed = readBootstrapStableFile(file, MAX_REPORT_BYTES, 'rollback report');
+    if (
+      observed.bytes.byteLength === evidence.bytes &&
+      sha256(observed.bytes) === evidence.sha256 &&
+      canonicalJson(observed.identity) === canonicalJson(evidence.identity)
+    ) {
+      unlinkSync(file);
+    }
+  } catch {}
+}
+
+function rollbackPublishedProfile(report, profileDir) {
+  try {
+    verifyProfileArtifactCustody(report, profileDir);
+    const expectedFiles = [...report.artifactSeal.directory.files];
+    const evidenceByFile = new Map(
+      report.cells.flatMap((cell) =>
+        Object.values(cell.profile.artifact).map((artifact) => [artifact.file, artifact]),
+      ),
+    );
+    for (const file of expectedFiles) {
+      const evidence = evidenceByFile.get(file);
+      const observed = readBootstrapStableFile(
+        path.join(profileDir, file),
+        256 * 1024 * 1024,
+        'rollback profile artifact',
+      );
+      if (
+        evidence === undefined ||
+        observed.identity.dev !== evidence.dev ||
+        observed.identity.ino !== evidence.ino ||
+        sha256(observed.bytes) !== evidence.sha256
+      ) {
+        return;
+      }
+    }
+    for (const file of expectedFiles) unlinkSync(path.join(profileDir, file));
+    rmdirSync(profileDir);
+  } catch {}
+}
+
+function rollbackLinkedProfileTarget(target, linked, controllerSeal, creationIdentity) {
+  try {
+    const current = lstatSync(target, { bigint: true });
+    if (
+      current.isSymbolicLink() ||
+      String(current.dev) !== creationIdentity?.dev ||
+      String(current.ino) !== creationIdentity?.ino
+    ) {
+      return;
+    }
+    const byFile = new Map(
+      controllerSeal.cells.flatMap((cell) =>
+        Object.values(cell.artifacts).map((artifact) => [artifact.file, artifact]),
+      ),
+    );
+    for (const file of linked) {
+      const artifact = byFile.get(file);
+      const stat = lstatSync(path.join(target, file), { bigint: true });
+      if (
+        stat.isSymbolicLink() ||
+        String(stat.dev) !== artifact?.dev ||
+        String(stat.ino) !== artifact?.ino
+      ) {
+        return;
+      }
+    }
+    for (const file of linked) unlinkSync(path.join(target, file));
+    if (readdirSync(target).length === 0) rmdirSync(target);
+  } catch {}
 }
 
 function verifyPrivateController(binding, readStable) {
@@ -585,12 +901,13 @@ function parseEvidenceTargets(argv) {
   }
   if (!diagnose || out === null) throw new Error('--diagnose and --out are required');
   profileDir ??= `${out}.profiles`;
+  out = canonicalTarget(out, 'diagnostic report');
+  profileDir = canonicalTarget(profileDir, 'diagnostic profile directory');
   if (out === profileDir) {
     throw new Error('diagnostic report and profile directory targets must differ');
   }
   for (const target of [out, profileDir]) {
     if (existsSync(target)) throw new Error(`diagnostic evidence target already exists: ${target}`);
-    canonicalDirectory(path.dirname(target), 'diagnostic evidence parent');
   }
   return { out, profileDir };
 }
@@ -728,6 +1045,12 @@ function canonicalDirectory(value, label) {
     throw new Error(`${label} must be a non-symlink directory`);
   }
   return realpathSync(absolute);
+}
+
+function canonicalTarget(value, label) {
+  const absolute = path.resolve(value);
+  const parent = canonicalDirectory(path.dirname(absolute), `${label} parent`);
+  return path.join(parent, path.basename(absolute));
 }
 
 function isWithinOrEqual(parent, child) {

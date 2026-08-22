@@ -1,19 +1,35 @@
 import { createHash } from 'node:crypto';
-import { copyFileSync, lstatSync, mkdirSync, symlinkSync, unlinkSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
+
+import { inspectDevPortAllocation } from '../benchmarks/harness/dev-port-allocation.mjs';
 
 import {
   authenticateReadyProfileControllerSource,
   DEV_READY_PROFILE_CONTROLLER_BINDING_SCHEMA,
   materializeReadyProfileController,
   readBootstrapStableFile,
+  runReadyProfileBootstrap,
 } from './perf-dev-ready-profile-bootstrap.mjs';
 
 const roots = [];
+const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const LOCKS = [
   'pnpm-lock.yaml',
   'benchmarks/nextjs/pnpm-lock.yaml',
@@ -24,7 +40,12 @@ const CONTROLLER = [
   'benchmarks/corpora/dev-process-marker.mjs',
   'benchmarks/corpora/generate.mjs',
   'benchmarks/harness/dev-port-allocation.mjs',
+  'packages/icons/scripts/icon-plan.mjs',
+  'scripts/component-catalog-schema.mjs',
+  'scripts/lib/bounded-regular-file.mjs',
   'scripts/lib/cli-entry.mjs',
+  'scripts/lib/deterministic-tarball.mjs',
+  'scripts/lib/pack-without-lifecycle.mjs',
   'scripts/lib/perf-dev-session-evidence.mjs',
   'scripts/lib/perf-execution.mjs',
   'scripts/lib/perf-host.mjs',
@@ -32,10 +53,15 @@ const CONTROLLER = [
   'scripts/lib/perf-provenance.mjs',
   'scripts/lib/perf-ready-route.mjs',
   'scripts/lib/process-tree-rss.mjs',
+  'scripts/lib/repo-root.mjs',
+  'scripts/package-exports.mjs',
+  'scripts/perf-cli-startup-benchmark.mjs',
   'scripts/perf-dev-edit-profile.mjs',
   'scripts/perf-dev-generation-spike.mjs',
   'scripts/perf-dev-ready-profile-bootstrap.mjs',
   'scripts/perf-dev-ready-profile.mjs',
+  'scripts/public-packages.mjs',
+  'scripts/release-packages.mjs',
 ];
 const BOUND = ['package.json', ...LOCKS, ...CONTROLLER].sort();
 
@@ -105,6 +131,150 @@ describe('immutable ready-profile controller bootstrap', () => {
       ).toEqual(await readFile(path.join(fixture.root, 'scripts/perf-dev-ready-profile.mjs')));
     } finally {
       materialized.cleanup();
+    }
+  });
+
+  it('materializes the controller and reaches real Git candidate authentication through the spike worktree', async () => {
+    const controllerRoot = await realControllerRepository();
+    const candidate = await realCandidateRepository();
+    const authenticated = authenticateReadyProfileControllerSource({ root: controllerRoot });
+    const materialized = materializeReadyProfileController(authenticated);
+    let candidateAuthenticated = false;
+    try {
+      const nonce = Date.now().toString(36);
+      const controller = await import(
+        `${
+          pathToFileURL(path.join(materialized.privateRoot, 'scripts/perf-dev-ready-profile.mjs'))
+            .href
+        }?integration=${nonce}`
+      );
+      const generation = await import(
+        `${
+          pathToFileURL(
+            path.join(materialized.privateRoot, 'scripts/perf-dev-generation-spike.mjs'),
+          ).href
+        }?integration=${nonce}`
+      );
+      const reportRoot = await temporaryRoot();
+      const state = (root) => ({
+        commit: gitText(root, ['rev-parse', 'HEAD']),
+        dirty: false,
+        dirtyPaths: [],
+        locks: {
+          'benchmarks/harness/pnpm-lock.yaml': `sha256:${'1'.repeat(64)}`,
+          'benchmarks/nextjs/pnpm-lock.yaml': `sha256:${'2'.repeat(64)}`,
+          'pnpm-lock.yaml': `sha256:${'3'.repeat(64)}`,
+        },
+        packageManager: authenticated.packageManager,
+        pnpmVersion: authenticated.pnpmVersion,
+      });
+
+      await expect(
+        controller.runDevReadyProfile(
+          {
+            baselineRoot: candidate.baseline,
+            diagnose: true,
+            out: path.join(reportRoot, 'report.json'),
+            profileDir: path.join(reportRoot, 'profiles'),
+            spikeRoot: candidate.repository,
+          },
+          {
+            controllerBinding: materialized.binding,
+            createHostAdmission: () => quietHostAdmission(),
+            inspectPortAllocation: (options) => inspectDevPortAllocation(options),
+            preparationDependencies: {
+              authenticateRoots(options) {
+                expect(options.candidateRepository).toBe(candidate.repository);
+                const binding = generation.authenticateGenerationCandidateRoots({
+                  ...options,
+                  candidate: candidate.candidate,
+                });
+                candidateAuthenticated = true;
+                return binding;
+              },
+              collectState: state,
+              preparePackedLane: async () => {
+                throw new Error('integration-stop-after-real-candidate-auth');
+              },
+            },
+          },
+        ),
+      ).rejects.toThrow(/integration-stop-after-real-candidate-auth/u);
+      expect(candidateAuthenticated).toBe(true);
+    } finally {
+      materialized.cleanup();
+    }
+  });
+
+  it('publishes a final-path seal only after non-clobber profile publication', async () => {
+    const fixture = await bootstrapRunFixture();
+    await expect(runReadyProfileBootstrap(fixture.argv, fixture.dependencies)).resolves.toBe(0);
+    const report = JSON.parse(await readFile(fixture.out, 'utf8'));
+    const finalDirectory = fileIdentity(lstatSync(fixture.profileDir, { bigint: true }));
+
+    expect(report.controller.bootstrap).toMatchObject({
+      headStableThroughPublication: true,
+      artifactPublication: {
+        controllerDirectoryIdentity: fixture.controllerReport.artifactSeal.directory.identity,
+        finalDirectoryIdentity: finalDirectory,
+        publication: 'exclusive-directory-plus-hardlinks/v1',
+      },
+    });
+    expect(report.artifactSeal.directory.identity).toEqual(finalDirectory);
+    expect(readdirSync(fixture.profileDir)).toHaveLength(8);
+    for (const [index, cell] of report.artifactSeal.cells.entries()) {
+      for (const kind of ['cpu', 'coverage']) {
+        const before = fixture.controllerReport.artifactSeal.cells[index].artifacts[kind];
+        const after = cell.artifacts[kind];
+        expect(after).toMatchObject({
+          dev: before.dev,
+          ino: before.ino,
+          sha256: before.sha256,
+        });
+      }
+    }
+  });
+
+  it('does not overwrite an appearing report and rolls back the published profile target', async () => {
+    const fixture = await bootstrapRunFixture();
+    fixture.dependencies.beforeReportPublication = () => {
+      writeFileSync(fixture.out, '{"owner":"other"}\n', { flag: 'wx' });
+    };
+
+    await expect(runReadyProfileBootstrap(fixture.argv, fixture.dependencies)).rejects.toThrow();
+    expect(await readFile(fixture.out, 'utf8')).toBe('{"owner":"other"}\n');
+    expect(existsSync(fixture.profileDir)).toBe(false);
+  });
+
+  it('fails closed and rolls back when source or artifacts change across publication', async () => {
+    const mutations = [
+      {
+        hook: 'afterPrepublicationVerification',
+        mutate({ report, stagedProfiles }) {
+          const file = report.artifactSeal.cells[0].artifacts.cpu.file;
+          writeFileSync(path.join(stagedProfiles, file), '{"tampered":true}\n');
+        },
+      },
+      {
+        hook: 'afterProfilePublication',
+        mutate(_context, fixture) {
+          writeFileSync(fixture.source.head, 'changed head guard\n');
+        },
+      },
+      {
+        hook: 'afterReportPublication',
+        mutate(_context, fixture) {
+          writeFileSync(fixture.source.head, 'changed after report publication\n');
+        },
+      },
+    ];
+
+    for (const mutation of mutations) {
+      const fixture = await bootstrapRunFixture();
+      fixture.dependencies[mutation.hook] = (context) => mutation.mutate(context, fixture);
+      await expect(runReadyProfileBootstrap(fixture.argv, fixture.dependencies)).rejects.toThrow();
+      expect(existsSync(fixture.out)).toBe(false);
+      expect(existsSync(fixture.profileDir)).toBe(false);
     }
   });
 
@@ -207,6 +377,254 @@ describe('immutable ready-profile controller bootstrap', () => {
     ).toThrow(/changed identity/u);
   });
 });
+
+async function bootstrapRunFixture() {
+  const source = await sourceFixture();
+  const outputRoot = await temporaryRoot();
+  const out = path.join(outputRoot, 'report.json');
+  const profileDir = path.join(outputRoot, 'profiles');
+  const argv = ['--diagnose', '--out', out, '--profile-dir', profileDir];
+  const base = gitDependencies(source);
+  const fixture = { argv, controllerReport: null, dependencies: null, out, profileDir, source };
+  fixture.dependencies = {
+    ...base,
+    controllerRoot: source.root,
+    spawn(_command, args, label) {
+      if (label !== 'controller archive extraction') return;
+      const destination = args[args.indexOf('-C') + 1];
+      for (const file of BOUND) {
+        const target = path.join(destination, file);
+        mkdirSyncParent(target);
+        copyFileSync(path.join(source.root, file), target);
+      }
+    },
+    spawnController(_command, args) {
+      const childArgv = args.slice(1);
+      const stagedOut = childArgv[childArgv.indexOf('--out') + 1];
+      const stagedProfiles = childArgv[childArgv.indexOf('--profile-dir') + 1];
+      fixture.controllerReport = writeSyntheticControllerReport(
+        stagedOut,
+        stagedProfiles,
+        source.commit,
+        source.tree,
+      );
+      return { error: undefined, signal: null, status: 0 };
+    },
+    writeStdout() {},
+  };
+  return fixture;
+}
+
+function writeSyntheticControllerReport(out, profileDir, commit, tree) {
+  mkdirSync(profileDir, { mode: 0o700 });
+  const cells = [];
+  const sealedCells = [];
+  const files = [];
+  for (let scheduleIndex = 0; scheduleIndex < 4; scheduleIndex += 1) {
+    const lane = scheduleIndex === 0 || scheduleIndex === 3 ? 'baseline' : 'spike';
+    const stem = `cell-${String(scheduleIndex).padStart(3, '0')}-${lane}`;
+    const binding = {
+      cell: { scheduleIndex },
+      inspectorProcess: {
+        pid: 10_000 + scheduleIndex,
+        processMarkerSha256: `sha256:${String(scheduleIndex).repeat(64)}`,
+        targetId: `target-${String(scheduleIndex)}`,
+      },
+      productDigest: `sha256:${'a'.repeat(64)}`,
+      schema: 'kovo-dev-ready-profile-window-binding/v1',
+    };
+    const attribution = { coverage: [], cpu: [] };
+    const calls = [];
+    const product = { digest: binding.productDigest, scriptAssets: [] };
+    const cpuFile = `${stem}.cpuprofile`;
+    const coverageFile = `${stem}.coverage.json`;
+    const cpuEnvelope = {
+      attribution: attribution.cpu,
+      binding,
+      profile: {},
+      schema: 'kovo-dev-ready-profile-cpu/v1',
+    };
+    const coverageEnvelope = {
+      attribution: attribution.coverage,
+      binding,
+      calls,
+      coverage: {},
+      product,
+      schema: 'kovo-dev-ready-profile-coverage/v1',
+    };
+    writeFileSync(path.join(profileDir, cpuFile), `${JSON.stringify(cpuEnvelope)}\n`, {
+      flag: 'wx',
+      mode: 0o600,
+    });
+    writeFileSync(path.join(profileDir, coverageFile), `${JSON.stringify(coverageEnvelope)}\n`, {
+      flag: 'wx',
+      mode: 0o600,
+    });
+    const cpu = syntheticArtifactEvidence(profileDir, cpuFile, 'kovo-dev-ready-profile-cpu/v1');
+    const coverage = syntheticArtifactEvidence(
+      profileDir,
+      coverageFile,
+      'kovo-dev-ready-profile-coverage/v1',
+    );
+    files.push(cpuFile, coverageFile);
+    cells.push({ profile: { artifact: { coverage, cpu }, attribution, binding, calls, product } });
+    sealedCells.push({
+      artifacts: {
+        coverage: { ...coverage, sealed: true },
+        cpu: { ...cpu, sealed: true },
+      },
+      binding,
+    });
+  }
+  files.sort((left, right) => left.localeCompare(right));
+  const report = {
+    artifactSeal: {
+      cells: sealedCells,
+      directory: {
+        files,
+        identity: fileIdentity(lstatSync(profileDir, { bigint: true })),
+      },
+      schema: 'kovo-dev-ready-profile-artifact-seal/v1',
+    },
+    cells,
+    controller: {
+      before: { commit, tree },
+      stable: true,
+    },
+    integrity: { artifactsSealed: true, complete: true, exactSchedule: true },
+    schema: 'kovo-dev-ready-profile/v1',
+    verdict: { status: 'diagnostic-only' },
+  };
+  writeFileSync(out, `${JSON.stringify(report)}\n`, { flag: 'wx', mode: 0o600 });
+  return report;
+}
+
+function syntheticArtifactEvidence(root, file, schema) {
+  const bytes = readFileSync(path.join(root, file));
+  const stat = lstatSync(path.join(root, file), { bigint: true });
+  return {
+    bytes: bytes.byteLength,
+    ctimeNs: String(stat.ctimeNs),
+    dev: String(stat.dev),
+    file,
+    ino: String(stat.ino),
+    mode: String(stat.mode),
+    mtimeNs: String(stat.mtimeNs),
+    nlink: Number(stat.nlink),
+    schema,
+    sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+  };
+}
+
+function fileIdentity(stat) {
+  return {
+    bytes: Number(stat.size),
+    ctimeNs: String(stat.ctimeNs),
+    dev: String(stat.dev),
+    ino: String(stat.ino),
+    mode: String(stat.mode),
+    mtimeNs: String(stat.mtimeNs),
+    nlink: Number(stat.nlink),
+  };
+}
+
+async function realControllerRepository() {
+  const root = await temporaryRoot();
+  gitCommand(root, ['init', '--quiet']);
+  gitCommand(root, ['config', 'user.name', 'Kovo test']);
+  gitCommand(root, ['config', 'user.email', 'kovo-test@invalid.example']);
+  for (const file of BOUND) {
+    const target = path.join(root, file);
+    mkdirSyncParent(target);
+    copyFileSync(path.join(projectRoot, file), target);
+  }
+  writeFileSync(path.join(root, '.git/info/exclude'), 'node_modules\n');
+  const dependencyRoot = path.join(root, 'node_modules');
+  mkdirSync(dependencyRoot);
+  symlinkSync(
+    await realpath(path.join(projectRoot, 'node_modules/playwright')),
+    path.join(dependencyRoot, 'playwright'),
+    'dir',
+  );
+  gitCommand(root, ['add', '--', ...BOUND]);
+  gitCommand(root, ['commit', '--quiet', '-m', 'controller']);
+  return root;
+}
+
+async function realCandidateRepository() {
+  const root = await temporaryRoot();
+  const repository = path.join(root, 'repository');
+  const baseline = path.join(root, 'baseline');
+  mkdirSync(repository);
+  gitCommand(repository, ['init', '--quiet']);
+  gitCommand(repository, ['config', 'user.name', 'Kovo test']);
+  gitCommand(repository, ['config', 'user.email', 'kovo-test@invalid.example']);
+  writeFileSync(path.join(repository, 'one.ts'), 'export const one = 1;\n');
+  writeFileSync(path.join(repository, 'two.ts'), 'export const two = 2;\n');
+  gitCommand(repository, ['add', '.']);
+  gitCommand(repository, ['commit', '--quiet', '-m', 'base']);
+  const parent = gitText(repository, ['rev-parse', 'HEAD']);
+  const parentTree = gitText(repository, ['rev-parse', 'HEAD^{tree}']);
+  gitCommand(repository, ['checkout', '--quiet', '-b', 'candidate']);
+
+  writeFileSync(path.join(repository, 'one.ts'), 'export const one = 11;\n');
+  gitCommand(repository, ['add', 'one.ts']);
+  gitCommand(repository, ['commit', '--quiet', '-m', 'candidate one']);
+  const firstCommit = gitText(repository, ['rev-parse', 'HEAD']);
+  const firstTree = gitText(repository, ['rev-parse', 'HEAD^{tree}']);
+
+  writeFileSync(path.join(repository, 'two.ts'), 'export const two = 22;\n');
+  gitCommand(repository, ['add', 'two.ts']);
+  gitCommand(repository, ['commit', '--quiet', '-m', 'candidate two']);
+  const secondCommit = gitText(repository, ['rev-parse', 'HEAD']);
+  const secondTree = gitText(repository, ['rev-parse', 'HEAD^{tree}']);
+
+  writeFileSync(path.join(repository, 'one.ts'), 'export const one = 111;\n');
+  gitCommand(repository, ['add', 'one.ts']);
+  gitCommand(repository, ['commit', '--quiet', '-m', 'candidate three']);
+  const commit = gitText(repository, ['rev-parse', 'HEAD']);
+  const tree = gitText(repository, ['rev-parse', 'HEAD^{tree}']);
+  gitCommand(repository, ['worktree', 'add', '--quiet', '--detach', baseline, parent]);
+
+  return {
+    baseline: await realpath(baseline),
+    candidate: {
+      commit,
+      parent,
+      parentTree,
+      paths: ['one.ts', 'two.ts'],
+      ref: 'refs/heads/candidate',
+      series: [
+        { commit: firstCommit, parent, tree: firstTree },
+        { commit: secondCommit, parent: firstCommit, tree: secondTree },
+        { commit, parent: secondCommit, tree },
+      ],
+      tree,
+    },
+    repository: await realpath(repository),
+  };
+}
+
+function quietHostAdmission() {
+  return {
+    async admit(label) {
+      return { comparable: true, label };
+    },
+    markBenchmarkWork() {},
+  };
+}
+
+function gitCommand(cwd, args) {
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+function gitText(cwd, args) {
+  return String(gitCommand(cwd, args)).trim();
+}
 
 async function sourceFixture() {
   const root = await temporaryRoot();

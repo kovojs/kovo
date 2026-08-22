@@ -1,5 +1,14 @@
 import { createHash } from 'node:crypto';
-import { linkSync, renameSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  linkSync,
+  lstatSync,
+  mkdirSync,
+  renameSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -32,6 +41,10 @@ import {
   DEV_CRITICAL_PATH_CANDIDATE,
   DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
 } from './perf-dev-generation-spike.mjs';
+import {
+  publishReadyProfileArtifacts,
+  verifyProfileArtifactCustody,
+} from './perf-dev-ready-profile-bootstrap.mjs';
 
 const roots = [];
 const CONTROLLER_FILE_PATHS = [
@@ -39,7 +52,12 @@ const CONTROLLER_FILE_PATHS = [
   'benchmarks/corpora/dev-process-marker.mjs',
   'benchmarks/corpora/generate.mjs',
   'benchmarks/harness/dev-port-allocation.mjs',
+  'packages/icons/scripts/icon-plan.mjs',
+  'scripts/component-catalog-schema.mjs',
+  'scripts/lib/bounded-regular-file.mjs',
   'scripts/lib/cli-entry.mjs',
+  'scripts/lib/deterministic-tarball.mjs',
+  'scripts/lib/pack-without-lifecycle.mjs',
   'scripts/lib/perf-dev-session-evidence.mjs',
   'scripts/lib/perf-execution.mjs',
   'scripts/lib/perf-host.mjs',
@@ -47,10 +65,15 @@ const CONTROLLER_FILE_PATHS = [
   'scripts/lib/perf-provenance.mjs',
   'scripts/lib/perf-ready-route.mjs',
   'scripts/lib/process-tree-rss.mjs',
+  'scripts/lib/repo-root.mjs',
+  'scripts/package-exports.mjs',
+  'scripts/perf-cli-startup-benchmark.mjs',
   'scripts/perf-dev-edit-profile.mjs',
   'scripts/perf-dev-generation-spike.mjs',
   'scripts/perf-dev-ready-profile-bootstrap.mjs',
   'scripts/perf-dev-ready-profile.mjs',
+  'scripts/public-packages.mjs',
+  'scripts/release-packages.mjs',
 ];
 const CONTROLLER_LOCK_PATHS = [
   'pnpm-lock.yaml',
@@ -294,6 +317,138 @@ describe('authenticated cold-first-ready diagnostic', () => {
       },
       sha256: sha256(Buffer.from(fixture.product.source)),
     });
+  });
+
+  it('publishes artifacts without clobber and rebinds the exact final-path directory identity', async () => {
+    const fixture = await capturedSealableFixture();
+    const seal = sealDevReadyProfileArtifacts({
+      cells: fixture.cells,
+      profileDir: fixture.profileDir,
+      schedule: fixture.schedule,
+    });
+    const report = publicationReport(fixture.cells, seal);
+    const controllerSeal = structuredClone(seal);
+    const target = path.join(fixture.root, 'published-profiles');
+    const publication = publishReadyProfileArtifacts(report, fixture.profileDir, target);
+    const finalIdentity = verifyProfileArtifactCustody(report, target);
+
+    expect(() => lstatSync(fixture.profileDir)).toThrow();
+    expect(report.artifactSeal.directory).toMatchObject({
+      controllerIdentity: controllerSeal.directory.identity,
+      identity: finalIdentity,
+      publication: 'exclusive-directory-plus-hardlinks/v1',
+    });
+    expect(publication.attestation).toMatchObject({
+      controllerDirectoryIdentity: controllerSeal.directory.identity,
+      finalDirectoryIdentity: finalIdentity,
+      publication: 'exclusive-directory-plus-hardlinks/v1',
+    });
+    expect(finalIdentity.ctimeNs).not.toBe(controllerSeal.directory.identity.ctimeNs);
+    for (const [index, cell] of report.artifactSeal.cells.entries()) {
+      for (const kind of ['cpu', 'coverage']) {
+        const before = controllerSeal.cells[index].artifacts[kind];
+        const after = cell.artifacts[kind];
+        expect(after).toMatchObject({
+          bytes: before.bytes,
+          dev: before.dev,
+          ino: before.ino,
+          mode: before.mode,
+          mtimeNs: before.mtimeNs,
+          sha256: before.sha256,
+        });
+        expect(after.ctimeNs).not.toBe(before.ctimeNs);
+      }
+    }
+  });
+
+  it('does not replace a profile target that appears at the publication boundary', async () => {
+    const fixture = await capturedSealableFixture();
+    const seal = sealDevReadyProfileArtifacts({
+      cells: fixture.cells,
+      profileDir: fixture.profileDir,
+      schedule: fixture.schedule,
+    });
+    const report = publicationReport(fixture.cells, seal);
+    const target = path.join(fixture.root, 'appearing-profile-target');
+    const marker = path.join(target, 'owned-by-other.json');
+
+    expect(() =>
+      publishReadyProfileArtifacts(report, fixture.profileDir, target, {
+        beforeTargetCreate() {
+          mkdirSync(target);
+          writeFileSync(marker, '{"owner":"other"}\n');
+        },
+      }),
+    ).toThrow();
+    expect(await readFile(marker, 'utf8')).toBe('{"owner":"other"}\n');
+    expect(verifyProfileArtifactCustody(report, fixture.profileDir)).toEqual(
+      seal.directory.identity,
+    );
+  });
+
+  it('rejects final-path replacement, swap, symlink, and same-byte new-inode races', async () => {
+    const mutations = [
+      {
+        hook: 'afterArtifactReopen',
+        mutate({ report, target }) {
+          const file = path.join(target, report.artifactSeal.directory.files[0]);
+          const replacement = `${file}.replacement`;
+          cpSync(file, replacement);
+          renameSync(replacement, file);
+        },
+      },
+      {
+        hook: 'afterFinalIdentity',
+        mutate({ report, target }) {
+          const [leftName, rightName] = report.artifactSeal.directory.files;
+          const left = path.join(target, leftName);
+          const right = path.join(target, rightName);
+          const temporary = `${left}.swap`;
+          renameSync(left, temporary);
+          renameSync(right, left);
+          renameSync(temporary, right);
+        },
+      },
+      {
+        hook: 'afterFinalDirectoryCensus',
+        mutate({ target }) {
+          const saved = `${target}.saved`;
+          renameSync(target, saved);
+          symlinkSync(saved, target);
+        },
+      },
+      {
+        hook: 'afterArtifactReopen',
+        mutate({ target }) {
+          const replacement = `${target}.replacement`;
+          const original = `${target}.original`;
+          cpSync(target, replacement, { recursive: true });
+          renameSync(target, original);
+          renameSync(replacement, target);
+        },
+      },
+    ];
+
+    for (const mutation of mutations) {
+      const fixture = await capturedSealableFixture();
+      const seal = sealDevReadyProfileArtifacts({
+        cells: fixture.cells,
+        profileDir: fixture.profileDir,
+        schedule: fixture.schedule,
+      });
+      const report = publicationReport(fixture.cells, seal);
+      const target = path.join(fixture.root, `published-${mutation.hook}`);
+      let mutated = false;
+      expect(() =>
+        publishReadyProfileArtifacts(report, fixture.profileDir, target, {
+          [mutation.hook](context) {
+            if (mutated) return;
+            mutated = true;
+            mutation.mutate({ ...context, report, target });
+          },
+        }),
+      ).toThrow();
+    }
   });
 
   it('rejects missing, replaced, re-inoded, linked, swapped, or extra final artifacts', async () => {
@@ -642,6 +797,14 @@ describe('authenticated cold-first-ready diagnostic', () => {
     const release = vi.fn();
     const closeBrowser = vi.fn();
     const calls = [];
+    const prepare = vi.fn(async (options) => {
+      expect(options).toMatchObject({
+        baselineRoot: prepared.roots.baseline,
+        candidateRepository: prepared.roots.spike,
+        spikeRoot: prepared.roots.spike,
+      });
+      return prepared;
+    });
     const report = await runDevReadyProfile(runnerOptions(root), {
       acquireLock: () => ({ release }),
       collectControllerState: () => controllerState(),
@@ -651,7 +814,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
       hostFingerprint: () => ({ schema: 'test-host/v1' }),
       inspectPortAllocation: completePortAllocation,
       launchBrowser: async () => ({ close: closeBrowser }),
-      prepare: async () => prepared,
+      prepare,
       runCell: async (options) => {
         calls.push({
           lane: options.lane,
@@ -666,6 +829,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
     });
 
     expect(calls.map(({ lane }) => lane)).toEqual(['baseline', 'spike', 'spike', 'baseline']);
+    expect(prepare).toHaveBeenCalledOnce();
     expect(calls[0]).toMatchObject({ priorProcessMarker: null, priorSession: null });
     expect(calls[1]).toMatchObject({
       priorProcessMarker: 'KOVO_PERF_DEV_SESSION_CELL_0',
@@ -816,6 +980,15 @@ async function capturedSealableFixture() {
     );
   }
   return { cells, product, profileDir, root, schedule };
+}
+
+function publicationReport(cells, artifactSeal) {
+  return {
+    artifactSeal,
+    cells,
+    integrity: { artifactsSealed: true, complete: true, exactSchedule: true },
+    verdict: { status: 'diagnostic-only' },
+  };
 }
 
 function artifactPath(fixture, cellIndex, kind) {
