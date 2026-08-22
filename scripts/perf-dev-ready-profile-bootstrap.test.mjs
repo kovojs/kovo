@@ -25,6 +25,7 @@ import {
   materializeReadyProfileController,
   readBootstrapStableFile,
   runReadyProfileBootstrap,
+  verifyProfileArtifactCustody,
 } from './perf-dev-ready-profile-bootstrap.mjs';
 
 const roots = [];
@@ -357,11 +358,17 @@ describe('immutable ready-profile controller bootstrap', () => {
     await expect(runReadyProfileBootstrap(fixture.argv, fixture.dependencies)).resolves.toBe(0);
     const report = JSON.parse(await readFile(fixture.out, 'utf8'));
     const finalDirectory = fileIdentity(lstatSync(fixture.profileDir, { bigint: true }));
+    const controllerAnalysisSha256 = canonicalDigest(fixture.controllerReport.analysis);
+    const controllerArtifactSealSha256 = canonicalDigest(fixture.controllerReport.artifactSeal);
 
     expect(report.controller.bootstrap).toMatchObject({
+      controllerAnalysisSha256,
+      controllerArtifactSealSha256,
       headStableThroughPublication: true,
+      publishedArtifactSealSha256: canonicalDigest(report.artifactSeal),
       artifactPublication: {
         controllerDirectoryIdentity: fixture.controllerReport.artifactSeal.directory.identity,
+        controllerSealSha256: controllerArtifactSealSha256,
         finalDirectoryIdentity: finalDirectory,
         publication: 'exclusive-directory-plus-hardlinks/v1',
       },
@@ -431,6 +438,31 @@ describe('immutable ready-profile controller bootstrap', () => {
       expect(existsSync(fixture.profileDir)).toBe(false);
     }
   });
+
+  it.each(['afterPrepublicationVerification', 'afterProfilePublication'])(
+    'rejects a structurally valid coordinated analysis/seal substitution at %s',
+    async (hook) => {
+      const fixture = await bootstrapRunFixture();
+      fixture.dependencies[hook] = (context) => {
+        const replacement = substitutedReadyAnalysis();
+        expect(canonicalDigest(replacement)).not.toBe(canonicalDigest(context.report.analysis));
+        context.report.analysis = structuredClone(replacement);
+        context.report.artifactSeal.analysis = structuredClone(replacement);
+        expect(() =>
+          verifyProfileArtifactCustody(
+            context.report,
+            context.stagedProfiles ?? context.publishedProfile.target,
+          ),
+        ).not.toThrow();
+      };
+
+      await expect(runReadyProfileBootstrap(fixture.argv, fixture.dependencies)).rejects.toThrow(
+        /authenticated report analysisSha256 and artifactSealSha256 changed/u,
+      );
+      expect(existsSync(fixture.out)).toBe(false);
+      expect(existsSync(fixture.profileDir)).toBe(false);
+    },
+  );
 
   it('rejects commit/tree movement and committed-blob or filesystem-byte confusion', async () => {
     {
@@ -739,6 +771,100 @@ function syntheticReadyAnalysis() {
     },
     schema: 'kovo-dev-ready-profile-analysis/v1',
   };
+}
+
+function substitutedReadyAnalysis() {
+  const ranking = () => ({
+    calls: {
+      census: {
+        authenticatedCallCount: 3,
+        authenticatedFunctions: 2,
+        authenticatedIdentities: 2,
+        totalCallCount: 3,
+        totalFunctions: 2,
+        unattributedCallCount: 0,
+        unattributedFunctions: 0,
+      },
+      topFive: [
+        {
+          callCount: 2,
+          identity: {
+            endOffset: 20,
+            functionName: 'substituteHot',
+            path: 'substitute/hot.mjs',
+            root: 'consumer',
+            startOffset: 10,
+          },
+          rank: 1,
+        },
+        {
+          callCount: 1,
+          identity: {
+            endOffset: 40,
+            functionName: 'substituteWarm',
+            path: 'substitute/warm.mjs',
+            root: 'consumer',
+            startOffset: 30,
+          },
+          rank: 2,
+        },
+      ],
+    },
+    cpu: {
+      census: {
+        authenticatedFrames: 2,
+        idleSamples: 0,
+        rankedSamples: 3,
+        totalSamples: 3,
+        unattributedSamples: 0,
+      },
+      topFive: [
+        {
+          identity: {
+            columnNumber: 2,
+            functionName: 'substituteHot',
+            lineNumber: 12,
+            path: 'substitute/hot.mjs',
+            root: 'consumer',
+          },
+          rank: 1,
+          selfSamples: 2,
+        },
+        {
+          identity: {
+            columnNumber: 4,
+            functionName: 'substituteWarm',
+            lineNumber: 34,
+            path: 'substitute/warm.mjs',
+            root: 'consumer',
+          },
+          rank: 2,
+          selfSamples: 1,
+        },
+      ],
+    },
+    schema: 'kovo-dev-ready-profile-ranking/v1',
+  });
+  const analysis = syntheticReadyAnalysis();
+  for (const cell of analysis.cells) cell.ranking = ranking();
+  for (const lane of analysis.lanes) lane.ranking = ranking();
+  analysis.overall.ranking = ranking();
+  return analysis;
+}
+
+function canonicalDigest(value) {
+  return `sha256:${createHash('sha256').update(canonicalJson(value)).digest('hex')}`;
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function syntheticArtifactEvidence(root, file, schema) {
