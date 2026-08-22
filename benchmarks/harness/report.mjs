@@ -13,7 +13,7 @@ export async function writeReport(resultsPath, reportPath) {
     '',
     '## Methodology',
     '',
-    'Each app renders the same 24-product catalog, serves the same WebP assets, and exposes the same listing, product detail, cart dialog, and checkout confirmation flow. The custom harness uses fresh browser contexts, cache-cleared runs, Chromium CDP throttling for the mobile profile, request-size accounting to network quiescence, a cart-dialog TTI proxy, a navigation-to-paint probe, and a back/forward-cache probe. Lighthouse runs cover the listing and one product detail page for desktop and mobile presets.',
+    'Each app renders the same 24-product catalog and serves the same WebP assets, listing route, and product-detail route. The cart implementations are intentionally not capability-matched: Kovo uses a platform-native L0 popover whose confirmation text is already present, while the React entrants implement hydrated client cart state. The custom harness uses fresh browser contexts, Chromium CDP throttling for the mobile profile, request-size accounting to network quiescence, a cart-dialog readiness proxy, a navigation-to-paint probe, and a back/forward-cache probe. Lighthouse runs cover the listing and one product detail page for desktop and mobile presets.',
     '',
     'The headline comparison is architectural, not a claim that one implementation is the only possible tuning for each framework: Kovo is measured as a server-rendered MPA with a platform-native L0 cart dialog and no hydration, while Next.js App Router and TanStack Start are measured with hydrated client cart UI. All apps use plain `<img>` tags to isolate framework behavior from image optimizer behavior.',
     '',
@@ -41,13 +41,23 @@ export async function writeReport(resultsPath, reportPath) {
     '',
     '## Navigation',
     '',
-    "Measured from the click to the paint that presents the destination: the destination document's browser-recorded first contentful paint when the navigation replaced the document, and the first frame rendered after the destination content is in the DOM when it did not. `Doc replaced` counts the navigations that destroyed the JS realm, i.e. where the framework fell back to a full document load.",
+    'Measured from the click to the first traced compositor/paint frame after a MutationObserver sees the destination marker. The same Chrome trace boundary is used whether navigation replaces the document or morphs it in place. `Doc replaced` counts navigations that destroyed the JS realm.',
     '',
     '`Superseded probe` reproduces the previous harness metric — wait for `main h1` to exist, then stop. The listing page also has a `main h1`, so that selector is already satisfied by the ORIGIN document and the probe resolves before the navigation commits: it measured harness round-trip latency, not navigation. `Superseded error` is how far low it lands. Do not quote it.',
     '',
     navigationTable(data.apps, 'desktop'),
     '',
     navigationTable(data.apps, 'mobile'),
+    '',
+    '## Navigation attribution',
+    '',
+    "Server and transfer come from the selected click-window response's authenticated Chrome Resource trace triplet. `Response processing + DOM apply` is the directly observed response-headers-to-destination-marker envelope on the same monotonic trace clock. It intentionally includes streaming transfer, read/decode, document build or morph, and main-thread queueing, so it overlaps the transfer and named timeline rows and must not be added to them. Browser-parser construction, style, layout, and paint are named Chrome timeline events. `Unsupported` means Chromium does not expose a stable cross-framework boundary; it never means zero.",
+    '',
+    navigationAttributionTable(data.apps, 'desktop'),
+    '',
+    navigationAttributionTable(data.apps, 'mobile'),
+    '',
+    navigationAttributionNotes(data.apps),
     '',
     '## Back/forward cache',
     '',
@@ -75,7 +85,8 @@ export async function writeReport(resultsPath, reportPath) {
     '',
     '## Known limits of this instrument',
     '',
-    "- **The navigation-to-paint probe is biased in favour of document-replacing entrants, and Kovo is the document-replacing entrant.** This bias is one-sided; it does not apply equally to every entrant. The probe's two branches are not the same instrument. When the navigation replaced the document, the reported time is the destination document's own browser-recorded first contentful paint — written by the browser at paint and read afterwards, with no harness cost inside the number. When it did not, no new paint entry is emitted, so the harness polls the page over CDP (25 ms interval) and then waits two animation frames before reading the clock. Up to one poll interval, the CDP round-trips of that wait chain, and two animation frames are all inside the same-document number, and none of them are inside the document-replacing one. The same branch split also picks different moments: first contentful paint can land before the destination's own `main h1` is painted, while the same-document branch cannot fire before that heading is in the DOM. Both differences push the same way. Nothing here is calibrated out, and it favours whichever entrant the `Doc replaced` column shows replacing the document. Today that is Kovo, so this instrument errs in Kovo's favour. **You can size the bias from this report's own columns**: for a same-document entrant, `Nav to paint ms` minus `Nav to destination DOM ms` is the harness overhead charged after the destination content was already in the DOM, and for a document-replacing entrant it is not charged at all. Measured on 2026-08-08 at `--iterations 10`, that desktop delta was +28 ms and +33 ms for the two same-document entrants against +3 ms for the document-replacing one, while the whole desktop spread between all three entrants was 4 ms — so on desktop the bias is larger than the result and that row distinguishes nothing.",
+    '- **The destination-paint mark observes DOM readiness, then the trace selects the first later frame.** MutationObserver scheduling and compositor event availability can add a small common delay. Raw trace-derived samples and the destination-DOM column remain in the report so that delay is visible; the old asymmetric FCP-versus-two-rAF branch has been removed.',
+    '- **Attribution rows are evidence, not an additive synthetic waterfall.** The response-processing/DOM-apply envelope starts at response headers, so it overlaps transfer, parser, style, and layout work. Response read/decode and DOM morph/apply remain `unsupported` because Chromium supplies no stable separate boundary; no residual is relabeled as either phase.',
     '- **Wall-clock numbers are only comparable to numbers taken at a similar load.** The load average at the end of the run is recorded above; treat timings taken above roughly 1.0 per core as indicative only. Byte counts are unaffected.',
     '- **Mobile TTFB is not network-realistic.** CDP mobile emulation does not apply the emulated RTT to the first byte, so the mobile TTFB column understates a real mobile connection.',
     '- **The back/forward-cache probe uses a different browser build** than the timing scenarios: full Chromium with `--disable-back-forward-cache` removed. Playwright\'s default `chrome-headless-shell` cannot participate in the back/forward cache at all, so a probe sharing that browser could only ever report "not restored".',
@@ -90,10 +101,19 @@ function runProvenance(data) {
   const machine = data.machine;
   if (!machine) return '_No machine record: this report was produced by an older harness._';
   const load = (machine.loadAverage ?? []).map((value) => value.toFixed(2)).join(' / ');
+  const source = data.source;
+  const sourceSummary = source
+    ? ` Source ${source.commit ?? 'unknown'} (${source.dirty ? `dirty: ${(source.dirtyPaths ?? []).join(', ') || 'paths not recorded'}` : 'clean'}). Lock digests: ${
+        Object.entries(source.locks ?? {})
+          .map(([name, digest]) => `${name}=${digest ?? 'missing'}`)
+          .join(', ') || 'not recorded'
+      }.`
+    : ' Source commit, dirty state, and lock digests were not recorded.';
   return [
     `Run \`${data.runId ?? 'unknown'}\` on ${machine.platform}/${machine.arch}, ${machine.cpus} cores, `,
     `${(machine.totalMemoryBytes / 1024 ** 3).toFixed(1)} GiB, node ${machine.node}. `,
     `Load average at end of run (1/5/15 min): **${load}**.`,
+    sourceSummary,
   ].join('');
 }
 
@@ -221,6 +241,94 @@ function navigationTable(apps, condition) {
     );
   }
   return rows.join('\n');
+}
+
+function navigationAttributionTable(apps, condition) {
+  const phases = [
+    ['Server', 'server'],
+    ['Transfer', 'transfer'],
+    ['Response processing + DOM apply', 'responseProcessingDomApply'],
+    ['Read/decode', 'responseReadDecode'],
+    ['Document construct', 'documentConstruction'],
+    ['DOM morph/apply', 'domMorphApply'],
+    ['Style', 'style'],
+    ['Layout', 'layout'],
+    ['Paint', 'paint'],
+  ];
+  const rows = [
+    `### ${title(condition)}`,
+    '',
+    `| App | Primary response | ${phases.map(([label]) => `${label} ms`).join(' | ')} |`,
+    `| --- | --- | ${phases.map(() => '---:').join(' | ')} |`,
+  ];
+  for (const app of apps) {
+    const scenario = app.conditions?.[condition]?.navigation ?? {};
+    const iterations = scenario.iterations ?? [];
+    const selections = [
+      ...new Set(
+        iterations.map((iteration) => {
+          const response = iteration.navAttribution?.primaryResponse;
+          return response?.status === 'observed'
+            ? response.selection
+            : response?.status === 'unsupported'
+              ? 'not observed'
+              : 'not measured';
+        }),
+      ),
+    ];
+    rows.push(
+      `| ${app.app} | ${selections.length === 0 ? 'not measured' : selections.join(', ')} | ${phases
+        .map(([, key]) => attributionPhaseCell(scenario, key))
+        .join(' | ')} |`,
+    );
+  }
+  return rows.join('\n');
+}
+
+function attributionPhaseCell(scenario, phaseName) {
+  const iterations = scenario.iterations ?? [];
+  const phases = iterations
+    .map((iteration) => iteration.navAttribution?.phases?.[phaseName])
+    .filter(Boolean);
+  if (phases.length === 0) return 'not measured';
+  const observed = phases.filter(
+    (phase) => phase.status === 'observed' && Number.isFinite(phase.durationMs),
+  );
+  if (observed.length === 0) return 'unsupported';
+  const aggregate = scenario.summary?.[`navAttribution.phases.${phaseName}.durationMs`];
+  const value = withSpread(aggregate);
+  return observed.length === phases.length
+    ? value
+    : `${value} (${observed.length}/${phases.length})`;
+}
+
+function navigationAttributionNotes(apps) {
+  const notes = [];
+  for (const app of apps) {
+    for (const condition of ['desktop', 'mobile']) {
+      const iterations = app.conditions?.[condition]?.navigation?.iterations ?? [];
+      for (const iteration of iterations) {
+        const response = iteration.navAttribution?.primaryResponse;
+        if (response?.status === 'unsupported') {
+          notes.push(`${app.app}/${condition}/primary response: ${response.reason}`);
+        }
+        for (const [phaseName, phase] of Object.entries(iteration.navAttribution?.phases ?? {})) {
+          if (phase?.status === 'unsupported') {
+            notes.push(`${app.app}/${condition}/${phaseName}: ${phase.reason}`);
+          }
+        }
+      }
+    }
+  }
+  const unique = [...new Set(notes)].sort();
+  if (unique.length === 0) {
+    return '_Every requested attribution phase was directly observed in this run._';
+  }
+  return [
+    '**Unsupported boundaries (deduplicated):**',
+    '',
+    ...unique.map((note) => `- ${note}`),
+  ].join('\n');
 }
 
 function bfcacheTable(apps) {

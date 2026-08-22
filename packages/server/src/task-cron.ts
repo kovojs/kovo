@@ -161,7 +161,11 @@ export class MemoryRecurringTaskOccurrenceStore implements RecurringTaskOccurren
 }
 
 export class PostgresRecurringTaskOccurrenceStore implements RecurringTaskOccurrenceStore {
-  constructor(private readonly executor: DurableTaskSqlExecutor) {}
+  private readonly executor: DurableTaskSqlExecutor;
+
+  constructor(executor: DurableTaskSqlExecutor) {
+    this.executor = executor;
+  }
 
   async currentTime(): Promise<Date> {
     const result = await this.executor.execute<{ now: Date | string }>(

@@ -12,10 +12,14 @@ import {
 } from './check-security-ledger-index.mjs';
 
 describe('security-ledger index gate', () => {
-  it('accepts the checked-in explicit registry at its reconciliation date', () => {
+  it('accepts the checked-in explicit registry after completed ledgers are archived', () => {
     expect(
-      validateSecurityLedgerIndex({ rootDir: defaultRepoRoot, today: '2026-07-22' }),
-    ).toMatchObject({ ok: true, findings: [] });
+      validateSecurityLedgerIndex({ rootDir: defaultRepoRoot, today: '2026-08-18' }),
+    ).toMatchObject({
+      ok: true,
+      findings: [],
+      summary: expect.stringContaining('0 transient ledger(s)'),
+    });
   });
 
   it('allows zero transient ledgers and ignores ledger-like filenames without markers', async () => {

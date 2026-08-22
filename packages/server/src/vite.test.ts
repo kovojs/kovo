@@ -864,6 +864,8 @@ export const LoginCard = component({
             if (id === '@kovojs/server/internal/app-shell-vite') {
               const module = await import('@kovojs/server/internal/app-shell-vite');
               return {
+                bindKovoAppShellViteDevLiveTargetAttestationSecret:
+                  module.bindKovoAppShellViteDevLiveTargetAttestationSecret,
                 claimCompilerClientModuleViteInstaller:
                   module.claimCompilerClientModuleViteInstaller,
                 compilerClientModuleViteEpoch: module.compilerClientModuleViteEpoch,

@@ -1,5 +1,5 @@
 {
-  "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md \u00a76.6.",
+  "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
   "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-29.1",
   "emptyPublicPackages": [
@@ -683,7 +683,7 @@
           "reason": "The custom-shell browser installer captures framework-bounded network and dynamic-loader authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "9e6f1a2f8ffad51aa91f4edba82d7a24352ba0f6a7dd4afcf0a9373c41e43be6"
+      "sourceTreeSha256": "a149adcb27a61ab8af8d62da030c84076a08547f7fe6b054ba4c3162a71fca47"
     },
     {
       "manifestVariants": [
@@ -783,7 +783,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "3efc17960bf6c210c2c1f61cf040e249a63d6e59b52c83fb3cd275a11c7768e4"
+      "sourceTreeSha256": "837582d96e0c3c92f87523b25d6e6376c68903c6b373eafe1854b13e90cce697"
     },
     {
       "manifestVariants": [
@@ -1018,7 +1018,7 @@
             "./security": ["DeclassifyPolicy", "revealSecret", "revealUntrusted", "trustedReveal"]
           },
           "review": {
-            "basis": "SPEC \u00a76.6 makes policy construction and all three declassification doors L1 capabilities. Any import reachable from an untrusted root closes before a runtime reveal can be attempted.",
+            "basis": "SPEC §6.6 makes policy construction and all three declassification doors L1 capabilities. Any import reachable from an untrusted root closes before a runtime reveal can be attempted.",
             "evidence": [
               "packages/core/src/security.ts",
               "packages/core/src/secret.ts",
@@ -1028,7 +1028,7 @@
           },
           "rootKind": "none",
           "securityRole": "request-closed",
-          "reason": "Declassification policy construction and reveal doors are unavailable to every untrusted-data-reachable module (SPEC \u00a76.6)."
+          "reason": "Declassification policy construction and reveal doors are unavailable to every untrusted-data-reachable module (SPEC §6.6)."
         },
         {
           "capabilities": [],
@@ -1617,7 +1617,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "bdd6ed3f25af7e551800d01609f598bec76f19f4156505a4efda09031ff7b981"
+      "sourceTreeSha256": "74061dd153459546a5da6bd26972056b0602b79d2d47c35afb31bc559887d3cd"
     },
     {
       "manifestVariants": [
@@ -6107,78 +6107,6 @@
       "manifestVariants": [
         {
           "exports": {
-            ".": "./src/index.ts",
-            "./agent": "./src/public-agent.ts",
-            "./build": "./src/build.ts",
-            "./client-modules": "./src/public-client-modules.ts",
-            "./command": "./src/public-command.ts",
-            "./confidential": "./src/public-confidential.ts",
-            "./custom-adapters": "./src/public-custom-adapters.ts",
-            "./data": "./src/public-data.ts",
-            "./delegation": "./src/public-delegation.ts",
-            "./derived-data": "./src/public-derived-data.ts",
-            "./diagnostics": "./src/public-diagnostics.ts",
-            "./egress": "./src/public-egress.ts",
-            "./files": "./src/public-files.ts",
-            "./node": "./src/public-node.ts",
-            "./password": "./src/public-password.ts",
-            "./postgres": "./src/public-postgres.ts",
-            "./principal-epochs": "./src/public-principal-epochs.ts",
-            "./principal-erasure": "./src/public-principal-erasure.ts",
-            "./render-tree": "./src/public-render-tree.ts",
-            "./rendering": "./src/public-rendering.ts",
-            "./replay": "./src/public-replay.ts",
-            "./routing": "./src/public-routing.ts",
-            "./runtime-bootstrap": "./src/runtime-bootstrap.ts",
-            "./secret-reading": "./src/public-secret-reading.ts",
-            "./security": "./src/public-security.ts",
-            "./signing": "./src/public-signing.ts",
-            "./sqlite": "./src/sqlite.ts",
-            "./static-export": "./src/public-static-export.ts",
-            "./storage-downloads": "./src/public-storage-downloads.ts",
-            "./storage-keys": "./src/public-storage-keys.ts",
-            "./tasks": "./src/public-tasks.ts",
-            "./vite": "./src/vite-source.ts",
-            "./webhooks": "./src/public-webhooks.ts",
-            "./write-safety": "./src/public-write-safety.ts",
-            "./generated/db-capabilities": "./src/generated-db-capabilities.ts",
-            "./internal/app-shell-vite": "./src/internal/app-shell-vite.ts",
-            "./internal/audit-facts": "./src/internal/audit-facts.ts",
-            "./internal/better-auth": "./src/internal/better-auth.ts",
-            "./internal/build": "./src/internal/build.ts",
-            "./internal/build-context": "./src/internal/build-context.ts",
-            "./internal/build-preset": "./src/build-preset-internal.ts",
-            "./internal/capabilities": "./src/internal/capabilities.ts",
-            "./internal/client-modules": "./src/internal/client-modules.ts",
-            "./internal/csp": "./src/internal/csp.ts",
-            "./internal/csrf": "./src/internal/csrf.ts",
-            "./internal/data-plane-static-analysis": "./src/internal/data-plane-static-analysis.ts",
-            "./internal/egress": "./src/internal/egress.ts",
-            "./internal/escape": "./src/internal/escape.ts",
-            "./internal/execution": "./src/internal/execution.ts",
-            "./internal/fixture-app": "./src/internal/fixture-app.ts",
-            "./internal/html": "./src/internal/html.ts",
-            "./internal/keyring": "./src/internal/keyring.ts",
-            "./internal/managed-db-capabilities": "./src/internal/managed-db-capabilities.ts",
-            "./internal/managed-db": "./src/internal/managed-db.ts",
-            "./internal/sql-parser-authority-bootstrap": "./src/sql-parser-authority-bootstrap.ts",
-            "./internal/postgres-capability": "./src/internal/postgres-capability.ts",
-            "./internal/runtime-registry-wire": "./src/internal/runtime-registry-wire.ts",
-            "./internal/runtime-environment": "./src/internal/runtime-environment.ts",
-            "./internal/route": "./src/internal/route.ts",
-            "./internal/sqlite": "./src/internal/sqlite.ts",
-            "./internal/sqlite-capability": "./src/internal/sqlite-capability.ts",
-            "./internal/static-export": "./src/internal/static-export.ts",
-            "./internal/testing": "./src/internal/testing.ts",
-            "./internal/vite-security-profile": "./src/internal/vite-security-profile.ts",
-            "./internal/wire": "./src/internal/wire.ts",
-            "./jsx-runtime": "./src/jsx-runtime.ts",
-            "./jsx-dev-runtime": "./src/jsx-runtime.ts"
-          },
-          "fingerprint": "sha256:44be732149664296a09cb30df3568a4265277115645d3997ae7e43e08b212aa2"
-        },
-        {
-          "exports": {
             ".": {
               "types": "./dist/index.d.mts",
               "default": "./dist/index.mjs"
@@ -6449,6 +6377,78 @@
             }
           },
           "fingerprint": "sha256:32991c3a2977c0a8551843a562e1976ac28a8e91de17f28681edbd9d9b8a074d"
+        },
+        {
+          "exports": {
+            ".": "./src/index.ts",
+            "./agent": "./src/public-agent.ts",
+            "./build": "./src/build.ts",
+            "./client-modules": "./src/public-client-modules.ts",
+            "./command": "./src/public-command.ts",
+            "./confidential": "./src/public-confidential.ts",
+            "./custom-adapters": "./src/public-custom-adapters.ts",
+            "./data": "./src/public-data.ts",
+            "./delegation": "./src/public-delegation.ts",
+            "./derived-data": "./src/public-derived-data.ts",
+            "./diagnostics": "./src/public-diagnostics.ts",
+            "./egress": "./src/public-egress.ts",
+            "./files": "./src/public-files.ts",
+            "./node": "./src/public-node.ts",
+            "./password": "./src/public-password.ts",
+            "./postgres": "./src/public-postgres.ts",
+            "./principal-epochs": "./src/public-principal-epochs.ts",
+            "./principal-erasure": "./src/public-principal-erasure.ts",
+            "./render-tree": "./src/public-render-tree.ts",
+            "./rendering": "./src/public-rendering.ts",
+            "./replay": "./src/public-replay.ts",
+            "./routing": "./src/public-routing.ts",
+            "./runtime-bootstrap": "./src/runtime-bootstrap.ts",
+            "./secret-reading": "./src/public-secret-reading.ts",
+            "./security": "./src/public-security.ts",
+            "./signing": "./src/public-signing.ts",
+            "./sqlite": "./src/sqlite.ts",
+            "./static-export": "./src/public-static-export.ts",
+            "./storage-downloads": "./src/public-storage-downloads.ts",
+            "./storage-keys": "./src/public-storage-keys.ts",
+            "./tasks": "./src/public-tasks.ts",
+            "./vite": "./src/vite-source.ts",
+            "./webhooks": "./src/public-webhooks.ts",
+            "./write-safety": "./src/public-write-safety.ts",
+            "./generated/db-capabilities": "./src/generated-db-capabilities.ts",
+            "./internal/app-shell-vite": "./src/internal/app-shell-vite.ts",
+            "./internal/audit-facts": "./src/internal/audit-facts.ts",
+            "./internal/better-auth": "./src/internal/better-auth.ts",
+            "./internal/build": "./src/internal/build.ts",
+            "./internal/build-context": "./src/internal/build-context.ts",
+            "./internal/build-preset": "./src/build-preset-internal.ts",
+            "./internal/capabilities": "./src/internal/capabilities.ts",
+            "./internal/client-modules": "./src/internal/client-modules.ts",
+            "./internal/csp": "./src/internal/csp.ts",
+            "./internal/csrf": "./src/internal/csrf.ts",
+            "./internal/data-plane-static-analysis": "./src/internal/data-plane-static-analysis.ts",
+            "./internal/egress": "./src/internal/egress.ts",
+            "./internal/escape": "./src/internal/escape.ts",
+            "./internal/execution": "./src/internal/execution.ts",
+            "./internal/fixture-app": "./src/internal/fixture-app.ts",
+            "./internal/html": "./src/internal/html.ts",
+            "./internal/keyring": "./src/internal/keyring.ts",
+            "./internal/managed-db-capabilities": "./src/internal/managed-db-capabilities.ts",
+            "./internal/managed-db": "./src/internal/managed-db.ts",
+            "./internal/sql-parser-authority-bootstrap": "./src/sql-parser-authority-bootstrap.ts",
+            "./internal/postgres-capability": "./src/internal/postgres-capability.ts",
+            "./internal/runtime-registry-wire": "./src/internal/runtime-registry-wire.ts",
+            "./internal/runtime-environment": "./src/internal/runtime-environment.ts",
+            "./internal/route": "./src/internal/route.ts",
+            "./internal/sqlite": "./src/internal/sqlite.ts",
+            "./internal/sqlite-capability": "./src/internal/sqlite-capability.ts",
+            "./internal/static-export": "./src/internal/static-export.ts",
+            "./internal/testing": "./src/internal/testing.ts",
+            "./internal/vite-security-profile": "./src/internal/vite-security-profile.ts",
+            "./internal/wire": "./src/internal/wire.ts",
+            "./jsx-runtime": "./src/jsx-runtime.ts",
+            "./jsx-dev-runtime": "./src/jsx-runtime.ts"
+          },
+          "fingerprint": "sha256:44be732149664296a09cb30df3568a4265277115645d3997ae7e43e08b212aa2"
         },
         {
           "exports": {
@@ -9805,7 +9805,7 @@
             "./principal-erasure": ["erasePrincipal"]
           },
           "review": {
-            "basis": "erasePrincipal is the fixed SPEC \u00a710.3 erasure door over an exact managed Postgres runtime, a fixed-purpose signing key ring, and every supplied enumerable storage adapter. It exposes no raw SQL, storage enumeration, network, filesystem, digest, or signing primitive.",
+            "basis": "erasePrincipal is the fixed SPEC §10.3 erasure door over an exact managed Postgres runtime, a fixed-purpose signing key ring, and every supplied enumerable storage adapter. It exposes no raw SQL, storage enumeration, network, filesystem, digest, or signing primitive.",
             "evidence": [
               "packages/server/src/index.ts",
               "packages/server/src/principal-erasure.ts",
@@ -9876,7 +9876,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "705b14ae52773de9babf3643b16b7de521c35904209eb1a7c94d9aaa63d666ad"
+      "sourceTreeSha256": "4ddcc15ecc29f54125a91de03622627086558bb37173b9832947722dc62448f1"
     },
     {
       "manifestVariants": [
@@ -10334,7 +10334,7 @@
           },
           "reason": "CSRF token minting here is explicit test-process setup authority and is not a request-handler capability door.",
           "review": {
-            "basis": "The focused test helper reaches Kovo\u2019s purpose-closed CSRF signing path only to prepare synthetic mutation submissions; both module evaluation and the named helper remain request-closed.",
+            "basis": "The focused test helper reaches Kovo’s purpose-closed CSRF signing path only to prepare synthetic mutation submissions; both module evaluation and the named helper remain request-closed.",
             "evidence": [
               "packages/server/src/csrf.ts",
               "packages/server/src/internal/csrf.ts",
@@ -10363,7 +10363,7 @@
           },
           "reason": "Ephemeral Postgres construction is explicit test-process setup authority and is not a request-handler capability door.",
           "review": {
-            "basis": "The Postgres test helper owns an ephemeral PGlite data directory and exercises Kovo\u2019s real database posture only from the test process; the former public server/testing door has been removed.",
+            "basis": "The Postgres test helper owns an ephemeral PGlite data directory and exercises Kovo’s real database posture only from the test process; the former public server/testing door has been removed.",
             "evidence": [
               "packages/server/src/internal/testing.ts",
               "packages/server/src/postgres-runtime.ts",

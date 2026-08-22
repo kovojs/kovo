@@ -20,6 +20,7 @@ import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { domain, query, route, s } from '@kovojs/server';
 import { jsx } from '@kovojs/server/jsx-runtime';
 import {
+  bindKovoAppShellViteDevLiveTargetAttestationSecret,
   createKovoAppShellDevDiagnosticLedger,
   createKovoAppShellViteDevIntegration,
   dispatchKovoAppShellViteDevRequest,
@@ -119,7 +120,10 @@ test('dev HMR client applies server-rendered live-target fragments without reloa
           __kovoHot?: Record<string, (event?: unknown) => void>;
         }
       ).__kovoHot;
-      hot?.['kovo:component-render']?.({ oldFactHash: 'old' });
+      hot?.['kovo:component-render']?.({
+        impact: 'componentRefresh',
+        liveTargets: ['hmr/Card'],
+      });
     });
     const [request] = await Promise.all([refreshRequest, refreshResponse]);
     const headers = request.headers();
@@ -212,7 +216,10 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
           __kovoHot?: Record<string, (event?: unknown) => void>;
         }
       ).__kovoHot;
-      hot?.['kovo:component-render']?.({ oldFactHash: 'old-query' });
+      hot?.['kovo:component-render']?.({
+        impact: 'componentRefresh',
+        liveTargets: ['hmr/ProductCard'],
+      });
     });
     const request = await refreshRequest;
     const headers = request.headers();
@@ -232,7 +239,9 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
   }
 });
 
-test('dev HMR client reloads the canonical document with server diagnostics', async ({ page }) => {
+test('dev HMR client retains the canonical document while Vite owns diagnostics', async ({
+  page,
+}) => {
   const failedModule = '/c/src/components/ProductCard.client.js?v=failed';
   const diagnostics = createKovoAppShellDevDiagnosticLedger();
   const app = createApp({
@@ -263,24 +272,23 @@ test('dev HMR client reloads the canonical document with server diagnostics', as
       moduleHrefs: [failedModule],
       source: 'export const ProductCard = component({ render: () => <p><div /></p> });',
     });
-    const documentResponse = page.waitForResponse(
-      (response) => response.url() === `${server.origin}/` && response.status() === 500,
-    );
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
       const hot = (
         window as typeof window & {
           __kovoHot?: Record<string, (event?: unknown) => void>;
         }
       ).__kovoHot;
       hot?.['kovo:diagnostics']?.();
+      // The authenticated Kovo event is observation-only; Vite's native overlay owns the
+      // diagnostic UI. Cross two frames so an accidental location.reload() cannot hide behind
+      // an immediately satisfied DOM assertion.
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
     });
-    await documentResponse;
 
-    await expect(page.locator('.kovo-diagnostic-code')).toHaveText('KV225');
-    await expect(page.locator('body')).toContainText(
-      'JSX nesting violates the HTML content model.',
-    );
-    await expect(page.locator('main')).not.toContainText('Healthy route');
+    await expect(page.locator('main')).toContainText('Healthy route');
+    await expect(page.locator('.kovo-diagnostic-code')).toHaveCount(0);
     expect(page.url()).toBe(`${server.origin}/`);
   } finally {
     await server.close();
@@ -576,7 +584,10 @@ async function serveHmrFixture(
   });
   const loadModule = async (id: string): Promise<Record<string, unknown>> => {
     if (id === '@kovojs/server/internal/app-shell-vite') {
-      return { dispatchKovoAppShellViteDevRequest };
+      return {
+        bindKovoAppShellViteDevLiveTargetAttestationSecret,
+        dispatchKovoAppShellViteDevRequest,
+      };
     }
     return { default: app };
   };

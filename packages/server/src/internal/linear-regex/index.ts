@@ -206,9 +206,12 @@ function workReport(matched: boolean, work: LinearRegexWorkMeter): LinearRegexWo
 }
 
 class Parser {
+  readonly source: string;
   #index = 0;
 
-  constructor(readonly source: string) {}
+  constructor(source: string) {
+    this.source = source;
+  }
 
   parse(): Ast {
     const ast = this.#parseAlt();
@@ -453,9 +456,12 @@ class Parser {
 }
 
 class Compiler {
+  readonly limit: number;
   readonly #instructions: Instruction[] = [];
 
-  constructor(readonly limit: number) {}
+  constructor(limit: number) {
+    this.limit = limit;
+  }
 
   compile(ast: Ast): readonly Instruction[] {
     const unanchoredStart = this.#emit({ type: 'split', out: NO_OUT, out1: NO_OUT });

@@ -4,7 +4,16 @@ import { existsSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
+import { fastCliVersionOutput } from './cli-version-fast-path.mjs';
+
 const currentBinPath = fileURLToPath(import.meta.url);
+const commandArgs = process.argv.slice(2);
+const fastVersionOutput = fastCliVersionOutput(commandArgs, import.meta.url);
+
+if (fastVersionOutput !== null) {
+  await new Promise((resolve) => process.stdout.write(fastVersionOutput, () => resolve(undefined)));
+  process.exit(0);
+}
 
 if (currentBinPath.endsWith('.ts') && process.env.KOVO_CLI_TRANSFORM_TYPES !== '1') {
   const nodeMajor = Number.parseInt(process.versions.node.split('.')[0] ?? '0', 10);
@@ -50,8 +59,6 @@ const commandSecurityDisposition = Object.freeze({
   invocationEnv,
   paranoidStaticAdvisory: paranoidValue === '1' || paranoidValue === 'true',
 });
-
-const commandArgs = process.argv.slice(2);
 
 // Source check/build are heavy one-shot proof pipelines. Route them before importing the complete
 // dispatcher so a thin parent can run each authenticated phase in a fresh process and let the

@@ -5950,9 +5950,10 @@ export default async function handler() {
   });
 
   // O16 (SPEC §14; plans/good-perf.md): a relative rootedFiles() root constructed while the app
-  // evaluated during `kovo build` is staged into the node artifact, and the generated server
-  // publishes the staged directory before importing the handler. Without this the artifact threw
-  // "Filesystem root '.../dist/shared/images' does not exist" and exited before listening.
+  // evaluated during `kovo build` is snapshotted into the neutral transaction before the handoff,
+  // then copied into the node artifact. The generated server publishes that staged directory
+  // before importing the handler. Without this the artifact threw "Filesystem root
+  // '.../dist/shared/images' does not exist" and exited before listening.
   // Declared last in this describe so the module-global inventory this test seeds cannot leak
   // into the artifacts asserted by the earlier preset-emission tests.
   it('stages relative rootedFiles roots into the node artifact (O16)', async () => {
@@ -5966,12 +5967,33 @@ export default async function handler() {
       expect(isAbsolute(relativeSpec)).toBe(false);
       const capability = await rootedFiles(relativeSpec);
       expect(capability.root.endsWith('shared-images')).toBe(true);
+      await rootedFiles(imagesDir);
 
       const build = await writeKovoNeutralBuild({
         app: createApp({}),
         outDir: join(root, '.kovo'),
         serverHandlerSource: 'export default async () => new Response("ok");\n',
       });
+      const neutralSnapshot = join(
+        root,
+        '.kovo',
+        'rooted',
+        `root-${encodeURIComponent(relativeSpec)}`,
+        'product-01.webp',
+      );
+      await expect(readFile(neutralSnapshot, 'utf8')).resolves.toBe('staged-image-bytes');
+      expect(build.rootedFileRoots).toEqual([
+        {
+          root: join(root, '.kovo', 'rooted', `root-${encodeURIComponent(relativeSpec)}`),
+          spec: relativeSpec,
+        },
+      ]);
+      await writeFile(join(imagesDir, 'product-01.webp'), 'post-neutral-mutation');
+      const postNeutralDir = join(root, 'post-neutral-injection');
+      await mkdir(postNeutralDir);
+      await writeFile(join(postNeutralDir, 'config-secret.txt'), 'must-not-stage');
+      const postNeutralSpec = relative(process.cwd(), postNeutralDir);
+      await rootedFiles(postNeutralSpec);
       const nodeOutDir = join(root, 'node-output');
       await node({ dockerfile: false }).emit!(build, {
         declaredEnv: [],
@@ -5988,6 +6010,17 @@ export default async function handler() {
         'product-01.webp',
       );
       await expect(readFile(stagedEntry, 'utf8')).resolves.toBe('staged-image-bytes');
+      await expect(
+        readFile(
+          join(
+            nodeOutDir,
+            'rooted',
+            `root-${encodeURIComponent(postNeutralSpec)}`,
+            'config-secret.txt',
+          ),
+          'utf8',
+        ),
+      ).rejects.toThrow();
       const serverSource = await readFile(join(nodeOutDir, 'server.mjs'), 'utf8');
       expect(serverSource).toContain('process.env.KOVO_ROOTED_FILES_DIR = pathResolve(');
       expect(serverSource).toContain("'rooted',");

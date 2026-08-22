@@ -12,8 +12,12 @@ import { runAppBenchmark } from './harness/run.mjs';
 import { DEFAULT_LIGHTHOUSE_REPEATS } from './harness/lighthouse.mjs';
 import { SETTLE_DEFAULTS } from './harness/scenarios.mjs';
 import { writeReport } from './harness/report.mjs';
+import { assertMeasurementIntegrity } from './harness/integrity.mjs';
+import { BROWSER_BENCHMARK_SCHEMA } from './harness/schema.mjs';
+import { collectPerformanceProvenance } from '../scripts/lib/perf-provenance.mjs';
 
 const benchmarkRoot = fileURLToPath(new URL('.', import.meta.url));
+const repoRoot = path.resolve(benchmarkRoot, '..');
 const resultsDir = path.join(benchmarkRoot, 'results');
 
 // Every entrant is started with NODE_ENV=production. Kovo additionally requires deployment
@@ -36,19 +40,19 @@ const DEVELOPMENT_POSTURE_MARKERS = [' in development', 'development posture'];
 
 const allApps = [
   {
-    build: ['pnpm', ['--dir', path.join(benchmarkRoot, 'kovo'), 'run', 'build']],
+    build: ['vp', ['exec', 'pnpm', '--dir', path.join(benchmarkRoot, 'kovo'), 'run', 'build']],
     cwd: path.join(benchmarkRoot, 'kovo'),
     env: { NODE_ENV: 'production', ...kovoAttestation },
     framework: 'Kovo',
     id: 'kovo',
     port: 4310,
-    start: ['pnpm', ['run', 'start']],
+    start: [process.execPath, ['dist/server/server.mjs']],
     versions: {
-      kovo: await packageVersion(path.join(benchmarkRoot, 'kovo/package.json'), '@kovojs/server'),
+      kovo: await ownPackageVersion(path.join(repoRoot, 'packages/server/package.json')),
     },
   },
   {
-    build: ['pnpm', ['--dir', path.join(benchmarkRoot, 'nextjs'), 'run', 'build']],
+    build: ['vp', ['exec', 'pnpm', '--dir', path.join(benchmarkRoot, 'nextjs'), 'run', 'build']],
     cwd: path.join(benchmarkRoot, 'nextjs'),
     env: { NODE_ENV: 'production' },
     framework: 'Next.js App Router',
@@ -62,13 +66,13 @@ const allApps = [
     ]),
   },
   {
-    build: ['pnpm', ['--dir', path.join(benchmarkRoot, 'tanstack'), 'run', 'build']],
+    build: ['vp', ['exec', 'pnpm', '--dir', path.join(benchmarkRoot, 'tanstack'), 'run', 'build']],
     cwd: path.join(benchmarkRoot, 'tanstack'),
     env: { NODE_ENV: 'production' },
     framework: 'TanStack Start',
     id: 'tanstack',
     port: 4312,
-    start: ['pnpm', ['run', 'start']],
+    start: [process.execPath, ['scripts/serve.mjs']],
     versions: await dependencyVersions(path.join(benchmarkRoot, 'tanstack/package.json'), [
       '@tanstack/react-start',
       '@tanstack/react-router',
@@ -78,6 +82,22 @@ const allApps = [
   },
 ];
 
+const lane = readArg('--lane') ?? 'default';
+const laneDefinitions = {
+  default: { listing: '/', scenarios: ['coldLoad', 'ttiProbe', 'navigation'] },
+  'matched-l0': { listing: '/matched/l0', scenarios: ['coldLoad', 'navigation'] },
+  'matched-l1': { listing: '/matched/l1', scenarios: ['coldLoad', 'ttiProbe', 'navigation'] },
+};
+const laneDefinition = laneDefinitions[lane];
+if (!laneDefinition) {
+  throw new Error(`Unknown --lane ${lane}; expected ${Object.keys(laneDefinitions).join(', ')}.`);
+}
+for (const app of allApps) {
+  app.lane = lane;
+  app.paths = { listing: laneDefinition.listing };
+  app.scenarios = laneDefinition.scenarios;
+}
+
 // Every count is validated, not `Number()`-coerced. An unvalidated NaN does not throw anywhere
 // downstream — it silently runs a loop zero times and publishes an empty cell that looks like a
 // measurement. See benchmarks/harness/args.mjs.
@@ -86,6 +106,7 @@ const iterations = parseIntegerFlag(
   readArg('--iterations') ?? process.env.BENCH_ITERATIONS,
   { fallback: 10, max: 1_000 },
 );
+const warmups = readIntegerArg('--warmups', { fallback: 0, max: 100, min: 0 });
 const runLighthouse = !process.argv.includes('--skip-lighthouse');
 const lighthouseRepeats = readIntegerArg('--lighthouse-runs', {
   fallback: DEFAULT_LIGHTHOUSE_REPEATS,
@@ -112,10 +133,15 @@ const appFilter = readArg('--apps')
   ?.split(',')
   .map((id) => id.trim())
   .filter(Boolean);
-const apps = appFilter ? allApps.filter((app) => appFilter.includes(app.id)) : allApps;
+const apps = appFilter
+  ? allApps.filter((app) => appFilter.includes(app.id))
+  : lane === 'default'
+    ? allApps
+    : allApps.filter((app) => app.id === 'kovo' || app.id === 'nextjs');
 if (apps.length === 0) throw new Error(`No benchmark apps matched --apps ${readArg('--apps')}.`);
 
 const outDir = readArg('--out-dir') ? path.resolve(readArg('--out-dir')) : resultsDir;
+const resultFile = readArg('--result-file');
 
 // `--port-base 4810` shifts every entrant's listen port so two benchmark runs on the same machine
 // cannot silently measure each other's server. Without this, a stale listener on the default port
@@ -136,7 +162,15 @@ await mkdir(outDir, { recursive: true });
 
 if (!skipBuild) {
   for (const app of apps) {
-    await runCommand(app.build[0], app.build[1], { cwd: benchmarkRoot, label: `${app.id}:build` });
+    const generatedInputs = await snapshotGeneratedBuildInputs(app);
+    try {
+      await runCommand(app.build[0], app.build[1], {
+        cwd: benchmarkRoot,
+        label: `${app.id}:build`,
+      });
+    } finally {
+      await restoreGeneratedBuildInputs(generatedInputs);
+    }
   }
 }
 
@@ -154,15 +188,17 @@ for (const app of apps) {
 }
 
 const results = [];
+let executionError = null;
 for (const app of apps) {
   const serverLog = [];
   const server = spawn(app.start[0], app.start[1], {
     cwd: app.cwd,
+    detached: process.platform !== 'win32',
     env: {
       ...process.env,
       ...app.env,
-      HOST: '127.0.0.1',
-      HOSTNAME: '127.0.0.1',
+      HOST: 'localhost',
+      HOSTNAME: 'localhost',
       PORT: String(app.port),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -170,12 +206,14 @@ for (const app of apps) {
   pipeServerLogs(app.id, server, serverLog);
   // A server that dies mid-run leaves the scenarios timing a dead origin, so surface it loudly.
   let serverExit = null;
+  let stoppingServer = false;
   server.on('exit', (code, signal) => {
+    if (stoppingServer) return;
     serverExit = `${app.id} server exited early (code ${code}, signal ${signal}).`;
     process.stderr.write(`[${app.id}] ${serverExit}\n`);
   });
   try {
-    const origin = `http://127.0.0.1:${app.port}`;
+    const origin = `http://localhost:${app.port}`;
     await waitForHttp(origin, () => serverExit);
     app.posture = {
       attestation: app.id === 'kovo' ? 'synthesized-per-run' : 'not-required',
@@ -190,6 +228,7 @@ for (const app of apps) {
         lighthouseRepeats,
         origin,
         settle,
+        warmups,
       }),
     );
     if (serverExit) throw new Error(serverExit);
@@ -197,14 +236,26 @@ for (const app of apps) {
     // Checked per entrant, not at the end: a rejected run should not first spend the remaining
     // entrants' wall clock producing numbers it is going to refuse to publish anyway.
     assertMeasurementIntegrity(results.slice(-1));
+  } catch (error) {
+    executionError = error;
   } finally {
+    stoppingServer = true;
     await stopServer(server);
   }
+  if (executionError) break;
 }
 
 const output = {
+  adapterFailure:
+    executionError === null
+      ? null
+      : {
+          error: boundedAdapterDiagnostic(executionError),
+          schema: 'kovo-browser-benchmark-adapter-failure/v1',
+        },
   generatedAt: new Date().toISOString(),
   iterations,
+  lane,
   lighthouseRepeats: runLighthouse ? lighthouseRepeats : 0,
   machine: {
     arch: os.arch(),
@@ -217,14 +268,32 @@ const output = {
     totalMemoryBytes: os.totalmem(),
   },
   runId,
+  schema: BROWSER_BENCHMARK_SCHEMA,
   settle,
+  warmups,
+  source: collectPerformanceProvenance({
+    lockFiles: [
+      'pnpm-lock.yaml',
+      'benchmarks/nextjs/pnpm-lock.yaml',
+      'benchmarks/harness/pnpm-lock.yaml',
+    ],
+    repoRoot,
+  }),
   apps: results,
 };
 const resultsPath = path.join(outDir, 'results.json');
 const reportPath = path.join(outDir, 'report.md');
 await writeFile(resultsPath, `${JSON.stringify(output, null, 2)}\n`);
+if (resultFile) await writeFile(path.resolve(resultFile), `${JSON.stringify(output, null, 2)}\n`);
+if (executionError) throw executionError;
 await writeReport(resultsPath, reportPath);
 process.stdout.write(`benchmark results written to ${path.relative(process.cwd(), reportPath)}\n`);
+
+function boundedAdapterDiagnostic(error) {
+  return (error instanceof Error ? error.message : String(error))
+    .replace(/[\r\n\0]+/gu, ' ')
+    .slice(0, 1_024);
+}
 
 /**
  * Refuses to report numbers taken in a posture the run did not actually achieve.
@@ -245,107 +314,24 @@ function assertPostureMatched(app, serverLog) {
   }
 }
 
-/**
- * Refuses to publish a run whose numbers were shaped by load shedding, server errors, or traffic
- * that never completed at the network layer.
- *
- * Kovo's DEFAULT_PER_IP_RATE is 600 requests/minute for every source IP, and the whole benchmark
- * arrives from 127.0.0.1 (plans/good-perf.md O13). A shed run looks fast and plausible; without
- * this check it would be indistinguishable from a healthy one.
- *
- * Covers ALL THREE traffic sources, not just the custom scenarios: the custom scenario iterations,
- * the Lighthouse cells (4 per entrant x `--lighthouse-runs` page loads, previously untracked), and
- * the back/forward-cache probe (2 document loads per iteration in its own browser, previously
- * untracked). A probe whose status could not be observed is reported as untracked rather than
- * counted as clean.
- */
-function assertMeasurementIntegrity(runs) {
-  const problems = [];
-  const notes = [];
-  for (const run of runs) {
-    for (const [conditionName, condition] of Object.entries(run.conditions ?? {})) {
-      for (const [scenarioName, scenario] of Object.entries(condition)) {
-        for (const iteration of scenario?.iterations ?? []) {
-          const where = `${run.app}/${conditionName}/${scenarioName}`;
-          if (iteration.rateLimitedResponses > 0) {
-            problems.push(
-              `${where}: ${iteration.rateLimitedResponses} HTTP 429 responses — the server shed ` +
-                `load, so these timings are not comparable.`,
-            );
-          }
-          if (iteration.errorResponses > 0) {
-            problems.push(`${where}: ${iteration.errorResponses} HTTP >=400 responses.`);
-          }
-          // A request that never produced an HTTP response carries no status at all, so neither
-          // check above can see it. Harness-caused aborts are excluded in scenarios.mjs.
-          if (iteration.failedRequests > 0) {
-            problems.push(
-              `${where}: ${iteration.failedRequests} requests failed at the network layer ` +
-                `(${(iteration.failureReasons ?? []).join(', ') || 'no reason reported'}) — the ` +
-                `page did not receive the bytes this iteration claims to have measured.`,
-            );
-          }
-        }
-      }
-    }
-
-    for (const cell of run.lighthouse ?? []) {
-      const where = `${run.app}/lighthouse/${cell.formFactor}${cell.path}`;
-      const network = cell.network;
-      if (!network || network.tracked !== true) {
-        notes.push(`${where}: HTTP statuses were not observable for this cell.`);
-        continue;
-      }
-      if (network.rateLimitedResponses > 0) {
-        problems.push(
-          `${where}: ${network.rateLimitedResponses} HTTP 429 responses across ${cell.repeats} ` +
-            `Lighthouse repeats — the server shed load while Lighthouse was scoring it.`,
-        );
-      }
-      if (network.errorResponses > 0) {
-        problems.push(`${where}: ${network.errorResponses} HTTP >=400 responses.`);
-      }
-    }
-
-    for (const [index, iteration] of (run.bfcache?.iterations ?? []).entries()) {
-      const where = `${run.app}/bfcache/${index}`;
-      const network = iteration.network;
-      if (!network) {
-        notes.push(`${where}: HTTP statuses were not observable for this probe iteration.`);
-        continue;
-      }
-      if (network.rateLimitedResponses > 0) {
-        problems.push(
-          `${where}: ${network.rateLimitedResponses} HTTP 429 responses — the back/forward-cache ` +
-            `verdict was taken against a shedding server.`,
-        );
-      }
-      if (network.errorResponses > 0) {
-        problems.push(`${where}: ${network.errorResponses} HTTP >=400 responses.`);
-      }
-    }
-  }
-  for (const note of [...new Set(notes)]) {
-    process.stderr.write(`[integrity] untracked: ${note}\n`);
-  }
-  if (problems.length > 0) {
-    const unique = [...new Set(problems)];
-    throw new Error(
-      `Benchmark run rejected — the measurement was not clean:\n${unique
-        .map((problem) => `  ${problem}`)
-        .join('\n')}`,
-    );
-  }
-}
-
 async function dependencyVersions(packagePath, names) {
   const pkg = JSON.parse(await readFile(packagePath, 'utf8'));
   const all = { ...pkg.dependencies, ...pkg.devDependencies };
   return Object.fromEntries(names.map((name) => [name, all[name] ?? 'n/a']));
 }
 
-async function packageVersion(packagePath, name) {
-  return (await dependencyVersions(packagePath, [name]))[name];
+async function ownPackageVersion(packagePath) {
+  return JSON.parse(await readFile(packagePath, 'utf8')).version ?? 'n/a';
+}
+
+async function snapshotGeneratedBuildInputs(app) {
+  if (app.id !== 'nextjs') return [];
+  const generatedPath = path.join(app.cwd, 'next-env.d.ts');
+  return [{ body: await readFile(generatedPath), path: generatedPath }];
+}
+
+async function restoreGeneratedBuildInputs(snapshots) {
+  for (const snapshot of snapshots) await writeFile(snapshot.path, snapshot.body);
 }
 
 function runCommand(command, args, { cwd, label }) {
@@ -380,7 +366,7 @@ function portInUse(port) {
     const probe = createServer();
     probe.once('error', () => resolve(true));
     probe.once('listening', () => probe.close(() => resolve(false)));
-    probe.listen(port, '127.0.0.1');
+    probe.listen(port, 'localhost');
   });
 }
 
@@ -411,9 +397,18 @@ function stopServer(server) {
       return;
     }
     server.once('exit', () => resolve());
-    server.kill('SIGTERM');
+    killServerTree(server, 'SIGTERM');
     setTimeout(() => {
-      if (server.exitCode === null && server.signalCode === null) server.kill('SIGKILL');
+      if (server.exitCode === null && server.signalCode === null) killServerTree(server, 'SIGKILL');
     }, 5000).unref();
   });
+}
+
+function killServerTree(server, signal) {
+  try {
+    if (process.platform === 'win32') server.kill(signal);
+    else process.kill(-server.pid, signal);
+  } catch (error) {
+    if (error?.code !== 'ESRCH') throw error;
+  }
 }

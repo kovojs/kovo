@@ -17,6 +17,8 @@ coverage/
 test-results/
 .playwright/
 .tmp-kovo-build-cli-*/
+benchmarks/kovo/.corpora/
+benchmarks/nextjs/.corpora/
 
 # Kovo app-local generated artifacts are reproducible and must not be committed.
 examples/commerce/src/generated/

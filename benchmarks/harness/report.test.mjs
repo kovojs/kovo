@@ -20,6 +20,37 @@ import { writeReport } from './report.mjs';
 /** A probe whose HTTP statuses were readable and clean. */
 const TRACKED_CLEAN = { errorResponses: 0, rateLimitedResponses: 0, requests: 12, tracked: true };
 
+const ATTRIBUTION = {
+  primaryResponse: { selection: 'kovo-document-parts-media-type', status: 'observed' },
+  phases: {
+    server: { durationMs: 12, source: 'request timing', status: 'observed' },
+    transfer: { durationMs: 3, source: 'request timing', status: 'observed' },
+    responseProcessingDomApply: {
+      durationMs: 81,
+      source: 'trace envelope',
+      status: 'observed',
+    },
+    responseReadDecode: {
+      durationMs: null,
+      reason: 'browser exposes no stable response decode boundary',
+      status: 'unsupported',
+    },
+    documentConstruction: {
+      durationMs: 8,
+      source: 'trace',
+      status: 'observed',
+    },
+    domMorphApply: {
+      durationMs: null,
+      reason: 'browser exposes no stable morph boundary',
+      status: 'unsupported',
+    },
+    style: { durationMs: 2, source: 'trace', status: 'observed' },
+    layout: { durationMs: 4, source: 'trace', status: 'observed' },
+    paint: { durationMs: 1, source: 'trace', status: 'observed' },
+  },
+};
+
 const RESULTS = {
   generatedAt: '2026-08-07T00:00:00.000Z',
   iterations: 3,
@@ -34,6 +65,16 @@ const RESULTS = {
   },
   runId: 'testrun',
   settle: { maxMs: 10_000, quietMs: 750 },
+  source: {
+    commit: '0123456789abcdef0123456789abcdef01234567',
+    dirty: false,
+    dirtyPaths: [],
+    locks: {
+      'benchmarks/harness/pnpm-lock.yaml': 'sha256:harness',
+      'benchmarks/nextjs/pnpm-lock.yaml': 'sha256:next',
+      'pnpm-lock.yaml': 'sha256:root',
+    },
+  },
   apps: [
     {
       app: 'replacer',
@@ -79,11 +120,21 @@ const RESULTS = {
           },
           navigation: {
             iterations: [
-              { navDocumentReplaced: 1 },
-              { navDocumentReplaced: 1 },
-              { navDocumentReplaced: 1 },
+              { navAttribution: ATTRIBUTION, navDocumentReplaced: 1 },
+              { navAttribution: ATTRIBUTION, navDocumentReplaced: 1 },
+              { navAttribution: ATTRIBUTION, navDocumentReplaced: 1 },
             ],
             summary: {
+              'navAttribution.phases.documentConstruction.durationMs': { mad: 0, median: 8 },
+              'navAttribution.phases.layout.durationMs': { mad: 0, median: 4 },
+              'navAttribution.phases.paint.durationMs': { mad: 0, median: 1 },
+              'navAttribution.phases.responseProcessingDomApply.durationMs': {
+                mad: 2,
+                median: 81,
+              },
+              'navAttribution.phases.server.durationMs': { mad: 1, median: 12 },
+              'navAttribution.phases.style.durationMs': { mad: 0, median: 2 },
+              'navAttribution.phases.transfer.durationMs': { mad: 0, median: 3 },
               navBytesSettled: { median: 152_537 },
               navLegacyDomPresenceMs: { median: 69 },
               navRequests: { median: 5 },
@@ -178,6 +229,14 @@ describe('benchmark report', () => {
     expect(report).toContain('18.50 / 12.25 / 8.00');
   });
 
+  it('binds the report to source, dirty state, and dependency locks', async () => {
+    const report = await renderReport(RESULTS);
+    expect(report).toContain('Source 0123456789abcdef0123456789abcdef01234567 (clean)');
+    expect(report).toContain('pnpm-lock.yaml=sha256:root');
+    expect(report).toContain('benchmarks/nextjs/pnpm-lock.yaml=sha256:next');
+    expect(report).toContain('benchmarks/harness/pnpm-lock.yaml=sha256:harness');
+  });
+
   it('shows how far the superseded load-window byte collection understates the truth', async () => {
     const report = await renderReport(RESULTS);
     // 434,847 settled vs 164,673 at load + 150 ms, and js 267,948 vs 0.
@@ -194,6 +253,20 @@ describe('benchmark report', () => {
     expect(report).toContain('**3/3**');
     // A framework that never replaced the document must not be flagged.
     expect(report).toContain('| sameDoc | 124 (1) | n/a | n/a | n/a | 0/3 |');
+  });
+
+  it('separates directly observed navigation phases from unsupported boundaries', async () => {
+    const report = await renderReport(RESULTS);
+    expect(report).toContain('## Navigation attribution');
+    expect(report).toContain(
+      '| replacer | kovo-document-parts-media-type | 12 (1) | 3 (0) | 81 (2) | unsupported | 8 (0) | unsupported | 2 (0) | 4 (0) | 1 (0) |',
+    );
+    expect(report).toContain(
+      '- replacer/desktop/responseReadDecode: browser exposes no stable response decode boundary',
+    );
+    expect(report).toContain(
+      '- replacer/desktop/domMorphApply: browser exposes no stable morph boundary',
+    );
   });
 
   it('flags Lighthouse cells with null samples and reports the spread', async () => {
@@ -253,28 +326,13 @@ describe('benchmark report', () => {
     expect(limits).toContain('three separate processes on the same machine');
   });
 
-  // This is the one limit that errs in the project's own favour, so it is pinned hardest. The
-  // navigation probe has two branches and they are not the same instrument: a document-replacing
-  // entrant is handed the destination document's browser-recorded FCP with no harness cost in the
-  // number, while a same-document entrant is charged a 25 ms poll interval, a CDP evaluate
-  // round-trip and two animation frames. Kovo is the document-replacing entrant today, so the
-  // error runs Kovo's way. An earlier handoff described this as symmetric; it is not, and a report
-  // that silently drops the disclosure is exactly the failure mode D14 deleted the last report for.
-  it('discloses that the navigation probe is biased toward document-replacing entrants', async () => {
+  it('states the shared trace boundary and its remaining common observation delay', async () => {
     const limits = knownLimits(await renderReport(RESULTS));
-    expect(limits).toContain(
-      'The navigation-to-paint probe is biased in favour of document-replacing entrants',
-    );
-    // Must name the direction, not merely admit an unspecified imprecision.
-    expect(limits).toContain("this instrument errs in Kovo's favour");
-    // Must not be relabelled as an evenly-applied limitation.
-    expect(limits).toContain('This bias is one-sided; it does not apply equally to every entrant.');
-    // Must keep the mechanism, so a reader can check the claim rather than trust it.
-    expect(limits).toContain('two animation frames');
-    expect(limits).toContain('first contentful paint');
-    // Must keep the recipe for sizing the bias from the report's own two navigation columns —
-    // a disclosure the reader can verify beats one they have to take on faith.
-    expect(limits).toContain('You can size the bias from this report');
-    expect(limits).toContain('`Nav to paint ms` minus `Nav to destination DOM ms`');
+    expect(limits).toContain('destination-paint mark observes DOM readiness');
+    expect(limits).toContain('first later frame');
+    expect(limits).toContain('old asymmetric FCP-versus-two-rAF branch has been removed');
+    expect(limits).toContain('not an additive synthetic waterfall');
+    expect(limits).toContain('remain `unsupported`');
+    expect(limits).not.toContain('errs in Kovo');
   });
 });

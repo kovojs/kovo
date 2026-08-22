@@ -12,6 +12,7 @@ import { withKovoBuildContext } from './build-context.js';
 
 export { deriveClosedKovoApp } from '../app-snapshot.js';
 export { declaredKovoAppId } from '../live-target-app-identity.js';
+export { stagedRootedFilesEntryName } from '../file.js';
 export { resolveKovoAppToken } from '../app-token.js';
 export type { KovoApp } from '../app-types.js';
 export {

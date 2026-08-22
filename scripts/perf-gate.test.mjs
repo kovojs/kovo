@@ -6,17 +6,24 @@ import { describe, expect, it } from 'vitest';
 
 import {
   cpuProfileFileHits,
+  createPerformanceGateHostAdmission,
   evaluateMetric,
   evaluateReport,
   fitLogLogExponent,
   marginalLogLogExponent,
   formatEvaluation,
+  loadGenerationIntegrityProblems,
   median,
   medianAbsoluteDeviation,
+  parseLadderOption,
+  parsePositiveIntegerOption,
   parseCheckPhaseCensus,
+  performanceGateHostSamples,
+  performanceGateWorkloadIdentity,
   phaseDurationMs,
   PERF_BUDGETS_SCHEMA,
   reportSuites,
+  wireResponseIntegrityProblems,
 } from './perf-gate.mjs';
 import {
   materializePerfWorkload,
@@ -165,6 +172,199 @@ describe('statistics', () => {
   it('reports median absolute deviation', () => {
     expect(medianAbsoluteDeviation([10, 10, 10])).toBe(0);
     expect(medianAbsoluteDeviation([1, 2, 3, 4, 100])).toBe(1);
+  });
+});
+
+describe('ratifiable report identity', () => {
+  it('authenticates the exact check-scaling ladder and per-rung sample policy', () => {
+    const workload = performanceGateWorkloadIdentity('check-scaling', {
+      ladder: [8, 24, 72, 216],
+      samples: 1,
+    });
+
+    expect(workload).toMatchObject({
+      complete: true,
+      identity: {
+        cells: ['check-scaling'],
+        policies: { ladder: [8, 24, 72, 216], samplesPerRung: 1 },
+      },
+      schema: 'kovo-performance-workload-identity/v1',
+    });
+    expect(workload.digest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(
+      performanceGateWorkloadIdentity('check-scaling', { ladder: [8], samples: 0 }).complete,
+    ).toBe(false);
+  });
+
+  it('ratifies from the last timed admission and retains a loaded post-suite diagnostic', () => {
+    const samples = performanceGateHostSamples(
+      {
+        detail: {
+          rungs: [
+            { componentCount: 8, samples: [{ loadAverage: 2 }] },
+            { componentCount: 24, samples: [{ loadAverage: 1 }] },
+          ],
+        },
+        hostAdmission: {
+          suiteComplete: {
+            at: '2026-08-14T12:00:00.000Z',
+            ceiling: 1,
+            comparable: false,
+            gatesTiming: false,
+            loadAverage: [8, 0, 0],
+            loadPerCpu: 2,
+            phase: 'host-diagnostic',
+            posture: 'post-timing',
+            settle: { rejectedObservations: 1, waitedMs: 0 },
+          },
+        },
+        suite: 'check-scaling',
+      },
+      { cpu: { count: 4 } },
+    );
+
+    expect(samples.slice(0, 2)).toEqual([
+      {
+        at: null,
+        ceiling: 1,
+        context: 'N=8/sample=0',
+        loadAverage: [2],
+        loadPerCpu: 0.5,
+        phase: 'check-scaling',
+      },
+      {
+        at: null,
+        ceiling: 1,
+        context: 'N=24/sample=0',
+        loadAverage: [1],
+        loadPerCpu: 0.25,
+        phase: 'check-scaling',
+      },
+    ]);
+    expect(samples.at(-1)).toMatchObject({
+      admissionContext: 'N=24/sample=0',
+      at: null,
+      loadAverage: [1],
+      loadPerCpu: 0.25,
+      phase: 'suite-complete',
+      posture: 'last-timed-admission',
+      ratificationBasis: 'last-pre-timing-admission',
+      postTimingDiagnostic: {
+        comparable: false,
+        gatesTiming: false,
+        loadAverage: [8, 0, 0],
+        loadPerCpu: 2,
+        phase: 'host-diagnostic',
+        posture: 'post-timing',
+      },
+    });
+  });
+
+  it('fails closed before timed rungs but keeps the final observation diagnostic', async () => {
+    const loads = [2, 8, 2, 8, 8, 8];
+    let waitedMs = 0;
+    const admission = createPerformanceGateHostAdmission({
+      ceiling: 1,
+      maxWaitMs: 20,
+      pollMs: 10,
+      readLoad: () => ({ loadAverage: [loads.shift(), 0, 0], logicalCpuCount: 4 }),
+      wait: async (milliseconds) => {
+        waitedMs += milliseconds;
+      },
+    });
+
+    const initial = await admission.admit('check-scaling/suite-start');
+    admission.markBenchmarkWork();
+    const settled = await admission.admit('check-scaling/N=8/sample=0');
+    const rejected = await admission.admit('check-scaling/N=24/sample=0');
+    const diagnostic = await admission.observe('check-scaling/suite-complete');
+
+    expect(initial).toMatchObject({
+      comparable: true,
+      phase: 'quiet-host-admission',
+      posture: 'pre-benchmark',
+      settle: { rejectedObservations: 0, waitedMs: 0 },
+    });
+    expect(settled).toMatchObject({
+      comparable: true,
+      phase: 'quiet-host-settle',
+      posture: 'post-benchmark',
+      settle: { rejectedObservations: 1, waitedMs: 10 },
+    });
+    expect(rejected).toMatchObject({
+      comparable: false,
+      gatesTiming: true,
+      phase: 'quiet-host-settle',
+      posture: 'post-benchmark',
+      settle: { rejectedObservations: 2, waitedMs: 10 },
+    });
+    expect(diagnostic).toMatchObject({
+      comparable: false,
+      gatesTiming: false,
+      phase: 'host-diagnostic',
+      posture: 'post-timing',
+      settle: { maxWaitMs: 0, rejectedObservations: 1, waitedMs: 0 },
+    });
+    expect(waitedMs).toBe(20);
+    expect(admission.policy()).toMatchObject({ remainingWaitMs: 0, totalWaitedMs: 20 });
+  });
+});
+
+describe('measurement input and response integrity', () => {
+  it('rejects malformed numeric options instead of silently producing an empty cell', () => {
+    expect(parsePositiveIntegerOption('samples', undefined, 5)).toBe(5);
+    expect(parsePositiveIntegerOption('samples', '7', 5)).toBe(7);
+    expect(() => parsePositiveIntegerOption('samples', 'many', 5)).toThrow('--samples');
+    expect(() => parsePositiveIntegerOption('samples', true, 5)).toThrow('requires');
+    expect(() => parsePositiveIntegerOption('port', '80', 43117, { min: 1024 })).toThrow('1024');
+  });
+
+  it('requires a usable, non-degenerate scaling ladder', () => {
+    expect(parseLadderOption('8,24,72,216')).toEqual([8, 24, 72, 216]);
+    expect(() => parseLadderOption('nope')).toThrow('--ladder');
+    expect(() => parseLadderOption('8')).toThrow('--ladder');
+    expect(() => parseLadderOption('8,8')).toThrow('--ladder');
+  });
+
+  it('refuses short or wrong-representation responses as byte wins', () => {
+    const healthy = {
+      contentEncoding: 'br',
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+      status: 200,
+      wireBytes: 400,
+    };
+    expect(
+      wireResponseIntegrityProblems('document', healthy, {
+        allowedContentEncodings: ['br', 'gzip'],
+        contentTypePrefix: 'text/html',
+      }),
+    ).toEqual([]);
+    expect(
+      wireResponseIntegrityProblems(
+        'document',
+        { ...healthy, headers: { 'content-type': 'text/plain' }, status: 404, wireBytes: 9 },
+        { allowedContentEncodings: ['br'], contentTypePrefix: 'text/html' },
+      ).join(' '),
+    ).toMatch(/HTTP 200.*Content-Type/u);
+  });
+
+  it('refuses HTTP and transport failures as SSR throughput', () => {
+    expect(
+      loadGenerationIntegrityProblems('measurement', {
+        completed: 100,
+        requestErrors: 0,
+        responseErrors: 0,
+        statusCounts: { 200: 100 },
+      }),
+    ).toEqual([]);
+    expect(
+      loadGenerationIntegrityProblems('measurement', {
+        completed: 100,
+        requestErrors: 2,
+        responseErrors: 1,
+        statusCounts: { 200: 90, 500: 10 },
+      }).join(' '),
+    ).toMatch(/2 requests failed.*1 response streams failed.*HTTP 500/u);
   });
 });
 

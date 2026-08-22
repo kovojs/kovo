@@ -1,0 +1,2759 @@
+{
+  "baseline": {
+    "digest": "sha256:ddef11fba9cc8ac0b533c975ac99f2891ed32b46c50ac24f50e0883005337666",
+    "reports": [
+      {
+        "contentDigest": "sha256:8b3926b4ab5c5bd98f15689c50a1998063bc7af0f7f81f8304df06db29ce0e0d",
+        "execution": "sha256:dec5d600435047029acfb2aa55470278646cc00d332257f0019deab359c298e6",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32446778239/artifacts/9437539608",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446778239"
+      },
+      {
+        "contentDigest": "sha256:9e4b8e5926a5ef00107cca39d0d10065b2559c2848f525b854fa7e7952eeb982",
+        "execution": "sha256:0ee68c52a952932f4c249090d59480ed37525aca60a732caac132ed468cb4c82",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32446817670/artifacts/9437639960",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446817670"
+      },
+      {
+        "contentDigest": "sha256:80e01157ee90a0676d0698c9d9176637fdda8e1979b059125dd3fbd1b04f915b",
+        "execution": "sha256:d217f75eb10974293e6c31d099e0c777cdf84eace3a37ef69606558b14ec6bbd",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32447025443/artifacts/9443031209",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32447025443"
+      },
+      {
+        "contentDigest": "sha256:8bba8906159d4a2754b62f32f864aec0034c850e95a38e9c662ab3c2bba834e9",
+        "execution": "sha256:738ef0f5d61e0fdfcac5690e01ee8ed82cec46611cf12c7cd094973c8435130c",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32447067595/artifacts/9445175016",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32447067595"
+      },
+      {
+        "contentDigest": "sha256:64ab363faf0b95b94e493410560e4f8061bfb8828d8f89ff0e4291048742f8a3",
+        "execution": "sha256:3be8f645ba03fd5b21899b6a4f7180158bb2a2398efe9b08e5a65a561f0229b8",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32447180722/artifacts/9448096702",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32447180722"
+      }
+    ],
+    "sourceCommit": "01b2c759468f41a3fc4739225eb13c8f5aa11406"
+  },
+  "generatedFrom": "2026-08-21T21:45:53.443Z",
+  "metrics": {
+    "matched-runtime/server/304-detail-identity-c1/durationMs": {
+      "baseline": {
+        "kovoMedian": 15000.36966,
+        "kovoP95": 15001.513108000003,
+        "nextMedian": 15000.326830999998,
+        "nextP95": 15002.535993000001,
+        "pairedMedian": -0.03798500000266358,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15750.388143,
+      "p95Maximum": 15751.588763400003
+    },
+    "matched-runtime/server/304-detail-identity-c1/p50Ms": {
+      "baseline": {
+        "kovoMedian": 0.598786000002292,
+        "kovoP95": 0.6051779999997962,
+        "nextMedian": 0.5463639999979932,
+        "nextP95": 0.5527120000006107,
+        "pairedMedian": 0.05034399999931338,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 0.6287253000024066,
+      "p95Maximum": 0.635436899999786
+    },
+    "matched-runtime/server/304-detail-identity-c1/p95Ms": {
+      "baseline": {
+        "kovoMedian": 0.8105700000014622,
+        "kovoP95": 0.8233380000001489,
+        "nextMedian": 0.702011000001221,
+        "nextP95": 0.7175900000002002,
+        "pairedMedian": 0.09943599999860453,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 0.8510985000015353,
+      "p95Maximum": 0.8645049000001563
+    },
+    "matched-runtime/server/304-detail-identity-c1/p99Ms": {
+      "baseline": {
+        "kovoMedian": 2.755130000000463,
+        "kovoP95": 3.0546919999997044,
+        "nextMedian": 1.0947779999996783,
+        "nextP95": 1.2392449999997552,
+        "pairedMedian": 1.630247000000054,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 2.892886500000486,
+      "p95Maximum": 3.20742659999969
+    },
+    "matched-runtime/server/304-detail-identity-c1/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 350564352,
+        "kovoP95": 356237312,
+        "nextMedian": 325881856,
+        "nextP95": 328355840,
+        "pairedMedian": 25231360,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 368092569.6,
+      "p95Maximum": 374049177.6
+    },
+    "matched-runtime/server/304-detail-identity-c1/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 1535.5369873970776,
+        "kovoP95": 1560.5759867930608,
+        "nextMedian": 1711.5933060726861,
+        "nextP95": 1728.1670215039398,
+        "pairedMedian": -182.2142471186287,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 1458.7601380272238,
+      "p95Minimum": 1482.5471874534078
+    },
+    "matched-runtime/server/304-detail-identity-c1/responseBytes": {
+      "baseline": {
+        "kovoMedian": 0,
+        "kovoP95": 0,
+        "nextMedian": 0,
+        "nextP95": 0,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 0,
+      "p95Maximum": 0
+    },
+    "matched-runtime/server/304-detail-identity-c1/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 13000,
+        "kovoP95": 13000,
+        "nextMedian": 13000,
+        "nextP95": 13000,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 13650,
+      "p95Maximum": 13650
+    },
+    "matched-runtime/server/304-detail-identity-c1/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 86.6636526608217,
+        "kovoP95": 86.66483546758151,
+        "nextMedian": 86.66392668262787,
+        "nextP95": 86.66539462089288,
+        "pairedMedian": 0.0002056796190430532,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 90.99683529386279,
+      "p95Maximum": 90.9980772409606
+    },
+    "matched-runtime/server/304-detail-identity-c32/durationMs": {
+      "baseline": {
+        "kovoMedian": 15013.498701999999,
+        "kovoP95": 15021.741485999999,
+        "nextMedian": 15011.797916,
+        "nextP95": 15014.693285000001,
+        "pairedMedian": 1.6079249999984313,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15764.173637099999,
+      "p95Maximum": 15772.8285603
+    },
+    "matched-runtime/server/304-detail-identity-c32/p50Ms": {
+      "baseline": {
+        "kovoMedian": 13.336314999998649,
+        "kovoP95": 13.516058000001067,
+        "nextMedian": 11.92745400000058,
+        "nextP95": 12.075616000000082,
+        "pairedMedian": 1.4132279999994353,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 14.003130749998583,
+      "p95Maximum": 14.19186090000112
+    },
+    "matched-runtime/server/304-detail-identity-c32/p95Ms": {
+      "baseline": {
+        "kovoMedian": 23.081835999997566,
+        "kovoP95": 23.952723999998852,
+        "nextMedian": 18.219199000000117,
+        "nextP95": 18.66439200000059,
+        "pairedMedian": 5.238168999998379,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 24.235927799997445,
+      "p95Maximum": 25.150360199998797
+    },
+    "matched-runtime/server/304-detail-identity-c32/p99Ms": {
+      "baseline": {
+        "kovoMedian": 32.03676500000074,
+        "kovoP95": 32.587163000000146,
+        "nextMedian": 26.282694999998057,
+        "nextP95": 26.94486600000073,
+        "pairedMedian": 6.000912999999855,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 33.63860325000078,
+      "p95Maximum": 34.216521150000155
+    },
+    "matched-runtime/server/304-detail-identity-c32/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 391417856,
+        "kovoP95": 396365824,
+        "nextMedian": 353140736,
+        "nextP95": 355966976,
+        "pairedMedian": 38682624,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 410988748.8,
+      "p95Maximum": 416184115.2
+    },
+    "matched-runtime/server/304-detail-identity-c32/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 2143.425793977199,
+        "kovoP95": 2166.5930032368287,
+        "nextMedian": 2453.961712957212,
+        "nextP95": 2491.8607834366176,
+        "pairedMedian": -328.5543961040853,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 2036.254504278339,
+      "p95Minimum": 2058.263353074987
+    },
+    "matched-runtime/server/304-detail-identity-c32/responseBytes": {
+      "baseline": {
+        "kovoMedian": 0,
+        "kovoP95": 0,
+        "nextMedian": 0,
+        "nextP95": 0,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 0,
+      "p95Maximum": 0
+    },
+    "matched-runtime/server/304-detail-identity-c32/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 17000,
+        "kovoP95": 17000,
+        "nextMedian": 17000,
+        "nextP95": 17000,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 17850,
+      "p95Maximum": 17850
+    },
+    "matched-runtime/server/304-detail-identity-c32/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 113.21921967427568,
+        "kovoP95": 113.23233832331434,
+        "nextMedian": 113.23016793836796,
+        "nextP95": 113.24275077406887,
+        "pairedMedian": -0.013569711719753741,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 118.88018065798947,
+      "p95Maximum": 118.89395523948006
+    },
+    "matched-runtime/server/304-detail-identity-c8/durationMs": {
+      "baseline": {
+        "kovoMedian": 15003.224559,
+        "kovoP95": 15008.621036,
+        "nextMedian": 15003.794313999999,
+        "nextP95": 15005.180183,
+        "pairedMedian": -0.5697549999986222,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15753.38578695,
+      "p95Maximum": 15759.0520878
+    },
+    "matched-runtime/server/304-detail-identity-c8/p50Ms": {
+      "baseline": {
+        "kovoMedian": 2.9708689999988565,
+        "kovoP95": 3.04591900000014,
+        "nextMedian": 2.6849480000000767,
+        "nextP95": 2.7211420000003272,
+        "pairedMedian": 0.28016199999910896,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 3.119412449998799,
+      "p95Maximum": 3.198214950000147
+    },
+    "matched-runtime/server/304-detail-identity-c8/p95Ms": {
+      "baseline": {
+        "kovoMedian": 7.168807000000015,
+        "kovoP95": 7.323541000001569,
+        "nextMedian": 5.562268000001495,
+        "nextP95": 5.667938000000504,
+        "pairedMedian": 1.480384000002232,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 7.5272473500000165,
+      "p95Maximum": 7.689718050001648
+    },
+    "matched-runtime/server/304-detail-identity-c8/p99Ms": {
+      "baseline": {
+        "kovoMedian": 9.976410999999644,
+        "kovoP95": 10.270395999999892,
+        "nextMedian": 7.5655870000000505,
+        "nextP95": 7.679130999998961,
+        "pairedMedian": 2.367117999999209,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 10.475231549999625,
+      "p95Maximum": 10.783915799999887
+    },
+    "matched-runtime/server/304-detail-identity-c8/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 364277760,
+        "kovoP95": 372064256,
+        "nextMedian": 337846272,
+        "nextP95": 342069248,
+        "pairedMedian": 27709440,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 382491648,
+      "p95Maximum": 390667468.8
+    },
+    "matched-runtime/server/304-detail-identity-c8/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 2134.037915686334,
+        "kovoP95": 2148.9273047976167,
+        "nextMedian": 2453.908767853954,
+        "nextP95": 2482.8467052142237,
+        "pairedMedian": -290.1250747651434,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 2027.3360199020174,
+      "p95Minimum": 2041.4809395577358
+    },
+    "matched-runtime/server/304-detail-identity-c8/responseBytes": {
+      "baseline": {
+        "kovoMedian": 0,
+        "kovoP95": 0,
+        "nextMedian": 0,
+        "nextP95": 0,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 0,
+      "p95Maximum": 0
+    },
+    "matched-runtime/server/304-detail-identity-c8/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 17000,
+        "kovoP95": 17000,
+        "nextMedian": 17000,
+        "nextP95": 17000,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 17850,
+      "p95Maximum": 17850
+    },
+    "matched-runtime/server/304-detail-identity-c8/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 113.30744493140755,
+        "kovoP95": 113.31044031859223,
+        "nextMedian": 113.25233159640004,
+        "nextP95": 113.31170812621845,
+        "pairedMedian": 0.05427956705919712,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 118.97281717797793,
+      "p95Maximum": 118.97596233452184
+    },
+    "matched-runtime/server/304-listing-identity-c1/durationMs": {
+      "baseline": {
+        "kovoMedian": 15000.257331,
+        "kovoP95": 15000.615417,
+        "nextMedian": 15000.420971,
+        "nextP95": 15003.141029,
+        "pairedMedian": -0.26773099999809347,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15750.270197550002,
+      "p95Maximum": 15750.646187850001
+    },
+    "matched-runtime/server/304-listing-identity-c1/p50Ms": {
+      "baseline": {
+        "kovoMedian": 0.583543999999165,
+        "kovoP95": 0.5897669999994832,
+        "nextMedian": 0.5716480000010051,
+        "nextP95": 0.5771789999998873,
+        "pairedMedian": 0.015268000001015025,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 0.6127211999991232,
+      "p95Maximum": 0.6192553499994574
+    },
+    "matched-runtime/server/304-listing-identity-c1/p95Ms": {
+      "baseline": {
+        "kovoMedian": 0.7826830000012706,
+        "kovoP95": 0.7910080000001471,
+        "nextMedian": 0.735714000000371,
+        "nextP95": 0.7528969999984838,
+        "pairedMedian": 0.044566999999915424,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 0.8218171500013342,
+      "p95Maximum": 0.8305584000001546
+    },
+    "matched-runtime/server/304-listing-identity-c1/p99Ms": {
+      "baseline": {
+        "kovoMedian": 3.0965200000009645,
+        "kovoP95": 3.1854530000000523,
+        "nextMedian": 1.0829990000001999,
+        "nextP95": 1.2242869999990944,
+        "pairedMedian": 1.9834769999997661,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 3.251346000001013,
+      "p95Maximum": 3.344725650000055
+    },
+    "matched-runtime/server/304-listing-identity-c1/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 350687232,
+        "kovoP95": 355713024,
+        "nextMedian": 323162112,
+        "nextP95": 328032256,
+        "pairedMedian": 28155904,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 368221593.6,
+      "p95Maximum": 373498675.2
+    },
+    "matched-runtime/server/304-listing-identity-c1/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 1576.3353264294942,
+        "kovoP95": 1587.146293085637,
+        "nextMedian": 1643.9437552043216,
+        "nextP95": 1667.8270822363197,
+        "pairedMedian": -69.15403079627276,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 1497.5185601080195,
+      "p95Minimum": 1507.788978431355
+    },
+    "matched-runtime/server/304-listing-identity-c1/responseBytes": {
+      "baseline": {
+        "kovoMedian": 0,
+        "kovoP95": 0,
+        "nextMedian": 0,
+        "nextP95": 0,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 0,
+      "p95Maximum": 0
+    },
+    "matched-runtime/server/304-listing-identity-c1/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 13000,
+        "kovoP95": 13000,
+        "nextMedian": 13000,
+        "nextP95": 13000,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 13650,
+      "p95Maximum": 13650
+    },
+    "matched-runtime/server/304-listing-identity-c1/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 86.66420979409514,
+        "kovoP95": 86.66531501130301,
+        "nextMedian": 86.66340908156026,
+        "nextP95": 86.66544653273341,
+        "pairedMedian": 0.0013781776493431153,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 90.9974202837999,
+      "p95Maximum": 90.99858076186817
+    },
+    "matched-runtime/server/304-listing-identity-c32/durationMs": {
+      "baseline": {
+        "kovoMedian": 15013.047098,
+        "kovoP95": 15019.644400000001,
+        "nextMedian": 15012.603731,
+        "nextP95": 15015.215341000003,
+        "pairedMedian": 0.24473500000021886,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15763.6994529,
+      "p95Maximum": 15770.626620000001
+    },
+    "matched-runtime/server/304-listing-identity-c32/p50Ms": {
+      "baseline": {
+        "kovoMedian": 12.903910999999425,
+        "kovoP95": 13.12403699999959,
+        "nextMedian": 12.620002999999997,
+        "nextP95": 12.731668000000354,
+        "pairedMedian": 0.2750839999989694,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 13.549106549999397,
+      "p95Maximum": 13.78023884999957
+    },
+    "matched-runtime/server/304-listing-identity-c32/p95Ms": {
+      "baseline": {
+        "kovoMedian": 22.7721760000004,
+        "kovoP95": 23.56841699999859,
+        "nextMedian": 19.35557500000141,
+        "nextP95": 20.091056000000208,
+        "pairedMedian": 3.6499059999987367,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 23.91078480000042,
+      "p95Maximum": 24.74683784999852
+    },
+    "matched-runtime/server/304-listing-identity-c32/p99Ms": {
+      "baseline": {
+        "kovoMedian": 31.24373899999955,
+        "kovoP95": 32.063922000000275,
+        "nextMedian": 27.410126000000673,
+        "nextP95": 27.68253299999924,
+        "pairedMedian": 4.0123640000001615,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 32.805925949999526,
+      "p95Maximum": 33.66711810000029
+    },
+    "matched-runtime/server/304-listing-identity-c32/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 386580480,
+        "kovoP95": 391860224,
+        "nextMedian": 347914240,
+        "nextP95": 352165888,
+        "pairedMedian": 38612992,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 405909504,
+      "p95Maximum": 411453235.2
+    },
+    "matched-runtime/server/304-listing-identity-c32/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 2207.0160817693554,
+        "kovoP95": 2236.246876074124,
+        "nextMedian": 2328.3987452053666,
+        "nextP95": 2362.81526038464,
+        "pairedMedian": -110.1405167340481,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 2096.6652776808874,
+      "p95Minimum": 2124.4345322704175
+    },
+    "matched-runtime/server/304-listing-identity-c32/responseBytes": {
+      "baseline": {
+        "kovoMedian": 0,
+        "kovoP95": 0,
+        "nextMedian": 0,
+        "nextP95": 0,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 0,
+      "p95Maximum": 0
+    },
+    "matched-runtime/server/304-listing-identity-c32/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 17000,
+        "kovoP95": 17000,
+        "nextMedian": 16000,
+        "nextP95": 16000,
+        "pairedMedian": 1000,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 17850,
+      "p95Maximum": 17850
+    },
+    "matched-runtime/server/304-listing-identity-c32/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 113.20904402205305,
+        "kovoP95": 113.22979030629583,
+        "nextMedian": 106.56377872024237,
+        "nextP95": 106.5788658885275,
+        "pairedMedian": 6.6415465193821746,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 118.8694962231557,
+      "p95Maximum": 118.89127982161062
+    },
+    "matched-runtime/server/304-listing-identity-c8/durationMs": {
+      "baseline": {
+        "kovoMedian": 15003.088351999999,
+        "kovoP95": 15005.521368000002,
+        "nextMedian": 15003.613192,
+        "nextP95": 15005.163106,
+        "pairedMedian": -0.6111789999995381,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15753.2427696,
+      "p95Maximum": 15755.797436400002
+    },
+    "matched-runtime/server/304-listing-identity-c8/p50Ms": {
+      "baseline": {
+        "kovoMedian": 2.915737000000263,
+        "kovoP95": 2.9861039999996137,
+        "nextMedian": 2.844097999999576,
+        "nextP95": 2.885844000000361,
+        "pairedMedian": 0.088103999998566,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 3.061523850000276,
+      "p95Maximum": 3.1354091999995943
+    },
+    "matched-runtime/server/304-listing-identity-c8/p95Ms": {
+      "baseline": {
+        "kovoMedian": 7.000482999999804,
+        "kovoP95": 7.258190000000468,
+        "nextMedian": 5.866691999999603,
+        "nextP95": 5.97001900000032,
+        "pairedMedian": 1.197349000000031,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 7.350507149999794,
+      "p95Maximum": 7.621099500000492
+    },
+    "matched-runtime/server/304-listing-identity-c8/p99Ms": {
+      "baseline": {
+        "kovoMedian": 9.976020000000062,
+        "kovoP95": 10.506082999999308,
+        "nextMedian": 7.800490999999965,
+        "nextP95": 8.01764600000024,
+        "pairedMedian": 1.9657589999997072,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 10.474821000000066,
+      "p95Maximum": 11.031387149999274
+    },
+    "matched-runtime/server/304-listing-identity-c8/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 362225664,
+        "kovoP95": 368750592,
+        "nextMedian": 330809344,
+        "nextP95": 334254080,
+        "pairedMedian": 31809536,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 380336947.2,
+      "p95Maximum": 387188121.6
+    },
+    "matched-runtime/server/304-listing-identity-c8/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 2187.1538016691266,
+        "kovoP95": 2218.1124118024277,
+        "nextMedian": 2313.7757132386555,
+        "nextP95": 2338.6053756217525,
+        "pairedMedian": -159.47381677326803,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 2077.79611158567,
+      "p95Minimum": 2107.206791212306
+    },
+    "matched-runtime/server/304-listing-identity-c8/responseBytes": {
+      "baseline": {
+        "kovoMedian": 0,
+        "kovoP95": 0,
+        "nextMedian": 0,
+        "nextP95": 0,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 0,
+      "p95Maximum": 0
+    },
+    "matched-runtime/server/304-listing-identity-c8/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 17000,
+        "kovoP95": 17000,
+        "nextMedian": 16000,
+        "nextP95": 16000,
+        "pairedMedian": 1000,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 17850,
+      "p95Maximum": 17850
+    },
+    "matched-runtime/server/304-listing-identity-c8/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 113.30945821465941,
+        "kovoP95": 113.3108166308795,
+        "nextMedian": 106.5931007701867,
+        "nextP95": 106.64551443891943,
+        "pairedMedian": 6.717818389767416,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 118.97493112539239,
+      "p95Maximum": 118.97635746242348
+    },
+    "matched-runtime/server/dynamic-detail-identity-c1/durationMs": {
+      "baseline": {
+        "kovoMedian": 15001.496,
+        "kovoP95": 15002.733406000001,
+        "nextMedian": 15000.791763999998,
+        "nextP95": 15001.885401,
+        "pairedMedian": 0.19544500000120024,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15751.5708,
+      "p95Maximum": 15752.870076300002
+    },
+    "matched-runtime/server/dynamic-detail-identity-c1/p50Ms": {
+      "baseline": {
+        "kovoMedian": 3.0459259999988717,
+        "kovoP95": 3.0689110000002984,
+        "nextMedian": 2.4731489999976475,
+        "nextP95": 2.5453659999984666,
+        "pairedMedian": 0.5405190000001312,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 3.1982222999988155,
+      "p95Maximum": 3.2223565500003133
+    },
+    "matched-runtime/server/dynamic-detail-identity-c1/p95Ms": {
+      "baseline": {
+        "kovoMedian": 5.07484199999999,
+        "kovoP95": 5.205487999999605,
+        "nextMedian": 3.820705999999518,
+        "nextP95": 4.038326000001689,
+        "pairedMedian": 1.23743899999954,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 5.328584099999989,
+      "p95Maximum": 5.465762399999585
+    },
+    "matched-runtime/server/dynamic-detail-identity-c1/p99Ms": {
+      "baseline": {
+        "kovoMedian": 5.964918000001489,
+        "kovoP95": 6.105457000001479,
+        "nextMedian": 5.365021000001434,
+        "nextP95": 5.640514999999141,
+        "pairedMedian": 0.5499690000015107,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 6.263163900001564,
+      "p95Maximum": 6.4107298500015535
+    },
+    "matched-runtime/server/dynamic-detail-identity-c1/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 341835776,
+        "kovoP95": 402345984,
+        "nextMedian": 399134720,
+        "nextP95": 404512768,
+        "pairedMedian": -55648256,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 358927564.8,
+      "p95Maximum": 422463283.2
+    },
+    "matched-runtime/server/dynamic-detail-identity-c1/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 306.36627518000375,
+        "kovoP95": 311.84139198421457,
+        "nextMedian": 377.9895891587423,
+        "nextP95": 381.8916233084517,
+        "pairedMedian": -66.75048499216689,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 291.04796142100355,
+      "p95Minimum": 296.24932238500384
+    },
+    "matched-runtime/server/dynamic-detail-identity-c1/responseBytes": {
+      "baseline": {
+        "kovoMedian": 7895928,
+        "kovoP95": 8036804,
+        "nextMedian": 72536310,
+        "nextP95": 73291097,
+        "pairedMedian": -64526748,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 8290724.4,
+      "p95Maximum": 8438644.200000001
+    },
+    "matched-runtime/server/dynamic-detail-identity-c1/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 15000,
+        "kovoP95": 16000,
+        "nextMedian": 16000,
+        "nextP95": 17000,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15750,
+      "p95Maximum": 16800
+    },
+    "matched-runtime/server/dynamic-detail-identity-c1/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 99.99085930226659,
+        "kovoP95": 106.66072827373429,
+        "nextMedian": 106.65203333223062,
+        "nextP95": 113.32044314803464,
+        "pairedMedian": -0.01433682171717976,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 104.99040226737992,
+      "p95Maximum": 111.993764687421
+    },
+    "matched-runtime/server/dynamic-detail-identity-c32/durationMs": {
+      "baseline": {
+        "kovoMedian": 15092.893921000003,
+        "kovoP95": 15096.510632999998,
+        "nextMedian": 15035.445155000001,
+        "nextP95": 15056.891301,
+        "pairedMedian": 57.97986800000035,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15847.538617050004,
+      "p95Maximum": 15851.336164649998
+    },
+    "matched-runtime/server/dynamic-detail-identity-c32/p50Ms": {
+      "baseline": {
+        "kovoMedian": 93.40505300000041,
+        "kovoP95": 94.132539000002,
+        "nextMedian": 75.42128700000103,
+        "nextP95": 76.05947100000049,
+        "pairedMedian": 18.704595000001063,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 98.07530565000043,
+      "p95Maximum": 98.8391659500021
+    },
+    "matched-runtime/server/dynamic-detail-identity-c32/p95Ms": {
+      "baseline": {
+        "kovoMedian": 108.77651100000003,
+        "kovoP95": 113.27687800000058,
+        "nextMedian": 85.54372200000034,
+        "nextP95": 86.72263300000122,
+        "pairedMedian": 23.569946000001437,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 114.21533655000003,
+      "p95Maximum": 118.94072190000061
+    },
+    "matched-runtime/server/dynamic-detail-identity-c32/p99Ms": {
+      "baseline": {
+        "kovoMedian": 189.58832800000073,
+        "kovoP95": 190.8630659999999,
+        "nextMedian": 101.96154299999944,
+        "nextP95": 111.86683399999947,
+        "pairedMedian": 86.85364000000027,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 199.06774440000078,
+      "p95Maximum": 200.4062192999999
+    },
+    "matched-runtime/server/dynamic-detail-identity-c32/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 366440448,
+        "kovoP95": 370491392,
+        "nextMedian": 449175552,
+        "nextP95": 593297408,
+        "pairedMedian": -90296320,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 384762470.40000004,
+      "p95Maximum": 389015961.6
+    },
+    "matched-runtime/server/dynamic-detail-identity-c32/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 328.93584283043685,
+        "kovoP95": 330.7644832249527,
+        "nextMedian": 420.2086277790365,
+        "nextP95": 424.66497143457923,
+        "pairedMedian": -94.36799520424336,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 312.489050688915,
+      "p95Minimum": 314.2262590637051
+    },
+    "matched-runtime/server/dynamic-detail-identity-c32/responseBytes": {
+      "baseline": {
+        "kovoMedian": 8529870,
+        "kovoP95": 8577974,
+        "nextMedian": 80775002,
+        "nextP95": 81875200,
+        "pairedMedian": -72274921,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 8956363.5,
+      "p95Maximum": 9006872.700000001
+    },
+    "matched-runtime/server/dynamic-detail-identity-c32/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 17000,
+        "kovoP95": 17000,
+        "nextMedian": 18000,
+        "nextP95": 18000,
+        "pairedMedian": -1000,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 17850,
+      "p95Maximum": 17850
+    },
+    "matched-runtime/server/dynamic-detail-identity-c32/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 112.635240775817,
+        "kovoP95": 112.6567428319148,
+        "nextMedian": 119.69477335661772,
+        "nextP95": 119.85902934482226,
+        "pairedMedian": -7.065189294156227,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 118.26700281460785,
+      "p95Maximum": 118.28957997351054
+    },
+    "matched-runtime/server/dynamic-detail-identity-c8/durationMs": {
+      "baseline": {
+        "kovoMedian": 15022.163786,
+        "kovoP95": 15025.386429000002,
+        "nextMedian": 15009.676561999999,
+        "nextP95": 15014.398379999999,
+        "pairedMedian": 13.96371100000215,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15773.2719753,
+      "p95Maximum": 15776.655750450003
+    },
+    "matched-runtime/server/dynamic-detail-identity-c8/p50Ms": {
+      "baseline": {
+        "kovoMedian": 21.208215999999084,
+        "kovoP95": 21.65794299999925,
+        "nextMedian": 18.4611019999993,
+        "nextP95": 19.700031999999737,
+        "pairedMedian": 2.4139259999992646,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 22.268626799999037,
+      "p95Maximum": 22.74084014999921
+    },
+    "matched-runtime/server/dynamic-detail-identity-c8/p95Ms": {
+      "baseline": {
+        "kovoMedian": 43.55124100000103,
+        "kovoP95": 44.393027000000075,
+        "nextMedian": 23.054528000000573,
+        "nextP95": 24.579866999998558,
+        "pairedMedian": 19.896764999997686,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 45.72880305000108,
+      "p95Maximum": 46.61267835000008
+    },
+    "matched-runtime/server/dynamic-detail-identity-c8/p99Ms": {
+      "baseline": {
+        "kovoMedian": 47.22432700000354,
+        "kovoP95": 48.91166700000031,
+        "nextMedian": 26.321245000001,
+        "nextP95": 27.59321700000055,
+        "pairedMedian": 20.12745900000118,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 49.58554335000372,
+      "p95Maximum": 51.35725035000033
+    },
+    "matched-runtime/server/dynamic-detail-identity-c8/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 340135936,
+        "kovoP95": 391778304,
+        "nextMedian": 419651584,
+        "nextP95": 427237376,
+        "pairedMedian": -72212480,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 357142732.8,
+      "p95Maximum": 411367219.2
+    },
+    "matched-runtime/server/dynamic-detail-identity-c8/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 323.79999064717873,
+        "kovoP95": 330.01839370599555,
+        "nextMedian": 419.287988583524,
+        "nextP95": 424.06074048831516,
+        "pairedMedian": -93.36094159166873,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 307.60999111481976,
+      "p95Minimum": 313.5174740206958
+    },
+    "matched-runtime/server/dynamic-detail-identity-c8/responseBytes": {
+      "baseline": {
+        "kovoMedian": 8356352,
+        "kovoP95": 8516126,
+        "nextMedian": 80480763,
+        "nextP95": 81401859,
+        "pairedMedian": -72122693,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 8774169.6,
+      "p95Maximum": 8941932.3
+    },
+    "matched-runtime/server/dynamic-detail-identity-c8/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 17000,
+        "kovoP95": 17000,
+        "nextMedian": 17000,
+        "nextP95": 17000,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 17850,
+      "p95Maximum": 17850
+    },
+    "matched-runtime/server/dynamic-detail-identity-c8/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 113.15431634771966,
+        "kovoP95": 113.16951832043291,
+        "nextMedian": 113.25930462053361,
+        "nextP95": 113.29636309858664,
+        "pairedMedian": -0.11286543428674634,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 118.81203216510565,
+      "p95Maximum": 118.82799423645457
+    },
+    "matched-runtime/server/dynamic-listing-identity-c1/durationMs": {
+      "baseline": {
+        "kovoMedian": 15001.822722,
+        "kovoP95": 15004.152216,
+        "nextMedian": 15001.877923,
+        "nextP95": 15002.873949,
+        "pairedMedian": 0.5524549999990995,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15751.9138581,
+      "p95Maximum": 15754.3598268
+    },
+    "matched-runtime/server/dynamic-listing-identity-c1/p50Ms": {
+      "baseline": {
+        "kovoMedian": 4.3815990000002785,
+        "kovoP95": 4.5063749999999345,
+        "nextMedian": 3.3103749999972933,
+        "nextP95": 3.400582000000213,
+        "pairedMedian": 1.0866599999990285,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 4.600678950000293,
+      "p95Maximum": 4.731693749999931
+    },
+    "matched-runtime/server/dynamic-listing-identity-c1/p95Ms": {
+      "baseline": {
+        "kovoMedian": 7.690505000000485,
+        "kovoP95": 8.046947000000728,
+        "nextMedian": 5.768106999999873,
+        "nextP95": 5.9876339999973425,
+        "pairedMedian": 1.8910269999996672,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 8.07503025000051,
+      "p95Maximum": 8.449294350000764
+    },
+    "matched-runtime/server/dynamic-listing-identity-c1/p99Ms": {
+      "baseline": {
+        "kovoMedian": 9.716154999998253,
+        "kovoP95": 10.433194000001095,
+        "nextMedian": 7.219634000000951,
+        "nextP95": 7.523283000000447,
+        "pairedMedian": 2.6169089999984863,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 10.201962749998165,
+      "p95Maximum": 10.95485370000115
+    },
+    "matched-runtime/server/dynamic-listing-identity-c1/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 334016512,
+        "kovoP95": 338223104,
+        "nextMedian": 393162752,
+        "nextP95": 400035840,
+        "pairedMedian": -55848960,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 350717337.6,
+      "p95Maximum": 355134259.2
+    },
+    "matched-runtime/server/dynamic-listing-identity-c1/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 209.08365013762543,
+        "kovoP95": 213.29719315277373,
+        "nextMedian": 274.41595487262214,
+        "nextP95": 279.4907984858169,
+        "pairedMedian": -66.59455382495244,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 198.62946763074416,
+      "p95Minimum": 202.63233349513504
+    },
+    "matched-runtime/server/dynamic-listing-identity-c1/responseBytes": {
+      "baseline": {
+        "kovoMedian": 39130938,
+        "kovoP95": 39916800,
+        "nextMedian": 168447055,
+        "nextP95": 171556595,
+        "pairedMedian": -129467800,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 41087484.9,
+      "p95Maximum": 41912640
+    },
+    "matched-runtime/server/dynamic-listing-identity-c1/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 16000,
+        "kovoP95": 16000,
+        "nextMedian": 16000,
+        "nextP95": 16000,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 16800,
+      "p95Maximum": 16800
+    },
+    "matched-runtime/server/dynamic-listing-identity-c1/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 106.65254131968751,
+        "kovoP95": 106.66294160564836,
+        "nextMedian": 106.65164117107216,
+        "nextP95": 106.65990321288005,
+        "pairedMedian": -0.0037755246488870853,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 111.9851683856719,
+      "p95Maximum": 111.99608868593077
+    },
+    "matched-runtime/server/dynamic-listing-identity-c32/durationMs": {
+      "baseline": {
+        "kovoMedian": 15141.658479,
+        "kovoP95": 15159.249594,
+        "nextMedian": 15046.230784,
+        "nextP95": 15068.073485,
+        "pairedMedian": 90.22772199999963,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15898.74140295,
+      "p95Maximum": 15917.212073700002
+    },
+    "matched-runtime/server/dynamic-listing-identity-c32/p50Ms": {
+      "baseline": {
+        "kovoMedian": 140.40565099999912,
+        "kovoP95": 142.9150640000007,
+        "nextMedian": 104.38053500000024,
+        "nextP95": 106.78087999999843,
+        "pairedMedian": 36.17977500000234,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 147.4259335499991,
+      "p95Maximum": 150.06081720000074
+    },
+    "matched-runtime/server/dynamic-listing-identity-c32/p95Ms": {
+      "baseline": {
+        "kovoMedian": 159.82373599999846,
+        "kovoP95": 162.76220699999976,
+        "nextMedian": 117.83297999999922,
+        "nextP95": 119.69984000000113,
+        "pairedMedian": 41.42425700000058,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 167.81492279999839,
+      "p95Maximum": 170.90031734999977
+    },
+    "matched-runtime/server/dynamic-listing-identity-c32/p99Ms": {
+      "baseline": {
+        "kovoMedian": 284.4702350000007,
+        "kovoP95": 290.59278900000027,
+        "nextMedian": 133.66638500000045,
+        "nextP95": 138.98907599999984,
+        "pairedMedian": 148.70778899999823,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 298.69374675000074,
+      "p95Maximum": 305.1224284500003
+    },
+    "matched-runtime/server/dynamic-listing-identity-c32/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 361959424,
+        "kovoP95": 367046656,
+        "nextMedian": 443273216,
+        "nextP95": 453832704,
+        "pairedMedian": -81674240,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 380057395.2,
+      "p95Maximum": 385398988.8
+    },
+    "matched-runtime/server/dynamic-listing-identity-c32/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 219.3792094420346,
+        "kovoP95": 221.43138583016227,
+        "nextMedian": 303.2523045222559,
+        "nextP95": 306.2561026845406,
+        "pairedMedian": -84.39290214385349,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 208.41024896993287,
+      "p95Minimum": 210.35981653865414
+    },
+    "matched-runtime/server/dynamic-listing-identity-c32/responseBytes": {
+      "baseline": {
+        "kovoMedian": 41413680,
+        "kovoP95": 41837796,
+        "nextMedian": 186899720,
+        "nextP95": 188536320,
+        "pairedMedian": -144999554,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 43484364,
+      "p95Maximum": 43929685.800000004
+    },
+    "matched-runtime/server/dynamic-listing-identity-c32/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 17000,
+        "kovoP95": 17000,
+        "nextMedian": 17000,
+        "nextP95": 18000,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 17850,
+      "p95Maximum": 17850
+    },
+    "matched-runtime/server/dynamic-listing-identity-c32/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 112.27147865496346,
+        "kovoP95": 112.32211609490062,
+        "nextMedian": 113.0324324228299,
+        "nextP95": 119.60632220137303,
+        "pairedMedian": -0.8237504099978707,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 117.88505258771164,
+      "p95Maximum": 117.93822189964565
+    },
+    "matched-runtime/server/dynamic-listing-identity-c8/durationMs": {
+      "baseline": {
+        "kovoMedian": 15031.689876,
+        "kovoP95": 15040.40792,
+        "nextMedian": 15012.416794999997,
+        "nextP95": 15019.996069,
+        "pairedMedian": 21.429285999995045,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15783.274369800001,
+      "p95Maximum": 15792.428316
+    },
+    "matched-runtime/server/dynamic-listing-identity-c8/p50Ms": {
+      "baseline": {
+        "kovoMedian": 31.130197000000408,
+        "kovoP95": 32.114032999999836,
+        "nextMedian": 26.06053299999985,
+        "nextP95": 27.155236999999033,
+        "pairedMedian": 5.326009000002159,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 32.68670685000043,
+      "p95Maximum": 33.71973464999983
+    },
+    "matched-runtime/server/dynamic-listing-identity-c8/p95Ms": {
+      "baseline": {
+        "kovoMedian": 65.66445799999929,
+        "kovoP95": 66.82601500000055,
+        "nextMedian": 32.3079459999999,
+        "nextP95": 33.37653799999953,
+        "pairedMedian": 34.21702500000083,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 68.94768089999926,
+      "p95Maximum": 70.16731575000058
+    },
+    "matched-runtime/server/dynamic-listing-identity-c8/p99Ms": {
+      "baseline": {
+        "kovoMedian": 70.62420399999974,
+        "kovoP95": 73.08288700000048,
+        "nextMedian": 37.434933999999885,
+        "nextP95": 39.888138000000254,
+        "pairedMedian": 33.17722700000013,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 74.15541419999973,
+      "p95Maximum": 76.7370313500005
+    },
+    "matched-runtime/server/dynamic-listing-identity-c8/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 373465088,
+        "kovoP95": 383787008,
+        "nextMedian": 415014912,
+        "nextP95": 548737024,
+        "pairedMedian": -44113920,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 392138342.40000004,
+      "p95Maximum": 402976358.40000004
+    },
+    "matched-runtime/server/dynamic-listing-identity-c8/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 217.8923197430104,
+        "kovoP95": 221.34131950395448,
+        "nextMedian": 298.83285588071357,
+        "nextP95": 312.33751425080146,
+        "pairedMedian": -84.26435883912569,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 206.99770375585987,
+      "p95Minimum": 210.27425352875676
+    },
+    "matched-runtime/server/dynamic-listing-identity-c8/responseBytes": {
+      "baseline": {
+        "kovoMedian": 40852350,
+        "kovoP95": 41500998,
+        "nextMedian": 183585605,
+        "nextP95": 191768605,
+        "pairedMedian": -143344481,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 42894967.5,
+      "p95Maximum": 43576047.9
+    },
+    "matched-runtime/server/dynamic-listing-identity-c8/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 17000,
+        "kovoP95": 17000,
+        "nextMedian": 17000,
+        "nextP95": 17000,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 17850,
+      "p95Maximum": 17850
+    },
+    "matched-runtime/server/dynamic-listing-identity-c8/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 113.08895137391536,
+        "kovoP95": 113.10342399198339,
+        "nextMedian": 113.23832311897281,
+        "nextP95": 113.29776541083825,
+        "pairedMedian": -0.16370430241912004,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 118.74339894261114,
+      "p95Maximum": 118.75859519158257
+    },
+    "matched-runtime/server/hit-detail-identity-c1/durationMs": {
+      "baseline": {
+        "kovoMedian": 15000.570179999999,
+        "kovoP95": 15000.756390999999,
+        "nextMedian": 15000.219622999999,
+        "nextP95": 15000.496929,
+        "pairedMedian": 0.19149100000140606,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15750.598688999999,
+      "p95Maximum": 15750.794210549999
+    },
+    "matched-runtime/server/hit-detail-identity-c1/p50Ms": {
+      "baseline": {
+        "kovoMedian": 0.7172289999998611,
+        "kovoP95": 0.734879000001456,
+        "nextMedian": 0.5982449999992241,
+        "nextP95": 0.6038619999999355,
+        "pairedMedian": 0.12099699999816949,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 0.7530904499998542,
+      "p95Maximum": 0.7716229500015288
+    },
+    "matched-runtime/server/hit-detail-identity-c1/p95Ms": {
+      "baseline": {
+        "kovoMedian": 1.009473000000071,
+        "kovoP95": 1.0355930000005173,
+        "nextMedian": 0.7904519999992772,
+        "nextP95": 0.8033470000009402,
+        "pairedMedian": 0.2180690000013783,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 1.0599466500000745,
+      "p95Maximum": 1.0873726500005432
+    },
+    "matched-runtime/server/hit-detail-identity-c1/p99Ms": {
+      "baseline": {
+        "kovoMedian": 3.4200810000002093,
+        "kovoP95": 3.769632999999885,
+        "nextMedian": 3.0013310000013007,
+        "nextP95": 3.177397999999812,
+        "pairedMedian": 0.3727290000006178,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 3.59108505000022,
+      "p95Maximum": 3.95811464999988
+    },
+    "matched-runtime/server/hit-detail-identity-c1/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 375554048,
+        "kovoP95": 585977856,
+        "nextMedian": 328679424,
+        "nextP95": 338771968,
+        "pairedMedian": 44417024,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 394331750.40000004,
+      "p95Maximum": 615276748.8000001
+    },
+    "matched-runtime/server/hit-detail-identity-c1/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 1238.5322018928825,
+        "kovoP95": 1261.6650604829335,
+        "nextMedian": 1537.1439533745058,
+        "nextP95": 1548.1815988595254,
+        "pairedMedian": -298.8860166495506,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 1176.6055917982383,
+      "p95Minimum": 1198.581807458787
+    },
+    "matched-runtime/server/hit-detail-identity-c1/responseBytes": {
+      "baseline": {
+        "kovoMedian": 31824114,
+        "kovoP95": 32418525,
+        "nextMedian": 285181344,
+        "nextP95": 287283904,
+        "pairedMedian": -253227108,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 33415319.700000003,
+      "p95Maximum": 34039451.25
+    },
+    "matched-runtime/server/hit-detail-identity-c1/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 14000,
+        "kovoP95": 14000,
+        "nextMedian": 13000,
+        "nextP95": 13000,
+        "pairedMedian": 1000,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 14700,
+      "p95Maximum": 14700
+    },
+    "matched-runtime/server/hit-detail-identity-c1/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 93.33056397906265,
+        "kovoP95": 93.33230674018074,
+        "nextMedian": 86.66351901876807,
+        "nextP95": 86.66519277484386,
+        "pairedMedian": 6.667283064563179,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 97.99709217801578,
+      "p95Maximum": 97.99892207718977
+    },
+    "matched-runtime/server/hit-detail-identity-c32/durationMs": {
+      "baseline": {
+        "kovoMedian": 15018.404958,
+        "kovoP95": 15032.231483,
+        "nextMedian": 15013.544315,
+        "nextP95": 15016.589057000001,
+        "pairedMedian": 5.815777000003436,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15769.3252059,
+      "p95Maximum": 15783.84305715
+    },
+    "matched-runtime/server/hit-detail-identity-c32/p50Ms": {
+      "baseline": {
+        "kovoMedian": 18.62285300000076,
+        "kovoP95": 18.755549999999857,
+        "nextMedian": 12.720436999999947,
+        "nextP95": 12.911215000000084,
+        "pairedMedian": 5.806539000001067,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 19.553995650000797,
+      "p95Maximum": 19.69332749999985
+    },
+    "matched-runtime/server/hit-detail-identity-c32/p95Ms": {
+      "baseline": {
+        "kovoMedian": 30.805755000001227,
+        "kovoP95": 31.486645000000863,
+        "nextMedian": 21.28519200000028,
+        "nextP95": 21.522845999999845,
+        "pairedMedian": 9.612794000001486,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 32.34604275000129,
+      "p95Maximum": 33.06097725000091
+    },
+    "matched-runtime/server/hit-detail-identity-c32/p99Ms": {
+      "baseline": {
+        "kovoMedian": 42.27339299999949,
+        "kovoP95": 43.08256799999981,
+        "nextMedian": 28.926641999998537,
+        "nextP95": 29.6814200000008,
+        "pairedMedian": 13.491037000000688,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 44.387062649999464,
+      "p95Maximum": 45.2366963999998
+    },
+    "matched-runtime/server/hit-detail-identity-c32/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 392441856,
+        "kovoP95": 395128832,
+        "nextMedian": 362602496,
+        "nextP95": 369094656,
+        "pairedMedian": 30765056,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 412063948.8,
+      "p95Maximum": 414885273.6
+    },
+    "matched-runtime/server/hit-detail-identity-c32/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 1548.981096315269,
+        "kovoP95": 1583.266936470375,
+        "nextMedian": 2262.8668969901,
+        "nextP95": 2306.663587379794,
+        "pairedMedian": -697.9255524958837,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 1471.5320414995056,
+      "p95Minimum": 1504.103589646856
+    },
+    "matched-runtime/server/hit-detail-identity-c32/responseBytes": {
+      "baseline": {
+        "kovoMedian": 39856371,
+        "kovoP95": 40730001,
+        "nextMedian": 420227536,
+        "nextP95": 428303840,
+        "pairedMedian": -380415703,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 41849189.550000004,
+      "p95Maximum": 42766501.050000004
+    },
+    "matched-runtime/server/hit-detail-identity-c32/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 17000,
+        "kovoP95": 17000,
+        "nextMedian": 17000,
+        "nextP95": 17000,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 17850,
+      "p95Maximum": 17850
+    },
+    "matched-runtime/server/hit-detail-identity-c32/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 113.19090429029943,
+        "kovoP95": 113.19612022625769,
+        "nextMedian": 113.19591060004956,
+        "nextP95": 113.23742686445384,
+        "pairedMedian": -0.018241191608765916,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 118.8504495048144,
+      "p95Maximum": 118.85592623757059
+    },
+    "matched-runtime/server/hit-detail-identity-c8/durationMs": {
+      "baseline": {
+        "kovoMedian": 15004.521531,
+        "kovoP95": 15006.884637000001,
+        "nextMedian": 15003.238311000001,
+        "nextP95": 15008.033783000003,
+        "pairedMedian": 1.2134409999980562,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15754.747607550002,
+      "p95Maximum": 15757.228868850001
+    },
+    "matched-runtime/server/hit-detail-identity-c8/p50Ms": {
+      "baseline": {
+        "kovoMedian": 4.1815370000003895,
+        "kovoP95": 4.253026000000318,
+        "nextMedian": 2.854065999999875,
+        "nextP95": 2.893400000000838,
+        "pairedMedian": 1.3318599999984144,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 4.390613850000409,
+      "p95Maximum": 4.465677300000334
+    },
+    "matched-runtime/server/hit-detail-identity-c8/p95Ms": {
+      "baseline": {
+        "kovoMedian": 9.379204000000755,
+        "kovoP95": 9.596768999999767,
+        "nextMedian": 6.672490999999354,
+        "nextP95": 6.80887199999961,
+        "pairedMedian": 2.726896999998644,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 9.848164200000793,
+      "p95Maximum": 10.076607449999756
+    },
+    "matched-runtime/server/hit-detail-identity-c8/p99Ms": {
+      "baseline": {
+        "kovoMedian": 13.091392000000269,
+        "kovoP95": 13.65389199999845,
+        "nextMedian": 9.056959999998071,
+        "nextP95": 9.196003000000928,
+        "pairedMedian": 4.045686000001297,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 13.745961600000284,
+      "p95Maximum": 14.336586599998373
+    },
+    "matched-runtime/server/hit-detail-identity-c8/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 365121536,
+        "kovoP95": 519946240,
+        "nextMedian": 341008384,
+        "nextP95": 352034816,
+        "pairedMedian": 23969792,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 383377612.8,
+      "p95Maximum": 545943552
+    },
+    "matched-runtime/server/hit-detail-identity-c8/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 1554.2813457609357,
+        "kovoP95": 1574.3960600568446,
+        "nextMedian": 2217.7878742087523,
+        "nextP95": 2243.1621649533186,
+        "pairedMedian": -660.0406746842148,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 1476.5672784728888,
+      "p95Minimum": 1495.6762570540022
+    },
+    "matched-runtime/server/hit-detail-identity-c8/responseBytes": {
+      "baseline": {
+        "kovoMedian": 39952299,
+        "kovoP95": 40466199,
+        "nextMedian": 411532832,
+        "nextP95": 416232672,
+        "pairedMedian": -371090615,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 41949913.95,
+      "p95Maximum": 42489508.95
+    },
+    "matched-runtime/server/hit-detail-identity-c8/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 17000,
+        "kovoP95": 17000,
+        "nextMedian": 17000,
+        "nextP95": 17000,
+        "pairedMedian": 0,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 17850,
+      "p95Maximum": 17850
+    },
+    "matched-runtime/server/hit-detail-identity-c8/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 113.24753139402151,
+        "kovoP95": 113.30119327447812,
+        "nextMedian": 113.30782333840246,
+        "nextP95": 113.31065469680861,
+        "pairedMedian": -0.0561959125435294,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 118.90990796372259,
+      "p95Maximum": 118.96625293820203
+    },
+    "matched-runtime/server/hit-listing-identity-c1/durationMs": {
+      "baseline": {
+        "kovoMedian": 15000.407119,
+        "kovoP95": 15003.784319,
+        "nextMedian": 15000.408992,
+        "nextP95": 15000.604301000001,
+        "pairedMedian": 0.10192699999788601,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15750.42747495,
+      "p95Maximum": 15753.97353495
+    },
+    "matched-runtime/server/hit-listing-identity-c1/p50Ms": {
+      "baseline": {
+        "kovoMedian": 0.7604100000007747,
+        "kovoP95": 0.7664270000004763,
+        "nextMedian": 0.7015690000007453,
+        "nextP95": 0.7099849999995058,
+        "pairedMedian": 0.05823899999813875,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 0.7984305000008135,
+      "p95Maximum": 0.8047483500005002
+    },
+    "matched-runtime/server/hit-listing-identity-c1/p95Ms": {
+      "baseline": {
+        "kovoMedian": 1.0534479999987525,
+        "kovoP95": 1.0804150000003574,
+        "nextMedian": 0.9806069999976899,
+        "nextP95": 1.0065249999988737,
+        "pairedMedian": 0.079278000001068,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 1.1061203999986902,
+      "p95Maximum": 1.1344357500003752
+    },
+    "matched-runtime/server/hit-listing-identity-c1/p99Ms": {
+      "baseline": {
+        "kovoMedian": 4.094430999999531,
+        "kovoP95": 4.288924999998926,
+        "nextMedian": 3.978200999999899,
+        "nextP95": 4.130752000000939,
+        "pairedMedian": 0.16456099999959406,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 4.299152549999508,
+      "p95Maximum": 4.503371249998873
+    },
+    "matched-runtime/server/hit-listing-identity-c1/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 555614208,
+        "kovoP95": 569266176,
+        "nextMedian": 327294976,
+        "nextP95": 329650176,
+        "pairedMedian": 228732928,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 583394918.4,
+      "p95Maximum": 597729484.8000001
+    },
+    "matched-runtime/server/hit-listing-identity-c1/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 1172.5035729258123,
+        "kovoP95": 1183.4368424014265,
+        "nextMedian": 1259.3097822202226,
+        "nextP95": 1277.5909066189631,
+        "pairedMedian": -85.20584950244506,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 1113.8783942795217,
+      "p95Minimum": 1124.265000281355
+    },
+    "matched-runtime/server/hit-listing-identity-c1/responseBytes": {
+      "baseline": {
+        "kovoMedian": 219304772,
+        "kovoP95": 221349688,
+        "nextMedian": 765776560,
+        "nextP95": 776678592,
+        "pairedMedian": -547656403,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 230270010.60000002,
+      "p95Maximum": 232417172.4
+    },
+    "matched-runtime/server/hit-listing-identity-c1/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 14000,
+        "kovoP95": 14000,
+        "nextMedian": 11000,
+        "nextP95": 11000,
+        "pairedMedian": 3000,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 14700,
+      "p95Maximum": 14700
+    },
+    "matched-runtime/server/hit-listing-identity-c1/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 93.3294772828742,
+        "kovoP95": 93.33065682164518,
+        "nextMedian": 73.33053775324257,
+        "nextP95": 73.332411173374,
+        "pairedMedian": 19.99827106069918,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 97.9959511470179,
+      "p95Maximum": 97.99718966272744
+    },
+    "matched-runtime/server/hit-listing-identity-c32/durationMs": {
+      "baseline": {
+        "kovoMedian": 15018.994012,
+        "kovoP95": 15024.685845,
+        "nextMedian": 15016.344678999998,
+        "nextP95": 15025.804448,
+        "pairedMedian": 5.013612999999168,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15769.9437126,
+      "p95Maximum": 15775.920137250001
+    },
+    "matched-runtime/server/hit-listing-identity-c32/p50Ms": {
+      "baseline": {
+        "kovoMedian": 19.11109999999917,
+        "kovoP95": 19.551824000001943,
+        "nextMedian": 14.0404410000001,
+        "nextP95": 14.241353000001254,
+        "pairedMedian": 5.122321000000738,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 20.066654999999127,
+      "p95Maximum": 20.529415200002042
+    },
+    "matched-runtime/server/hit-listing-identity-c32/p95Ms": {
+      "baseline": {
+        "kovoMedian": 32.48594400000002,
+        "kovoP95": 34.24813499999982,
+        "nextMedian": 24.97166399999969,
+        "nextP95": 25.363506999998208,
+        "pairedMedian": 7.570676000000276,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 34.11024120000002,
+      "p95Maximum": 35.96054174999981
+    },
+    "matched-runtime/server/hit-listing-identity-c32/p99Ms": {
+      "baseline": {
+        "kovoMedian": 44.33970100000079,
+        "kovoP95": 46.06928699999844,
+        "nextMedian": 32.13509999999951,
+        "nextP95": 33.02251500000057,
+        "pairedMedian": 11.582280000000537,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 46.55668605000083,
+      "p95Maximum": 48.37275134999836
+    },
+    "matched-runtime/server/hit-listing-identity-c32/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 391208960,
+        "kovoP95": 499826688,
+        "nextMedian": 363642880,
+        "nextP95": 372760576,
+        "pairedMedian": 26120192,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 410769408,
+      "p95Maximum": 524818022.40000004
+    },
+    "matched-runtime/server/hit-listing-identity-c32/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 1501.7912724736777,
+        "kovoP95": 1532.0098911054454,
+        "nextMedian": 2047.7722443510281,
+        "nextP95": 2061.1516373896857,
+        "pairedMedian": -537.412351022633,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 1426.7017088499938,
+      "p95Minimum": 1455.4093965501731
+    },
+    "matched-runtime/server/hit-listing-identity-c32/responseBytes": {
+      "baseline": {
+        "kovoMedian": 281313109,
+        "kovoP95": 286886752,
+        "nextMedian": 1246276528,
+        "nextP95": 1255476384,
+        "pairedMedian": -958719631,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 295378764.45,
+      "p95Maximum": 301231089.6
+    },
+    "matched-runtime/server/hit-listing-identity-c32/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 17000,
+        "kovoP95": 17000,
+        "nextMedian": 16000,
+        "nextP95": 17000,
+        "pairedMedian": 1000,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 17850,
+      "p95Maximum": 17850
+    },
+    "matched-runtime/server/hit-listing-identity-c32/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 113.18040745273974,
+        "kovoP95": 113.19295851960274,
+        "nextMedian": 106.51130827830639,
+        "nextP95": 113.16945671716165,
+        "pairedMedian": 6.6530326608120305,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 118.83942782537673,
+      "p95Maximum": 118.85260644558288
+    },
+    "matched-runtime/server/hit-listing-identity-c8/durationMs": {
+      "baseline": {
+        "kovoMedian": 15004.476465,
+        "kovoP95": 15008.059530000002,
+        "nextMedian": 15003.344034000002,
+        "nextP95": 15008.752338000002,
+        "pairedMedian": 1.186942000002091,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 15754.70028825,
+      "p95Maximum": 15758.462506500004
+    },
+    "matched-runtime/server/hit-listing-identity-c8/p50Ms": {
+      "baseline": {
+        "kovoMedian": 4.227373999998235,
+        "kovoP95": 4.315129999999954,
+        "nextMedian": 3.1227920000001177,
+        "nextP95": 3.1578810000000885,
+        "pairedMedian": 1.1200820000012754,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 4.438742699998147,
+      "p95Maximum": 4.530886499999951
+    },
+    "matched-runtime/server/hit-listing-identity-c8/p95Ms": {
+      "baseline": {
+        "kovoMedian": 9.731893000000127,
+        "kovoP95": 9.902655999998387,
+        "nextMedian": 8.078512000000046,
+        "nextP95": 8.271456000000398,
+        "pairedMedian": 1.6769939999994676,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 10.218487650000133,
+      "p95Maximum": 10.397788799998308
+    },
+    "matched-runtime/server/hit-listing-identity-c8/p99Ms": {
+      "baseline": {
+        "kovoMedian": 13.738152000001719,
+        "kovoP95": 14.346456999999646,
+        "nextMedian": 11.504203000000416,
+        "nextP95": 11.82861999999841,
+        "pairedMedian": 2.3069270000014512,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 14.425059600001806,
+      "p95Maximum": 15.063779849999628
+    },
+    "matched-runtime/server/hit-listing-identity-c8/peakRssBytes": {
+      "baseline": {
+        "kovoMedian": 359407616,
+        "kovoP95": 665829376,
+        "nextMedian": 339591168,
+        "nextP95": 346918912,
+        "pairedMedian": 23252992,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 377377996.8,
+      "p95Maximum": 699120844.8000001
+    },
+    "matched-runtime/server/hit-listing-identity-c8/requestsPerSecond": {
+      "baseline": {
+        "kovoMedian": 1521.715712437609,
+        "kovoP95": 1536.9889735676597,
+        "nextMedian": 1994.2693673926358,
+        "nextP95": 2009.4596351378032,
+        "pairedMedian": -464.85218300767133,
+        "runs": 5
+      },
+      "direction": "higher-is-better",
+      "kind": "ratified-regression-floor",
+      "medianMinimum": 1445.6299268157286,
+      "p95Minimum": 1460.1395248892766
+    },
+    "matched-runtime/server/hit-listing-identity-c8/responseBytes": {
+      "baseline": {
+        "kovoMedian": 284767022,
+        "kovoP95": 287560078,
+        "nextMedian": 1212597760,
+        "nextP95": 1221919200,
+        "pairedMedian": -923441650,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 299005373.1,
+      "p95Maximum": 301938081.90000004
+    },
+    "matched-runtime/server/hit-listing-identity-c8/serverCpuMs": {
+      "baseline": {
+        "kovoMedian": 17000,
+        "kovoP95": 17000,
+        "nextMedian": 16000,
+        "nextP95": 16000,
+        "pairedMedian": 1000,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 17850,
+      "p95Maximum": 17850
+    },
+    "matched-runtime/server/hit-listing-identity-c8/serverCpuPercent": {
+      "baseline": {
+        "kovoMedian": 113.29816383093527,
+        "kovoP95": 113.30073542012458,
+        "nextMedian": 106.64182694138998,
+        "nextP95": 106.64390646109476,
+        "pairedMedian": 6.655977743266789,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 118.96307202248204,
+      "p95Maximum": 118.96577219113081
+    }
+  },
+  "policy": {
+    "maxLoadPerCpu": 1,
+    "maxRegressionPct": 5,
+    "representations": {
+      "cachedComparisonEncoding": "identity",
+      "forcedDynamicComparisonEncoding": "identity",
+      "kovoBrotliPosture": "required-raw-measurement-not-a-paired-next-target",
+      "nextBrotliPosture": "unsupported"
+    },
+    "targets": {
+      "cachedThroughputMinimumRatio": 0.9,
+      "forcedDynamicThroughputMinimumRatio": 0.8
+    }
+  },
+  "schema": "kovo-comparison-performance-budget/v2",
+  "subject": {
+    "host": {
+      "arch": "x64",
+      "browsers": [],
+      "cpu": {
+        "count": 4,
+        "model": "AMD EPYC 7763 64-Core Processor"
+      },
+      "memoryCapacityClassBytes": 17179869184,
+      "node": "v24.18.0",
+      "platform": "linux",
+      "release": "6.17.0-1022-azure",
+      "runnerImage": "github-actions/ubuntu-24.04 ImageOS=ubuntu24 ImageVersionDigest=sha256:daee8837c48a1f6d9e42a0303242b2433b2761aceff583672f517f05fda8e796",
+      "digest": "sha256:f1182961bbda39a54ca990b7611b5005d9891c8c154e95e9e3ca846e73816ce2",
+      "schema": "kovo-performance-host/v2",
+      "totalMemoryBytes": 16766414848
+    },
+    "kind": "server",
+    "locks": {
+      "pnpm-lock.yaml": "sha256:b44051d7c24ac90744743140c794ccee83991dd07d2e15d2e893fcc3d2b6d0a4",
+      "benchmarks/nextjs/pnpm-lock.yaml": "sha256:a9e68be4a032b6e2cc40a5f5392f942d14eae0277b6fc93408446b61d565086b",
+      "benchmarks/harness/pnpm-lock.yaml": "sha256:bfbf3b2e8725c5ef8a844f62c0907a154a1d5f68af4ff6ec26a91658d1227663"
+    },
+    "workloadIdentity": {
+      "complete": true,
+      "digest": "sha256:e3b1f69533da28ae85f2a155c39943edf4933ed413986661a0ae78dd15100f1b",
+      "identity": {
+        "adapters": {
+          "browser": "kovo-browser-benchmark/v1",
+          "browserPrepare": "kovo-browser-benchmark-prepare/v1",
+          "build": "kovo-build-benchmark/v1",
+          "compare": "kovo-next-performance-comparison/v1",
+          "dev": "kovo-dev-loop-report/v1",
+          "server": "kovo-server-benchmark/v1",
+          "serverPrepare": "kovo-server-benchmark-prepare/v1"
+        },
+        "cells": [
+          "server"
+        ],
+        "corpus": {},
+        "fixture": {
+          "digest": "sha256:6f040bb40b88205ce1f31f2d92d30b43b63af03221621286911af0836dae15f4",
+          "identity": {
+            "authority": {
+              "shared/matched-fixture.json": {
+                "bytes": 1684,
+                "lines": 60,
+                "sha256": "sha256:d25225ead82bd307b6ceba10b8a2db5404ef8aa3af9acb6231b5e5719383a919"
+              },
+              "shared/catalog.json": {
+                "bytes": 5699,
+                "lines": 195,
+                "sha256": "sha256:481481eb0ec6e105d8a6ca5447f0de91b1f49be5666e79cc7db3e661578c68d1"
+              },
+              "shared/styles.css": {
+                "bytes": 4099,
+                "lines": 279,
+                "sha256": "sha256:5220da7b4cb35e65f9da9bb379c50924f421f833622ad891a8a0b0d04546a86f"
+              }
+            },
+            "css": {
+              "facts": {
+                "bodyBackground": "rgb(247, 247, 244)",
+                "bodyColor": "rgb(32, 35, 31)",
+                "cardDisplay": "grid",
+                "cardImageAspectRatio": "4 / 3",
+                "navPosition": "sticky"
+              },
+              "kovoPosture": "byte-identical-to-authoritative-shared-css",
+              "nextjsPosture": "exact-import-of-authoritative-shared-css"
+            },
+            "renderedContracts": {
+              "default": {
+                "digest": "sha256:9af671e2f1208013c658ba28e73c6ab349011a4a40ce52dfaadc1c788b5ac697",
+                "schema": "kovo-browser-fixture-rendered-evidence/v1"
+              },
+              "matched-l0": {
+                "digest": "sha256:8c1089b1144b8d5989c8986b62a0160e0759e26335abaaf670a623831d58e9d2",
+                "schema": "kovo-browser-fixture-rendered-evidence/v1"
+              },
+              "matched-l1": {
+                "digest": "sha256:5e1a722b750b4eff9c6c79f65524433d6abd6a5f9d19cacdcfa399c657fa7a69",
+                "schema": "kovo-browser-fixture-rendered-evidence/v1"
+              }
+            },
+            "schema": "kovo-browser-fixture-identity/v1",
+            "semanticCorpus": {
+              "catalogItems": 24,
+              "catalogSha256": "sha256:481481eb0ec6e105d8a6ca5447f0de91b1f49be5666e79cc7db3e661578c68d1",
+              "routeKinds": [
+                "listing",
+                "detail"
+              ],
+              "routes": [
+                {
+                  "basePath": "/matched/l0",
+                  "kovoPath": "/matched/l0",
+                  "lane": "matched-l0",
+                  "nextPage": "(matched-l0)/matched/l0/page.tsx",
+                  "route": "listing"
+                },
+                {
+                  "basePath": "/matched/l0",
+                  "kovoPath": "/matched/l0/product/:slug",
+                  "lane": "matched-l0",
+                  "nextPage": "(matched-l0)/matched/l0/product/[slug]/page.tsx",
+                  "route": "detail"
+                },
+                {
+                  "basePath": "/matched/l1",
+                  "kovoPath": "/matched/l1",
+                  "lane": "matched-l1",
+                  "nextPage": "(matched-l1)/matched/l1/page.tsx",
+                  "route": "listing"
+                },
+                {
+                  "basePath": "/matched/l1",
+                  "kovoPath": "/matched/l1/product/:slug",
+                  "lane": "matched-l1",
+                  "nextPage": "(matched-l1)/matched/l1/product/[slug]/page.tsx",
+                  "route": "detail"
+                },
+                {
+                  "basePath": "/matched/l0",
+                  "kovoPath": "/matched/runtime/dynamic",
+                  "lane": "matched-runtime",
+                  "nextPage": "(matched-runtime)/matched/runtime/dynamic/page.tsx",
+                  "route": "listing"
+                },
+                {
+                  "basePath": "/matched/l0",
+                  "kovoPath": "/matched/runtime/dynamic/product/:slug",
+                  "lane": "matched-runtime",
+                  "nextPage": "(matched-runtime)/matched/runtime/dynamic/product/[slug]/page.tsx",
+                  "route": "detail"
+                }
+              ],
+              "sharedCssSha256": "sha256:5220da7b4cb35e65f9da9bb379c50924f421f833622ad891a8a0b0d04546a86f"
+            },
+            "sourceProjection": {
+              "equalityPosture": "equal-route-and-rendered-contract;framework-native-module-and-authored-loc-recorded-not-normalized",
+              "kovo": {
+                "approximateLoc": 986,
+                "catalogPosture": "compiler-constrained-exact-local-literal",
+                "files": {
+                  "kovo/src/app.tsx": {
+                    "bytes": 27087,
+                    "lines": 867,
+                    "sha256": "sha256:06e437f3a574b4f8a036b312a3273f6552b3363276441b21db5d8a1f2c1e188d"
+                  },
+                  "kovo/src/matched-l1-shell.tsx": {
+                    "bytes": 3421,
+                    "lines": 119,
+                    "sha256": "sha256:601995ef137c5e5851c9bce13cfe576e50b6ef6a296b6b8fe4397532bf5f3ec8"
+                  }
+                },
+                "moduleCount": 2,
+                "routeCount": 6
+              },
+              "nextjs": {
+                "approximateLoc": 336,
+                "catalogPosture": "direct-authoritative-json-import",
+                "files": {
+                  "nextjs/app/_matched/content.tsx": {
+                    "bytes": 2042,
+                    "lines": 67,
+                    "sha256": "sha256:fed481d8de3624fe9da726557032c482965d977e932e7ee7a062df8fd9823aa9"
+                  },
+                  "nextjs/app/_matched/l0-shell.tsx": {
+                    "bytes": 1630,
+                    "lines": 58,
+                    "sha256": "sha256:e8a990b6ff121b9d5eaf13e651bbedcee2b5f06fac5b7a527fce4408036c7d25"
+                  },
+                  "nextjs/app/_matched/l1-shell.tsx": {
+                    "bytes": 2877,
+                    "lines": 90,
+                    "sha256": "sha256:62b23f932c870f9f3ec5eabb5851e443261431b135babb66aed54334ce788ef8"
+                  },
+                  "nextjs/app/(matched-l0)/matched/l0/page.tsx": {
+                    "bytes": 323,
+                    "lines": 13,
+                    "sha256": "sha256:08c6c8c9877c7524f3b40be4461a956889fdfd58708898827d98b59832e8dea5"
+                  },
+                  "nextjs/app/(matched-l0)/matched/l0/product/[slug]/page.tsx": {
+                    "bytes": 716,
+                    "lines": 26,
+                    "sha256": "sha256:bb6aa4d71f3afe6052e298a6c9704087166c6c9f1181c20b2a58ba2c4ca7e935"
+                  },
+                  "nextjs/app/(matched-l1)/matched/l1/page.tsx": {
+                    "bytes": 323,
+                    "lines": 13,
+                    "sha256": "sha256:7a320e35c46d0f97f71e42b252ca5c3bdf780a9c5ff010d2cab678e82dc4dfaa"
+                  },
+                  "nextjs/app/(matched-l1)/matched/l1/product/[slug]/page.tsx": {
+                    "bytes": 716,
+                    "lines": 26,
+                    "sha256": "sha256:8434d295d3d7e9c10478df9e6ad75bbd29f53460d663d5f02863dca4035c2109"
+                  },
+                  "nextjs/app/(matched-runtime)/matched/runtime/dynamic/page.tsx": {
+                    "bytes": 603,
+                    "lines": 18,
+                    "sha256": "sha256:417688c498a93398dbb4933ef3d5ecaae57944a28c0ec989faa3d40d29fbee6f"
+                  },
+                  "nextjs/app/(matched-runtime)/matched/runtime/dynamic/product/[slug]/page.tsx": {
+                    "bytes": 699,
+                    "lines": 25,
+                    "sha256": "sha256:27048fab0628d7205a2102adca4e4d4b20786f7a2b66ecc192a64e23062ab42d"
+                  }
+                },
+                "moduleCount": 9,
+                "routeCount": 6
+              }
+            }
+          },
+          "schema": "kovo-browser-fixture-identity/v1"
+        },
+        "lanes": [
+          "matched-runtime"
+        ],
+        "policies": {
+          "bfcacheIterations": 10,
+          "browserSamples": 30,
+          "buildSamples": 30,
+          "buildModes": [
+            "clean",
+            "unchanged",
+            "edit"
+          ],
+          "corpusSize": 24,
+          "devEditSamples": 30,
+          "devEditSessionSamples": 0,
+          "devOccurrenceSchedule": [],
+          "devPortAllocationPosture": "unique-exact-port-outside-host-ephemeral/v2",
+          "devPortBase": 20000,
+          "devPortStride": 128,
+          "devReadySamples": 15,
+          "devWarmups": 3,
+          "lighthouseRuns": 5,
+          "quietHost": {
+            "ceilingPerCpu": 1,
+            "maxTotalWaitMs": 30000,
+            "pollMs": 1000,
+            "posture": "pre-benchmark-admission-then-post-benchmark-settle"
+          },
+          "skipLighthouse": false,
+          "server": {
+            "concurrencies": [
+              1,
+              8,
+              32
+            ],
+            "durationMs": 15000,
+            "encodings": [
+              "identity",
+              "br"
+            ],
+            "hostSettleMaxMs": 30000,
+            "hostSettlePollMs": 1000,
+            "modes": [
+              "HIT",
+              "304",
+              "dynamic"
+            ],
+            "routes": [
+              "listing",
+              "detail"
+            ],
+            "samples": 7,
+            "warmupMs": 5000
+          },
+          "warmups": 3
+        },
+        "serverSemantic": {
+          "contracts": {
+            "listing": {
+              "schema": "kovo-matched-server-semantic-contract/v1",
+              "sha256": "sha256:20a798a92d3a85b8a54e4c11e3d5ae7a103f871064e643715dc238c93d203ba4"
+            },
+            "detail": {
+              "schema": "kovo-matched-server-semantic-contract/v1",
+              "sha256": "sha256:a897a6e32a592ee825f970512f95d3a18e443aab6156bf7022fbae0e5d719fa7"
+            }
+          },
+          "source": {
+            "files": [
+              {
+                "bytes": 5699,
+                "path": "benchmarks/shared/catalog.json",
+                "sha256": "sha256:481481eb0ec6e105d8a6ca5447f0de91b1f49be5666e79cc7db3e661578c68d1"
+              },
+              {
+                "bytes": 1684,
+                "path": "benchmarks/shared/matched-fixture.json",
+                "sha256": "sha256:d25225ead82bd307b6ceba10b8a2db5404ef8aa3af9acb6231b5e5719383a919"
+              },
+              {
+                "bytes": 28131,
+                "path": "benchmarks/shared/server-semantic-contract.mjs",
+                "sha256": "sha256:9d81deda8b33474aea35b38c921abb45dcdc3ede1049e6918affad753be9cdb4"
+              }
+            ],
+            "schema": "kovo-matched-server-semantic-source/v1",
+            "sha256": "sha256:db5a223de6d4b3316e73a6e541a4337dbb5157416a0d706c53525f9f121cd26f"
+          }
+        }
+      },
+      "schema": "kovo-performance-workload-identity/v1"
+    }
+  },
+  "targetAssessment": {
+    "checks": [
+      {
+        "id": "matched-runtime/server/dynamic-listing-identity-c1/requestsPerSecond.median-vs-next",
+        "kind": "competitive-target",
+        "limit": 0.8,
+        "observed": 0.7619223533656324,
+        "operator": ">=",
+        "publicationImpact": "follow-on",
+        "status": "fail"
+      },
+      {
+        "id": "matched-runtime/server/dynamic-listing-identity-c8/requestsPerSecond.median-vs-next",
+        "kind": "competitive-target",
+        "limit": 0.8,
+        "observed": 0.7291444546846865,
+        "operator": ">=",
+        "publicationImpact": "follow-on",
+        "status": "fail"
+      },
+      {
+        "id": "matched-runtime/server/dynamic-listing-identity-c32/requestsPerSecond.median-vs-next",
+        "kind": "competitive-target",
+        "limit": 0.8,
+        "observed": 0.7234214090727025,
+        "operator": ">=",
+        "publicationImpact": "follow-on",
+        "status": "fail"
+      },
+      {
+        "id": "matched-runtime/server/dynamic-detail-identity-c1/requestsPerSecond.median-vs-next",
+        "kind": "competitive-target",
+        "limit": 0.8,
+        "observed": 0.8105151146142829,
+        "operator": ">=",
+        "publicationImpact": "follow-on",
+        "status": "pass"
+      },
+      {
+        "id": "matched-runtime/server/dynamic-detail-identity-c8/requestsPerSecond.median-vs-next",
+        "kind": "competitive-target",
+        "limit": 0.8,
+        "observed": 0.7722615468691786,
+        "operator": ">=",
+        "publicationImpact": "follow-on",
+        "status": "fail"
+      },
+      {
+        "id": "matched-runtime/server/dynamic-detail-identity-c32/requestsPerSecond.median-vs-next",
+        "kind": "competitive-target",
+        "limit": 0.8,
+        "observed": 0.7827917398293052,
+        "operator": ">=",
+        "publicationImpact": "follow-on",
+        "status": "fail"
+      },
+      {
+        "id": "matched-runtime/server/hit-listing-identity-c1/requestsPerSecond.median-vs-next",
+        "kind": "competitive-target",
+        "limit": 0.9,
+        "observed": 0.9310684229408852,
+        "operator": ">=",
+        "publicationImpact": "follow-on",
+        "status": "pass"
+      },
+      {
+        "id": "matched-runtime/server/hit-listing-identity-c8/requestsPerSecond.median-vs-next",
+        "kind": "competitive-target",
+        "limit": 0.9,
+        "observed": 0.7630442192606826,
+        "operator": ">=",
+        "publicationImpact": "follow-on",
+        "status": "fail"
+      },
+      {
+        "id": "matched-runtime/server/hit-listing-identity-c32/requestsPerSecond.median-vs-next",
+        "kind": "competitive-target",
+        "limit": 0.9,
+        "observed": 0.7333780778680392,
+        "operator": ">=",
+        "publicationImpact": "follow-on",
+        "status": "fail"
+      },
+      {
+        "id": "matched-runtime/server/hit-detail-identity-c1/requestsPerSecond.median-vs-next",
+        "kind": "competitive-target",
+        "limit": 0.9,
+        "observed": 0.8057359879495487,
+        "operator": ">=",
+        "publicationImpact": "follow-on",
+        "status": "fail"
+      },
+      {
+        "id": "matched-runtime/server/hit-detail-identity-c8/requestsPerSecond.median-vs-next",
+        "kind": "competitive-target",
+        "limit": 0.9,
+        "observed": 0.7008250716112613,
+        "operator": ">=",
+        "publicationImpact": "follow-on",
+        "status": "fail"
+      },
+      {
+        "id": "matched-runtime/server/hit-detail-identity-c32/requestsPerSecond.median-vs-next",
+        "kind": "competitive-target",
+        "limit": 0.9,
+        "observed": 0.6845215237253284,
+        "operator": ">=",
+        "publicationImpact": "follow-on",
+        "status": "fail"
+      }
+    ],
+    "failures": [
+      "matched-runtime/server/dynamic-listing-identity-c1/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/dynamic-listing-identity-c8/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/dynamic-listing-identity-c32/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/dynamic-detail-identity-c8/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/dynamic-detail-identity-c32/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/hit-listing-identity-c8/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/hit-listing-identity-c32/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/hit-detail-identity-c1/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/hit-detail-identity-c8/requestsPerSecond.median-vs-next",
+      "matched-runtime/server/hit-detail-identity-c32/requestsPerSecond.median-vs-next"
+    ],
+    "status": "fail"
+  },
+  "digest": "sha256:688471330fb11482a94114a0eb5b1f75db2d76800eaec92e6c45fd34e3792345"
+}

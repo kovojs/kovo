@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@kovojs/server",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2024",
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

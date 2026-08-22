@@ -11,6 +11,8 @@ import {
 } from './check-postgres-rls-emission-door.mjs';
 
 describe('Postgres RLS emission-door census', () => {
+  // CI run 32259150601 completed the standalone census in about 19s, then this duplicate census
+  // exceeded Vitest's 30s default under contention. The enclosing gate still enforces 180s total.
   it('accepts the exact production census at the checked-out revision', () => {
     const result = checkPostgresRlsEmissionDoor();
     expect(result.findings).toEqual([]);
@@ -21,7 +23,7 @@ describe('Postgres RLS emission-door census', () => {
       runtimeCallCount: 5,
       siteCount: 5,
     });
-  });
+  }, 60_000);
 
   it('rejects a sixth raw CREATE POLICY emitter in any production package', () => {
     const files = cleanFixture();

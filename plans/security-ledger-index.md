@@ -18,12 +18,9 @@ ledger active; registration does. `pnpm run check:security-ledger-index` enforce
 
 ## Transient ledgers
 
-| Ledger             | State                       | Archive deadline | Archive destination        |
-| ------------------ | --------------------------- | ---------------- | -------------------------- |
-| `plans/bugz-33.md` | Closed; publication pending | 2026-07-25       | `plans/history/bugz-33.md` |
-| `plans/bugz-34.md` | Closed; publication pending | 2026-07-25       | `plans/history/bugz-34.md` |
-| `plans/bugz-35.md` | Closed; publication pending | 2026-08-18       | `plans/history/bugz-35.md` |
-| `plans/bugz-36.md` | Open                        | 2026-08-18       | `plans/history/bugz-36.md` |
+There are currently no transient security ledgers. The completed `bugz-33` through `bugz-36`
+ledgers were archived under `plans/history/` on 2026-08-18 after their closing commits were
+verified on `origin/main` and the published tip's required CI and Pages runs completed successfully.
 
 There may be zero, one, or many transient ledgers. Do not infer a required count or discover them
 from `bugz-*` / `papercuts-*` filenames.
@@ -51,4 +48,4 @@ Search all Markdown below every `history.dedupRoots` entry before filing a findi
 includes archived files and old ledgers whose checkboxes are stale; activity comes only from the
 explicit registry. The compact series summaries cover foundational security plans, the
 fundamental-fixes sequence, adversarial security dogfood rounds, and numbered bug ledgers through
-`bugz-32`. Read the source ledger when an exact prior root cause or refutation matters.
+`bugz-36`. Read the source ledger when an exact prior root cause or refutation matters.

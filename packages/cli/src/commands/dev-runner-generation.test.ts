@@ -26,6 +26,7 @@ function deferred<T>(): Deferred<T> {
 
 function runnerFixture(observer?: KovoDevRunnerGenerationObserver) {
   const closed: string[] = [];
+  const generationRunners: FakeRunner[] = [];
   const origins: string[] = [];
   let failValidation = false;
   let validationFailure = 'assembly failed';
@@ -44,6 +45,7 @@ function runnerFixture(observer?: KovoDevRunnerGenerationObserver) {
   }
 
   class FakeRunner {
+    readonly options = { transport: {} as { timeout?: number } };
     readonly snapshot: string;
 
     constructor(environment: FakeEnvironment) {
@@ -80,7 +82,9 @@ function runnerFixture(observer?: KovoDevRunnerGenerationObserver) {
 
   const viteModule = {
     createServerModuleRunner(environment: FakeEnvironment): FakeRunner {
-      return new FakeRunner(environment);
+      const runner = new FakeRunner(environment);
+      generationRunners.push(runner);
+      return runner;
     },
   };
   const bootstrapEnvironment = new FakeEnvironment();
@@ -122,6 +126,7 @@ function runnerFixture(observer?: KovoDevRunnerGenerationObserver) {
     },
     FakeEnvironment,
     FakeRunner,
+    generationRunners,
     liveEnvironment,
     liveServer,
     origins,
@@ -156,6 +161,25 @@ async function startBroker(
 }
 
 describe('Kovo dev runner generations (SPEC §6.2.1 / §6.6 rule 6)', () => {
+  it('pins a long invoke deadline on every broker-created Vite transport', async () => {
+    const fixture = runnerFixture();
+    await startBroker(fixture.broker, fixture.configure);
+    fixture.setSource('second');
+    await fixture.broker.stage({});
+
+    expect(fixture.generationRunners).toHaveLength(2);
+    for (const runner of fixture.generationRunners) {
+      expect(Object.getOwnPropertyDescriptor(runner.options.transport, 'timeout')).toEqual({
+        configurable: false,
+        enumerable: true,
+        value: 600_000,
+        writable: false,
+      });
+    }
+
+    await fixture.broker.close();
+  });
+
   it('validates a fresh candidate before atomically swapping the active generation', async () => {
     const fixture = runnerFixture();
     await startBroker(fixture.broker, fixture.configure);

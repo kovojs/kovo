@@ -1,0 +1,755 @@
+{
+  "generatedAt": "2026-08-21T21:45:53.443Z",
+  "identity": {
+    "host": "sha256:f1182961bbda39a54ca990b7611b5005d9891c8c154e95e9e3ca846e73816ce2",
+    "locks": {
+      "pnpm-lock.yaml": "sha256:b44051d7c24ac90744743140c794ccee83991dd07d2e15d2e893fcc3d2b6d0a4",
+      "benchmarks/nextjs/pnpm-lock.yaml": "sha256:a9e68be4a032b6e2cc40a5f5392f942d14eae0277b6fc93408446b61d565086b",
+      "benchmarks/harness/pnpm-lock.yaml": "sha256:bfbf3b2e8725c5ef8a844f62c0907a154a1d5f68af4ff6ec26a91658d1227663"
+    },
+    "source": "01b2c759468f41a3fc4739225eb13c8f5aa11406",
+    "workload": "sha256:7131a6859d9513678ae656c371272286fe64af01223229b5aad3cf7828dff1d7"
+  },
+  "metrics": {
+    "corpus-n24/build/clean/artifactBytes": {
+      "kovo": {
+        "mad": 0,
+        "median": 14087325,
+        "p95": 14087325,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 14087325,
+          "p95": 14087325,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 1,
+        "median": 54706948,
+        "p95": 54706993,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 2,
+          "median": 54706950,
+          "p95": 54706995,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 1,
+        "median": -40619623,
+        "p95": -40619622,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/clean/durationMs": {
+      "kovo": {
+        "mad": 406.9857939999929,
+        "median": 76459.835327,
+        "p95": 77486.233774,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 598.5381380000035,
+          "median": 77830.52434,
+          "p95": 79143.179631,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 31.96756800000003,
+        "median": 6465.252835,
+        "p95": 6756.132581,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 97.4604160000008,
+          "median": 6602.291194,
+          "p95": 6910.411097,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 363.5565830000123,
+        "median": 70026.55006,
+        "p95": 70766.20884699999,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/clean/exitCode": {
+      "kovo": {
+        "mad": 0,
+        "median": 0,
+        "p95": 0,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 0,
+          "p95": 0,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 0,
+        "median": 0,
+        "p95": 0,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 0,
+          "p95": 0,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 0,
+        "median": 0,
+        "p95": 0,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/clean/loadAverage": {
+      "kovo": {
+        "mad": 0.06000000000000005,
+        "median": 2.06,
+        "p95": 2.15,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0.04999999999999982,
+          "median": 2.89,
+          "p95": 3.22,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 0.19999999999999973,
+        "median": 2.85,
+        "p95": 3.4,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0.31000000000000005,
+          "median": 3.27,
+          "p95": 3.69,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 0.27,
+        "median": -0.8300000000000001,
+        "p95": -0.1200000000000001,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/clean/outputCensus.totalBytes": {
+      "kovo": {
+        "mad": 0,
+        "median": 14087325,
+        "p95": 14087325,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 14087325,
+          "p95": 14087325,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 1,
+        "median": 54706948,
+        "p95": 54706993,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 2,
+          "median": 54706950,
+          "p95": 54706995,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 1,
+        "median": -40619623,
+        "p95": -40619622,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/clean/peakRssBytes": {
+      "kovo": {
+        "mad": 5038080,
+        "median": 1950793728,
+        "p95": 1957900288,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 1257472,
+          "median": 1960263680,
+          "p95": 1968001024,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 2105344,
+        "median": 900919296,
+        "p95": 903729152,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 1576960,
+          "median": 914530304,
+          "p95": 916107264,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 2514944,
+        "median": 1042632704,
+        "p95": 1057488896,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/edit/artifactBytes": {
+      "kovo": {
+        "mad": 0,
+        "median": 14087598,
+        "p95": 14087598,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 14087598,
+          "p95": 14087598,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 1,
+        "median": 54706994,
+        "p95": 54706995,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 1,
+          "median": 54706997,
+          "p95": 54706998,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 0,
+        "median": -40619396,
+        "p95": -40619396,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/edit/durationMs": {
+      "kovo": {
+        "mad": 297.71518600000127,
+        "median": 77110.623829,
+        "p95": 77933.78795,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 227.1956719999871,
+          "median": 78640.083238,
+          "p95": 78867.27891,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 48.44855699999971,
+        "median": 6586.218377,
+        "p95": 6668.945556,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 56.09232599999996,
+          "median": 6698.912218,
+          "p95": 6892.884885,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 301.5849940000044,
+        "median": 70441.475451,
+        "p95": 71428.352451,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/edit/exitCode": {
+      "kovo": {
+        "mad": 0,
+        "median": 0,
+        "p95": 0,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 0,
+          "p95": 0,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 0,
+        "median": 0,
+        "p95": 0,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 0,
+          "p95": 0,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 0,
+        "median": 0,
+        "p95": 0,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/edit/loadAverage": {
+      "kovo": {
+        "mad": 0.06999999999999984,
+        "median": 2.03,
+        "p95": 2.35,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0.11000000000000032,
+          "median": 2.62,
+          "p95": 2.91,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 0.07999999999999963,
+        "median": 2.68,
+        "p95": 3.02,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0.22999999999999998,
+          "median": 3.2,
+          "p95": 3.53,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 0.31000000000000005,
+        "median": -0.3599999999999999,
+        "p95": 0.020000000000000018,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/edit/outputCensus.totalBytes": {
+      "kovo": {
+        "mad": 0,
+        "median": 14087598,
+        "p95": 14087598,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 14087598,
+          "p95": 14087598,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 1,
+        "median": 54706994,
+        "p95": 54706995,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 1,
+          "median": 54706997,
+          "p95": 54706998,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 0,
+        "median": -40619396,
+        "p95": -40619396,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/edit/peakRssBytes": {
+      "kovo": {
+        "mad": 1105920,
+        "median": 1951952896,
+        "p95": 1958182912,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 5210112,
+          "median": 1966653440,
+          "p95": 1977966592,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 389120,
+        "median": 909066240,
+        "p95": 911302656,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 425984,
+          "median": 917000192,
+          "p95": 922300416,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 2969600,
+        "median": 1043222528,
+        "p95": 1046192128,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/unchanged/artifactBytes": {
+      "kovo": {
+        "mad": 0,
+        "median": 14087325,
+        "p95": 14087325,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 14087325,
+          "p95": 14087325,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 0,
+        "median": 54706995,
+        "p95": 54706995,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 54706997,
+          "p95": 54706997,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 0,
+        "median": -40619670,
+        "p95": -40619669,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/unchanged/durationMs": {
+      "kovo": {
+        "mad": 614.5394709999964,
+        "median": 76757.142244,
+        "p95": 77371.681715,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 853.1271059999999,
+          "median": 77921.551927,
+          "p95": 78774.679033,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 17.938583999999537,
+        "median": 6620.656591,
+        "p95": 6766.349779,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 75.67911499999991,
+          "median": 6684.075903,
+          "p95": 7015.83972,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 706.556436999992,
+        "median": 70124.873148,
+        "p95": 70831.42958499999,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/unchanged/exitCode": {
+      "kovo": {
+        "mad": 0,
+        "median": 0,
+        "p95": 0,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 0,
+          "p95": 0,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 0,
+        "median": 0,
+        "p95": 0,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 0,
+          "p95": 0,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 0,
+        "median": 0,
+        "p95": 0,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/unchanged/loadAverage": {
+      "kovo": {
+        "mad": 0.020000000000000018,
+        "median": 2.15,
+        "p95": 2.2,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0.06000000000000005,
+          "median": 2.83,
+          "p95": 2.89,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 0.1200000000000001,
+        "median": 2.76,
+        "p95": 3.3,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0.10000000000000009,
+          "median": 3.22,
+          "p95": 3.82,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 0.18000000000000016,
+        "median": -0.48,
+        "p95": 0.010000000000000231,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/unchanged/outputCensus.totalBytes": {
+      "kovo": {
+        "mad": 0,
+        "median": 14087325,
+        "p95": 14087325,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 14087325,
+          "p95": 14087325,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 0,
+        "median": 54706995,
+        "p95": 54706995,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 0,
+          "median": 54706997,
+          "p95": 54706997,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 0,
+        "median": -40619670,
+        "p95": -40619669,
+        "runs": 5
+      }
+    },
+    "corpus-n24/build/unchanged/peakRssBytes": {
+      "kovo": {
+        "mad": 983040,
+        "median": 1948835840,
+        "p95": 1950334976,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 6803456,
+          "median": 1964646400,
+          "p95": 1974943744,
+          "runs": 5
+        }
+      },
+      "nextjs": {
+        "mad": 1130496,
+        "median": 909561856,
+        "p95": 911872000,
+        "runs": 5,
+        "sampleP95": {
+          "mad": 720896,
+          "median": 915345408,
+          "p95": 919891968,
+          "runs": 5
+        }
+      },
+      "pairedDifference": {
+        "mad": 2482176,
+        "median": 1039814656,
+        "p95": 1043828736,
+        "runs": 5
+      }
+    }
+  },
+  "policy": {
+    "maxLoadPerCpu": 1,
+    "minRuns": 5,
+    "minSamples": 5,
+    "requireProvider": "github-actions"
+  },
+  "reports": [
+    {
+      "contentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+      "execution": "sha256:f607c16dbb4d139cf56b73dc9e22d9340f7216b6dd2ab1de4aba39b4a4810d6a",
+      "location": "https://github.com/kovojs/kovo/actions/runs/32446817670/artifacts/9435488973",
+      "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446817670"
+    },
+    {
+      "contentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+      "execution": "sha256:92f28deef99267f27ef5ef23fed53965dddf799fd7e21ddcc21d218c60b34a93",
+      "location": "https://github.com/kovojs/kovo/actions/runs/32446907225/artifacts/9436796034",
+      "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446907225"
+    },
+    {
+      "contentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+      "execution": "sha256:1b139b9d6d4df36e2783d88615d0d7489c0dfcc5a07a8da9c0c97bf0e037a111",
+      "location": "https://github.com/kovojs/kovo/actions/runs/32446958451/artifacts/9438585540",
+      "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446958451"
+    },
+    {
+      "contentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+      "execution": "sha256:d39e36e1dd644e83e0e4c57d306770686bcb5f7c3c7d3dcff55768436645fd14",
+      "location": "https://github.com/kovojs/kovo/actions/runs/32447025443/artifacts/9440278044",
+      "runUrl": "https://github.com/kovojs/kovo/actions/runs/32447025443"
+    },
+    {
+      "contentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+      "execution": "sha256:d2e5908bb6d443aaa95588e760a27762f008af38bbee4cb7f133e2f3020298a3",
+      "location": "https://github.com/kovojs/kovo/actions/runs/32447045761/artifacts/9440716920",
+      "runUrl": "https://github.com/kovojs/kovo/actions/runs/32447045761"
+    }
+  ],
+  "schema": "kovo-performance-baseline/v1",
+  "subject": {
+    "host": {
+      "arch": "x64",
+      "browsers": [],
+      "cpu": {
+        "count": 4,
+        "model": "AMD EPYC 7763 64-Core Processor"
+      },
+      "memoryCapacityClassBytes": 17179869184,
+      "node": "v24.18.0",
+      "platform": "linux",
+      "release": "6.17.0-1022-azure",
+      "runnerImage": "github-actions/ubuntu-24.04 ImageOS=ubuntu24 ImageVersionDigest=sha256:daee8837c48a1f6d9e42a0303242b2433b2761aceff583672f517f05fda8e796",
+      "digest": "sha256:f1182961bbda39a54ca990b7611b5005d9891c8c154e95e9e3ca846e73816ce2",
+      "schema": "kovo-performance-host/v2",
+      "totalMemoryBytes": 16766406656
+    },
+    "locks": {
+      "pnpm-lock.yaml": "sha256:b44051d7c24ac90744743140c794ccee83991dd07d2e15d2e893fcc3d2b6d0a4",
+      "benchmarks/nextjs/pnpm-lock.yaml": "sha256:a9e68be4a032b6e2cc40a5f5392f942d14eae0277b6fc93408446b61d565086b",
+      "benchmarks/harness/pnpm-lock.yaml": "sha256:bfbf3b2e8725c5ef8a844f62c0907a154a1d5f68af4ff6ec26a91658d1227663"
+    },
+    "sourceCommit": "01b2c759468f41a3fc4739225eb13c8f5aa11406",
+    "workloadIdentity": {
+      "complete": true,
+      "digest": "sha256:7131a6859d9513678ae656c371272286fe64af01223229b5aad3cf7828dff1d7",
+      "identity": {
+        "adapters": {
+          "browser": "kovo-browser-benchmark/v1",
+          "browserPrepare": "kovo-browser-benchmark-prepare/v1",
+          "build": "kovo-build-benchmark/v1",
+          "compare": "kovo-next-performance-comparison/v1",
+          "dev": "kovo-dev-loop-report/v1",
+          "server": "kovo-server-benchmark/v1",
+          "serverPrepare": "kovo-server-benchmark-prepare/v1"
+        },
+        "cells": [
+          "build"
+        ],
+        "corpus": {
+          "kovo": {
+            "manifestDigest": "sha256:50dde0bafa140b07fcfa7a65fc927a1cb0d10e3722696166eea0f29d5d7ffc1b",
+            "shapeDigest": "sha256:698809eae1c9e21680f079f7380398227c4c5b72bf0de5bf658edb9c3cb38c65",
+            "sourceDigest": "sha256:b4bf33728cb2fd2c665ddbfc14098ec34ffaaf5480e7c9dbbe3143ca245d4ed4"
+          },
+          "nextjs": {
+            "manifestDigest": "sha256:1c79ff77ba27f66fde54786699ce87d54ee6b6b5a61ba8fbe6f8e008fc2733f1",
+            "shapeDigest": "sha256:698809eae1c9e21680f079f7380398227c4c5b72bf0de5bf658edb9c3cb38c65",
+            "sourceDigest": "sha256:9835f8812668cf14310db50c4cdb50bc75dc9deffe4b8fd29a052c32b2c50950"
+          }
+        },
+        "fixture": null,
+        "lanes": [
+          "corpus-n24"
+        ],
+        "productArtifactPolicy": {
+          "concreteIdentity": "report-bound",
+          "corpusIsolation": "external-root-without-ancestor-node-modules",
+          "kovo": "required",
+          "nextjs": "forbidden",
+          "preparationTiming": "before-quiet-host-admission-and-outside-samples",
+          "schema": "kovo-packed-product-workload-policy/v1"
+        },
+        "policies": {
+          "bfcacheIterations": 10,
+          "browserSamples": 10,
+          "buildSamples": 10,
+          "buildModes": [
+            "clean",
+            "unchanged",
+            "edit"
+          ],
+          "corpusSize": 24,
+          "devEditSamples": 30,
+          "devEditSessionSamples": 0,
+          "devOccurrenceSchedule": [],
+          "devPortAllocationPosture": "unique-exact-port-outside-host-ephemeral/v2",
+          "devPortBase": 20000,
+          "devPortStride": 128,
+          "devReadySamples": 15,
+          "devWarmups": 3,
+          "lighthouseRuns": 5,
+          "quietHost": {
+            "ceilingPerCpu": 1,
+            "maxTotalWaitMs": 30000,
+            "pollMs": 1000,
+            "posture": "pre-benchmark-admission-then-post-benchmark-settle"
+          },
+          "skipLighthouse": false,
+          "server": {
+            "concurrencies": [
+              1,
+              8,
+              32
+            ],
+            "durationMs": 15000,
+            "encodings": [
+              "identity",
+              "br"
+            ],
+            "hostSettleMaxMs": 30000,
+            "hostSettlePollMs": 1000,
+            "modes": [
+              "HIT",
+              "304",
+              "dynamic"
+            ],
+            "routes": [
+              "listing",
+              "detail"
+            ],
+            "samples": 7,
+            "warmupMs": 5000
+          },
+          "warmups": 3
+        },
+        "serverSemantic": null
+      },
+      "schema": "kovo-performance-workload-identity/v1"
+    }
+  },
+  "verdict": {
+    "reasons": [],
+    "status": "ratified"
+  }
+}

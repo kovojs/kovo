@@ -1,0 +1,1822 @@
+{
+  "baseline": {
+    "digest": "sha256:12e943bb18c527fd0437e4adb1b9cc8866aaf1c0281fe4c978526526c29c7cfd",
+    "reports": [
+      {
+        "contentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+        "execution": "sha256:f607c16dbb4d139cf56b73dc9e22d9340f7216b6dd2ab1de4aba39b4a4810d6a",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32446817670/artifacts/9435488973",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446817670"
+      },
+      {
+        "contentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+        "execution": "sha256:92f28deef99267f27ef5ef23fed53965dddf799fd7e21ddcc21d218c60b34a93",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32446907225/artifacts/9436796034",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446907225"
+      },
+      {
+        "contentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+        "execution": "sha256:1b139b9d6d4df36e2783d88615d0d7489c0dfcc5a07a8da9c0c97bf0e037a111",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32446958451/artifacts/9438585540",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446958451"
+      },
+      {
+        "contentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+        "execution": "sha256:d39e36e1dd644e83e0e4c57d306770686bcb5f7c3c7d3dcff55768436645fd14",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32447025443/artifacts/9440278044",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32447025443"
+      },
+      {
+        "contentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+        "execution": "sha256:d2e5908bb6d443aaa95588e760a27762f008af38bbee4cb7f133e2f3020298a3",
+        "location": "https://github.com/kovojs/kovo/actions/runs/32447045761/artifacts/9440716920",
+        "runUrl": "https://github.com/kovojs/kovo/actions/runs/32447045761"
+      }
+    ],
+    "sourceCommit": "01b2c759468f41a3fc4739225eb13c8f5aa11406"
+  },
+  "generatedFrom": "2026-08-21T21:45:53.443Z",
+  "metrics": {
+    "corpus-n24/build/clean/durationMs": {
+      "baseline": {
+        "median": 76459.835327,
+        "nextMedian": 6465.252835,
+        "nextP95": 6602.291194,
+        "pairedMedian": 70026.55006,
+        "p95": 77830.52434,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 80282.82709335,
+      "p95Maximum": 81722.05055700001
+    },
+    "corpus-n24/build/clean/peakRssBytes": {
+      "baseline": {
+        "median": 1950793728,
+        "nextMedian": 900919296,
+        "nextP95": 914530304,
+        "pairedMedian": 1042632704,
+        "p95": 1960263680,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 2048333414.4,
+      "p95Maximum": 2058276864
+    },
+    "corpus-n24/build/clean/artifactBytes": {
+      "baseline": {
+        "median": 14087325,
+        "nextMedian": 54706948,
+        "nextP95": 54706950,
+        "pairedMedian": -40619623,
+        "p95": 14087325,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 14791691.25,
+      "p95Maximum": 14791691.25
+    },
+    "corpus-n24/build/unchanged/durationMs": {
+      "baseline": {
+        "median": 76757.142244,
+        "nextMedian": 6620.656591,
+        "nextP95": 6684.075903,
+        "pairedMedian": 70124.873148,
+        "p95": 77921.551927,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 80594.9993562,
+      "p95Maximum": 81817.62952335
+    },
+    "corpus-n24/build/unchanged/peakRssBytes": {
+      "baseline": {
+        "median": 1948835840,
+        "nextMedian": 909561856,
+        "nextP95": 915345408,
+        "pairedMedian": 1039814656,
+        "p95": 1964646400,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 2046277632,
+      "p95Maximum": 2062878720
+    },
+    "corpus-n24/build/unchanged/artifactBytes": {
+      "baseline": {
+        "median": 14087325,
+        "nextMedian": 54706995,
+        "nextP95": 54706997,
+        "pairedMedian": -40619670,
+        "p95": 14087325,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 14791691.25,
+      "p95Maximum": 14791691.25
+    },
+    "corpus-n24/build/edit/durationMs": {
+      "baseline": {
+        "median": 77110.623829,
+        "nextMedian": 6586.218377,
+        "nextP95": 6698.912218,
+        "pairedMedian": 70441.475451,
+        "p95": 78640.083238,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 80966.15502045001,
+      "p95Maximum": 82572.0873999
+    },
+    "corpus-n24/build/edit/peakRssBytes": {
+      "baseline": {
+        "median": 1951952896,
+        "nextMedian": 909066240,
+        "nextP95": 917000192,
+        "pairedMedian": 1043222528,
+        "p95": 1966653440,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 2049550540.8000002,
+      "p95Maximum": 2064986112
+    },
+    "corpus-n24/build/edit/artifactBytes": {
+      "baseline": {
+        "median": 14087598,
+        "nextMedian": 54706994,
+        "nextP95": 54706997,
+        "pairedMedian": -40619396,
+        "p95": 14087598,
+        "runs": 5
+      },
+      "direction": "lower-is-better",
+      "kind": "ratified-regression-ceiling",
+      "medianMaximum": 14791977.9,
+      "p95Maximum": 14791977.9
+    }
+  },
+  "persistenceEvidence": {
+    "corpusSize": 24,
+    "modes": {
+      "unchanged": {
+        "artifactBytes": {
+          "kovoMedian": 14087325,
+          "kovoP95": 14087325
+        },
+        "milestone": {
+          "peakRssMedianVsNextRatio": 2.1426094631655266,
+          "status": "fail",
+          "wallMedianVsNextRatio": 11.593584592250604
+        },
+        "residualUpper": {
+          "medianRatio": 0.05432737386712302,
+          "samples": [
+            {
+              "cliStartupTailMs": 86.98927700000058,
+              "eligibleDurationMs": 4125.774578,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 0,
+              "upperDurationMs": 4212.763855,
+              "upperWallRatio": 0.054414535966114445,
+              "wallDurationMs": 77419.825056
+            },
+            {
+              "cliStartupTailMs": 88.51793699998234,
+              "eligibleDurationMs": 4105.730355000001,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 1,
+              "upperDurationMs": 4194.248291999983,
+              "upperWallRatio": 0.05382654975775279,
+              "wallDurationMs": 77921.551927
+            },
+            {
+              "cliStartupTailMs": 92.22786499999347,
+              "eligibleDurationMs": 4160.0649589999975,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 2,
+              "upperDurationMs": 4252.292823999991,
+              "upperWallRatio": 0.054741524866099706,
+              "wallDurationMs": 77679.473387
+            },
+            {
+              "cliStartupTailMs": 87.95354699999734,
+              "eligibleDurationMs": 4118.202975000001,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 3,
+              "upperDurationMs": 4206.156521999998,
+              "upperWallRatio": 0.054573265337424584,
+              "wallDurationMs": 77073.57249
+            },
+            {
+              "cliStartupTailMs": 85.21814799999993,
+              "eligibleDurationMs": 4076.496981000002,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 4,
+              "upperDurationMs": 4161.715129000002,
+              "upperWallRatio": 0.05418848005642437,
+              "wallDurationMs": 76800.735593
+            },
+            {
+              "cliStartupTailMs": 86.48338199999125,
+              "eligibleDurationMs": 4128.522555000001,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 0,
+              "upperDurationMs": 4215.005936999993,
+              "upperWallRatio": 0.05491353395624202,
+              "wallDurationMs": 76757.142244
+            },
+            {
+              "cliStartupTailMs": 89.51833800000895,
+              "eligibleDurationMs": 4110.301971000001,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 1,
+              "upperDurationMs": 4199.82030900001,
+              "upperWallRatio": 0.05499500794991435,
+              "wallDurationMs": 76367.300698
+            },
+            {
+              "cliStartupTailMs": 83.47953700000653,
+              "eligibleDurationMs": 4010.309373000002,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 2,
+              "upperDurationMs": 4093.7889100000084,
+              "upperWallRatio": 0.05368258860115498,
+              "wallDurationMs": 76259.156212
+            },
+            {
+              "cliStartupTailMs": 86.54391600000963,
+              "eligibleDurationMs": 4111.5025879999985,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 3,
+              "upperDurationMs": 4198.046504000008,
+              "upperWallRatio": 0.055043236441785506,
+              "wallDurationMs": 76268.162546
+            },
+            {
+              "cliStartupTailMs": 87.19358999999531,
+              "eligibleDurationMs": 4024.8443139999977,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 4,
+              "upperDurationMs": 4112.037903999993,
+              "upperWallRatio": 0.05459506664958156,
+              "wallDurationMs": 75318.854914
+            },
+            {
+              "cliStartupTailMs": 83.1703439999983,
+              "eligibleDurationMs": 4102.327576999998,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 0,
+              "upperDurationMs": 4185.4979209999965,
+              "upperWallRatio": 0.05506409216772642,
+              "wallDurationMs": 76011.38521
+            },
+            {
+              "cliStartupTailMs": 90.15447600001062,
+              "eligibleDurationMs": 4098.366868000001,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 1,
+              "upperDurationMs": 4188.521344000012,
+              "upperWallRatio": 0.055220062002911116,
+              "wallDurationMs": 75851.442249
+            },
+            {
+              "cliStartupTailMs": 91.59894099997473,
+              "eligibleDurationMs": 4104.0796489999975,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 2,
+              "upperDurationMs": 4195.678589999972,
+              "upperWallRatio": 0.05524652592152466,
+              "wallDurationMs": 75944.659325
+            },
+            {
+              "cliStartupTailMs": 84.80758599999535,
+              "eligibleDurationMs": 4071.304815000001,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 3,
+              "upperDurationMs": 4156.112400999997,
+              "upperWallRatio": 0.05442463162543034,
+              "wallDurationMs": 76364.548126
+            },
+            {
+              "cliStartupTailMs": 84.05532999998832,
+              "eligibleDurationMs": 4070.7925939999986,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 4,
+              "upperDurationMs": 4154.847923999987,
+              "upperWallRatio": 0.053922364258784106,
+              "wallDurationMs": 77052.406383
+            },
+            {
+              "cliStartupTailMs": 82.8968549999845,
+              "eligibleDurationMs": 4092.2782100000004,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 0,
+              "upperDurationMs": 4175.175064999985,
+              "upperWallRatio": 0.054503356511781495,
+              "wallDurationMs": 76603.99895
+            },
+            {
+              "cliStartupTailMs": 84.99094899998454,
+              "eligibleDurationMs": 4037.780781999999,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 1,
+              "upperDurationMs": 4122.771730999983,
+              "upperWallRatio": 0.054125408234730485,
+              "wallDurationMs": 76170.727676
+            },
+            {
+              "cliStartupTailMs": 85.2979789999954,
+              "eligibleDurationMs": 4018.5001379999994,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 2,
+              "upperDurationMs": 4103.798116999995,
+              "upperWallRatio": 0.05401927131793732,
+              "wallDurationMs": 75969.14984
+            },
+            {
+              "cliStartupTailMs": 87.05825199998799,
+              "eligibleDurationMs": 4013.507820000001,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 3,
+              "upperDurationMs": 4100.566071999989,
+              "upperWallRatio": 0.0539957227504095,
+              "wallDurationMs": 75942.424013
+            },
+            {
+              "cliStartupTailMs": 84.07958099998359,
+              "eligibleDurationMs": 4032.4755950000012,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 4,
+              "upperDurationMs": 4116.555175999985,
+              "upperWallRatio": 0.05412072927629203,
+              "wallDurationMs": 76062.448364
+            },
+            {
+              "cliStartupTailMs": 81.90212600001541,
+              "eligibleDurationMs": 4015.72178,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 0,
+              "upperDurationMs": 4097.623906000015,
+              "upperWallRatio": 0.054291148319727124,
+              "wallDurationMs": 75474.990543
+            },
+            {
+              "cliStartupTailMs": 83.63907699999982,
+              "eligibleDurationMs": 4021.6189280000003,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 1,
+              "upperDurationMs": 4105.258005,
+              "upperWallRatio": 0.05431911228338257,
+              "wallDurationMs": 75576.677019
+            },
+            {
+              "cliStartupTailMs": 82.09204999999201,
+              "eligibleDurationMs": 4082.745159000001,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 2,
+              "upperDurationMs": 4164.837208999993,
+              "upperWallRatio": 0.05493071579948747,
+              "wallDurationMs": 75819.824089
+            },
+            {
+              "cliStartupTailMs": 82.34144200000446,
+              "eligibleDurationMs": 4014.599856000003,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 3,
+              "upperDurationMs": 4096.941298000007,
+              "upperWallRatio": 0.05439072394943822,
+              "wallDurationMs": 75324.264884
+            },
+            {
+              "cliStartupTailMs": 82.56917899999826,
+              "eligibleDurationMs": 4004.2943780000005,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 4,
+              "upperDurationMs": 4086.8635569999988,
+              "upperWallRatio": 0.05426495739336077,
+              "wallDurationMs": 75313.125695
+            },
+            {
+              "cliStartupTailMs": 83.25392300001113,
+              "eligibleDurationMs": 4036.8028129999993,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 0,
+              "upperDurationMs": 4120.0567360000105,
+              "upperWallRatio": 0.054585878210818166,
+              "wallDurationMs": 75478.436384
+            },
+            {
+              "cliStartupTailMs": 84.94110300000466,
+              "eligibleDurationMs": 4056.597017000001,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 1,
+              "upperDurationMs": 4141.538120000006,
+              "upperWallRatio": 0.05465038483531663,
+              "wallDurationMs": 75782.41457
+            },
+            {
+              "cliStartupTailMs": 90.7981540000037,
+              "eligibleDurationMs": 4070.992695000001,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 2,
+              "upperDurationMs": 4161.7908490000045,
+              "upperWallRatio": 0.055102647546965526,
+              "wallDurationMs": 75527.965248
+            },
+            {
+              "cliStartupTailMs": 83.04217399998743,
+              "eligibleDurationMs": 3982.6148109999967,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 3,
+              "upperDurationMs": 4065.656984999984,
+              "upperWallRatio": 0.05382588415437313,
+              "wallDurationMs": 75533.491904
+            },
+            {
+              "cliStartupTailMs": 83.81564099999378,
+              "eligibleDurationMs": 4020.8042530000016,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 4,
+              "upperDurationMs": 4104.619893999996,
+              "upperWallRatio": 0.0543299801373435,
+              "wallDurationMs": 75549.814
+            },
+            {
+              "cliStartupTailMs": 88.14617400000861,
+              "eligibleDurationMs": 4082.4589950000004,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 0,
+              "upperDurationMs": 4170.6051690000095,
+              "upperWallRatio": 0.05444891784110566,
+              "wallDurationMs": 76596.658563
+            },
+            {
+              "cliStartupTailMs": 89.00211500001024,
+              "eligibleDurationMs": 4065.273767999999,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 1,
+              "upperDurationMs": 4154.275883000009,
+              "upperWallRatio": 0.053424627519950946,
+              "wallDurationMs": 77759.566624
+            },
+            {
+              "cliStartupTailMs": 85.9173870000086,
+              "eligibleDurationMs": 4112.473652999997,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 2,
+              "upperDurationMs": 4198.391040000006,
+              "upperWallRatio": 0.054358603835704906,
+              "wallDurationMs": 77235.078603
+            },
+            {
+              "cliStartupTailMs": 84.55677200001082,
+              "eligibleDurationMs": 4091.1234789999985,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 3,
+              "upperDurationMs": 4175.680251000009,
+              "upperWallRatio": 0.054070087865901936,
+              "wallDurationMs": 77227.177092
+            },
+            {
+              "cliStartupTailMs": 97.54370899999049,
+              "eligibleDurationMs": 4099.991504000001,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 4,
+              "upperDurationMs": 4197.535212999992,
+              "upperWallRatio": 0.05442084842289881,
+              "wallDurationMs": 77131.013842
+            },
+            {
+              "cliStartupTailMs": 85.24139999999898,
+              "eligibleDurationMs": 4089.7853559999985,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 0,
+              "upperDurationMs": 4175.0267559999975,
+              "upperWallRatio": 0.05397046876125475,
+              "wallDurationMs": 77357.615226
+            },
+            {
+              "cliStartupTailMs": 85.13668399998278,
+              "eligibleDurationMs": 4153.867674000001,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 1,
+              "upperDurationMs": 4239.004357999984,
+              "upperWallRatio": 0.054209494180512734,
+              "wallDurationMs": 78196.714839
+            },
+            {
+              "cliStartupTailMs": 89.70773599999666,
+              "eligibleDurationMs": 4135.9174669999975,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 2,
+              "upperDurationMs": 4225.625202999994,
+              "upperWallRatio": 0.053641922187075,
+              "wallDurationMs": 78774.679033
+            },
+            {
+              "cliStartupTailMs": 88.21559699998761,
+              "eligibleDurationMs": 4187.750747999999,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 3,
+              "upperDurationMs": 4275.966344999986,
+              "upperWallRatio": 0.05432476759690254,
+              "wallDurationMs": 78711.176028
+            },
+            {
+              "cliStartupTailMs": 86.43668300000718,
+              "eligibleDurationMs": 4152.400483999998,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 4,
+              "upperDurationMs": 4238.837167000005,
+              "upperWallRatio": 0.054087236331700886,
+              "wallDurationMs": 78370.378198
+            },
+            {
+              "cliStartupTailMs": 83.65152000001399,
+              "eligibleDurationMs": 4101.432000999999,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 0,
+              "upperDurationMs": 4185.083521000013,
+              "upperWallRatio": 0.05411204013657025,
+              "wallDurationMs": 77341.078075
+            },
+            {
+              "cliStartupTailMs": 86.70686999999452,
+              "eligibleDurationMs": 4182.610067999998,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 1,
+              "upperDurationMs": 4269.316937999993,
+              "upperWallRatio": 0.054358443912626134,
+              "wallDurationMs": 78540.08744
+            },
+            {
+              "cliStartupTailMs": 86.7517569999909,
+              "eligibleDurationMs": 4081.4221730000004,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 2,
+              "upperDurationMs": 4168.173929999992,
+              "upperWallRatio": 0.05383014316657603,
+              "wallDurationMs": 77431.968128
+            },
+            {
+              "cliStartupTailMs": 93.27680200002214,
+              "eligibleDurationMs": 4146.704071000001,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 3,
+              "upperDurationMs": 4239.980873000023,
+              "upperWallRatio": 0.05455159715552152,
+              "wallDurationMs": 77724.229795
+            },
+            {
+              "cliStartupTailMs": 91.87017999998352,
+              "eligibleDurationMs": 4135.233037000002,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 4,
+              "upperDurationMs": 4227.103216999985,
+              "upperWallRatio": 0.05455091655193406,
+              "wallDurationMs": 77489.132799
+            },
+            {
+              "cliStartupTailMs": 89.32920900001773,
+              "eligibleDurationMs": 4157.642511000001,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 0,
+              "upperDurationMs": 4246.971720000019,
+              "upperWallRatio": 0.055095289121396246,
+              "wallDurationMs": 77084.117131
+            },
+            {
+              "cliStartupTailMs": 85.39571199999773,
+              "eligibleDurationMs": 4082.732653000002,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 1,
+              "upperDurationMs": 4168.128365,
+              "upperWallRatio": 0.05409901630499228,
+              "wallDurationMs": 77046.287524
+            },
+            {
+              "cliStartupTailMs": 86.38302999999723,
+              "eligibleDurationMs": 4083.3742500000008,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 2,
+              "upperDurationMs": 4169.757279999998,
+              "upperWallRatio": 0.05389255070555885,
+              "wallDurationMs": 77371.681715
+            },
+            {
+              "cliStartupTailMs": 86.30379599999287,
+              "eligibleDurationMs": 4114.5582129999975,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 3,
+              "upperDurationMs": 4200.86200899999,
+              "upperWallRatio": 0.05412550486394708,
+              "wallDurationMs": 77613.354731
+            },
+            {
+              "cliStartupTailMs": 88.28170099999988,
+              "eligibleDurationMs": 4062.155286000002,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 4,
+              "upperDurationMs": 4150.436987000002,
+              "upperWallRatio": 0.05370830097648345,
+              "wallDurationMs": 77277.383785
+            }
+          ]
+        },
+        "wall": {
+          "kovoMedianMs": 76757.142244,
+          "kovoP95Ms": 77921.551927,
+          "nextMedianMs": 6620.656591
+        }
+      },
+      "edit": {
+        "artifactBytes": {
+          "kovoMedian": 14087598,
+          "kovoP95": 14087598
+        },
+        "milestone": {
+          "peakRssMedianVsNextRatio": 2.1472064521942866,
+          "status": "fail",
+          "wallMedianVsNextRatio": 11.707875356559864
+        },
+        "residualUpper": {
+          "medianRatio": 0.056952192863170895,
+          "samples": [
+            {
+              "cliStartupTailMs": 89.09288700000616,
+              "eligibleDurationMs": 4356.421914999997,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 0,
+              "upperDurationMs": 4445.514802000003,
+              "upperWallRatio": 0.05765113263586542,
+              "wallDurationMs": 77110.623829
+            },
+            {
+              "cliStartupTailMs": 83.52709199998935,
+              "eligibleDurationMs": 4303.633830000003,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 1,
+              "upperDurationMs": 4387.160921999993,
+              "upperWallRatio": 0.05725096462147509,
+              "wallDurationMs": 76630.340659
+            },
+            {
+              "cliStartupTailMs": 84.66149900000892,
+              "eligibleDurationMs": 4266.089204000002,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 2,
+              "upperDurationMs": 4350.750703000011,
+              "upperWallRatio": 0.056788021935485634,
+              "wallDurationMs": 76613.880088
+            },
+            {
+              "cliStartupTailMs": 84.10149499999534,
+              "eligibleDurationMs": 4280.781004,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 3,
+              "upperDurationMs": 4364.882498999996,
+              "upperWallRatio": 0.05683998394114321,
+              "wallDurationMs": 76792.46538
+            },
+            {
+              "cliStartupTailMs": 83.80144699999073,
+              "eligibleDurationMs": 4246.458824000003,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 4,
+              "upperDurationMs": 4330.260270999994,
+              "upperWallRatio": 0.05656319672689951,
+              "wallDurationMs": 76556.144659
+            },
+            {
+              "cliStartupTailMs": 84.17350699999952,
+              "eligibleDurationMs": 4377.481645999998,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 0,
+              "upperDurationMs": 4461.655152999998,
+              "upperWallRatio": 0.05729001499870876,
+              "wallDurationMs": 77878.407836
+            },
+            {
+              "cliStartupTailMs": 95.94562799998675,
+              "eligibleDurationMs": 4393.498312999998,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 1,
+              "upperDurationMs": 4489.443940999985,
+              "upperWallRatio": 0.057310479856921524,
+              "wallDurationMs": 78335.479867
+            },
+            {
+              "cliStartupTailMs": 86.94572899999912,
+              "eligibleDurationMs": 4401.142690000001,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 2,
+              "upperDurationMs": 4488.088419,
+              "upperWallRatio": 0.05707125722917968,
+              "wallDurationMs": 78640.083238
+            },
+            {
+              "cliStartupTailMs": 90.13730000000214,
+              "eligibleDurationMs": 4383.385336999998,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 3,
+              "upperDurationMs": 4473.522637,
+              "upperWallRatio": 0.057137306034018294,
+              "wallDurationMs": 78294.251996
+            },
+            {
+              "cliStartupTailMs": 93.73974200000521,
+              "eligibleDurationMs": 4314.0338550000015,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+              "sample": 4,
+              "upperDurationMs": 4407.773597000007,
+              "upperWallRatio": 0.05643335297007367,
+              "wallDurationMs": 78105.825102
+            },
+            {
+              "cliStartupTailMs": 82.5316840000014,
+              "eligibleDurationMs": 4326.253870999999,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 0,
+              "upperDurationMs": 4408.785555,
+              "upperWallRatio": 0.058275575177929397,
+              "wallDurationMs": 75654.089068
+            },
+            {
+              "cliStartupTailMs": 85.96815499999502,
+              "eligibleDurationMs": 4218.111387000002,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 1,
+              "upperDurationMs": 4304.079541999997,
+              "upperWallRatio": 0.0562066556452124,
+              "wallDurationMs": 76575.976503
+            },
+            {
+              "cliStartupTailMs": 88.43645600001037,
+              "eligibleDurationMs": 4245.422053999997,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 2,
+              "upperDurationMs": 4333.858510000007,
+              "upperWallRatio": 0.056380978595619406,
+              "wallDurationMs": 76867.387157
+            },
+            {
+              "cliStartupTailMs": 83.03909800000838,
+              "eligibleDurationMs": 4295.908412999998,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 3,
+              "upperDurationMs": 4378.947511000007,
+              "upperWallRatio": 0.05640113677362533,
+              "wallDurationMs": 77639.348451
+            },
+            {
+              "cliStartupTailMs": 83.28932900000655,
+              "eligibleDurationMs": 4285.979474999998,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 4,
+              "upperDurationMs": 4369.268804000005,
+              "upperWallRatio": 0.056656033709355534,
+              "wallDurationMs": 77119.214282
+            },
+            {
+              "cliStartupTailMs": 99.56282300001476,
+              "eligibleDurationMs": 4387.79993,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 0,
+              "upperDurationMs": 4487.362753000015,
+              "upperWallRatio": 0.05819918591718269,
+              "wallDurationMs": 77103.5313
+            },
+            {
+              "cliStartupTailMs": 94.19183100000373,
+              "eligibleDurationMs": 4287.834411,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 1,
+              "upperDurationMs": 4382.026242000004,
+              "upperWallRatio": 0.0570704428477671,
+              "wallDurationMs": 76782.762203
+            },
+            {
+              "cliStartupTailMs": 85.64699000000837,
+              "eligibleDurationMs": 4268.738042999999,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 2,
+              "upperDurationMs": 4354.385033000008,
+              "upperWallRatio": 0.05668819355920621,
+              "wallDurationMs": 76812.908643
+            },
+            {
+              "cliStartupTailMs": 84.03420699998969,
+              "eligibleDurationMs": 4267.020292,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 3,
+              "upperDurationMs": 4351.05449899999,
+              "upperWallRatio": 0.0567319530199571,
+              "wallDurationMs": 76694.953503
+            },
+            {
+              "cliStartupTailMs": 84.03131000000576,
+              "eligibleDurationMs": 4247.667910000002,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+              "sample": 4,
+              "upperDurationMs": 4331.699220000008,
+              "upperWallRatio": 0.05616557975856154,
+              "wallDurationMs": 77123.733764
+            },
+            {
+              "cliStartupTailMs": 82.93604500000947,
+              "eligibleDurationMs": 4325.331567000002,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 0,
+              "upperDurationMs": 4408.2676120000115,
+              "upperWallRatio": 0.05802713978726746,
+              "wallDurationMs": 75969.065995
+            },
+            {
+              "cliStartupTailMs": 84.80718999999226,
+              "eligibleDurationMs": 4248.202492,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 1,
+              "upperDurationMs": 4333.009681999993,
+              "upperWallRatio": 0.057221492564276964,
+              "wallDurationMs": 75723.46487
+            },
+            {
+              "cliStartupTailMs": 84.85055600001942,
+              "eligibleDurationMs": 4251.926911,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 2,
+              "upperDurationMs": 4336.777467000019,
+              "upperWallRatio": 0.05702093904030206,
+              "wallDurationMs": 76055.875964
+            },
+            {
+              "cliStartupTailMs": 86.47864400001708,
+              "eligibleDurationMs": 4209.2004830000005,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 3,
+              "upperDurationMs": 4295.679127000018,
+              "upperWallRatio": 0.056519447674099825,
+              "wallDurationMs": 76003.558134
+            },
+            {
+              "cliStartupTailMs": 81.88916700000118,
+              "eligibleDurationMs": 4204.509064000001,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 4,
+              "upperDurationMs": 4286.398231000002,
+              "upperWallRatio": 0.056817870146812874,
+              "wallDurationMs": 75441.022691
+            },
+            {
+              "cliStartupTailMs": 83.9227789999859,
+              "eligibleDurationMs": 4367.561606000001,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 0,
+              "upperDurationMs": 4451.484384999987,
+              "upperWallRatio": 0.05868130955311691,
+              "wallDurationMs": 75858.640833
+            },
+            {
+              "cliStartupTailMs": 84.7721810000221,
+              "eligibleDurationMs": 4209.233478999999,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 1,
+              "upperDurationMs": 4294.005660000021,
+              "upperWallRatio": 0.05678451695658404,
+              "wallDurationMs": 75619.304172
+            },
+            {
+              "cliStartupTailMs": 90.43525100000261,
+              "eligibleDurationMs": 4216.7332940000015,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 2,
+              "upperDurationMs": 4307.168545000004,
+              "upperWallRatio": 0.056899987634148205,
+              "wallDurationMs": 75697.178929
+            },
+            {
+              "cliStartupTailMs": 83.13411100000667,
+              "eligibleDurationMs": 4227.6691809999975,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 3,
+              "upperDurationMs": 4310.803292000004,
+              "upperWallRatio": 0.056683510455581246,
+              "wallDurationMs": 76050.393798
+            },
+            {
+              "cliStartupTailMs": 82.83853000000818,
+              "eligibleDurationMs": 4258.669412000001,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+              "sample": 4,
+              "upperDurationMs": 4341.507942000009,
+              "upperWallRatio": 0.05745820403478329,
+              "wallDurationMs": 75559.409051
+            },
+            {
+              "cliStartupTailMs": 87.11605100000452,
+              "eligibleDurationMs": 4388.739922000002,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 0,
+              "upperDurationMs": 4475.855973000006,
+              "upperWallRatio": 0.05743152091967584,
+              "wallDurationMs": 77933.78795
+            },
+            {
+              "cliStartupTailMs": 87.60923899999761,
+              "eligibleDurationMs": 4356.184278999999,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 1,
+              "upperDurationMs": 4443.793517999997,
+              "upperWallRatio": 0.05715889132656371,
+              "wallDurationMs": 77744.571577
+            },
+            {
+              "cliStartupTailMs": 85.08481799998845,
+              "eligibleDurationMs": 4308.235708999999,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 2,
+              "upperDurationMs": 4393.320526999987,
+              "upperWallRatio": 0.05697009329809287,
+              "wallDurationMs": 77116.26
+            },
+            {
+              "cliStartupTailMs": 85.63866900000721,
+              "eligibleDurationMs": 4269.1106279999985,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 3,
+              "upperDurationMs": 4354.749297000006,
+              "upperWallRatio": 0.05654608317692899,
+              "wallDurationMs": 77012.395065
+            },
+            {
+              "cliStartupTailMs": 83.45861100000911,
+              "eligibleDurationMs": 4286.934821999999,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 4,
+              "upperDurationMs": 4370.393433000008,
+              "upperWallRatio": 0.05711804120872375,
+              "wallDurationMs": 76515.113973
+            },
+            {
+              "cliStartupTailMs": 94.77204999999958,
+              "eligibleDurationMs": 4422.738183,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 0,
+              "upperDurationMs": 4517.510233,
+              "upperWallRatio": 0.05774910504304416,
+              "wallDurationMs": 78226.497703
+            },
+            {
+              "cliStartupTailMs": 87.14645899999596,
+              "eligibleDurationMs": 4346.603574000002,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 1,
+              "upperDurationMs": 4433.7500329999975,
+              "upperWallRatio": 0.0564841963317776,
+              "wallDurationMs": 78495.407936
+            },
+            {
+              "cliStartupTailMs": 88.70712000002095,
+              "eligibleDurationMs": 4403.914747999999,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 2,
+              "upperDurationMs": 4492.62186800002,
+              "upperWallRatio": 0.05701757482583918,
+              "wallDurationMs": 78793.633046
+            },
+            {
+              "cliStartupTailMs": 88.29257200000575,
+              "eligibleDurationMs": 4344.152249000002,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 3,
+              "upperDurationMs": 4432.444821000007,
+              "upperWallRatio": 0.05640337054735399,
+              "wallDurationMs": 78584.75084
+            },
+            {
+              "cliStartupTailMs": 85.809608999989,
+              "eligibleDurationMs": 4336.583262000001,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+              "sample": 4,
+              "upperDurationMs": 4422.39287099999,
+              "upperWallRatio": 0.0562839501086059,
+              "wallDurationMs": 78572.894448
+            },
+            {
+              "cliStartupTailMs": 98.43632799998159,
+              "eligibleDurationMs": 4404.293146,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 0,
+              "upperDurationMs": 4502.729473999982,
+              "upperWallRatio": 0.05802249908419667,
+              "wallDurationMs": 77603.163343
+            },
+            {
+              "cliStartupTailMs": 83.968257000015,
+              "eligibleDurationMs": 4323.949901999998,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 1,
+              "upperDurationMs": 4407.918159000013,
+              "upperWallRatio": 0.05715980552326105,
+              "wallDurationMs": 77115.695525
+            },
+            {
+              "cliStartupTailMs": 85.46222099999432,
+              "eligibleDurationMs": 4353.757456000001,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 2,
+              "upperDurationMs": 4439.2196769999955,
+              "upperWallRatio": 0.05628721744116271,
+              "wallDurationMs": 78867.27891
+            },
+            {
+              "cliStartupTailMs": 91.41308200001367,
+              "eligibleDurationMs": 4329.554872000001,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 3,
+              "upperDurationMs": 4420.967954000014,
+              "upperWallRatio": 0.05694121922386006,
+              "wallDurationMs": 77640.907839
+            },
+            {
+              "cliStartupTailMs": 87.68511699998635,
+              "eligibleDurationMs": 4231.537059000002,
+              "occurrence": 0,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 4,
+              "upperDurationMs": 4319.222175999988,
+              "upperWallRatio": 0.056515097767516884,
+              "wallDurationMs": 76425.987862
+            },
+            {
+              "cliStartupTailMs": 86.74090399999113,
+              "eligibleDurationMs": 4503.895668000001,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 0,
+              "upperDurationMs": 4590.636571999992,
+              "upperWallRatio": 0.05865654810420807,
+              "wallDurationMs": 78262.98547
+            },
+            {
+              "cliStartupTailMs": 87.34336400000029,
+              "eligibleDurationMs": 4243.417129000003,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 1,
+              "upperDurationMs": 4330.760493000003,
+              "upperWallRatio": 0.05582811122192174,
+              "wallDurationMs": 77573.115017
+            },
+            {
+              "cliStartupTailMs": 85.0581860000093,
+              "eligibleDurationMs": 4260.495368,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 2,
+              "upperDurationMs": 4345.553554000009,
+              "upperWallRatio": 0.05666261795859897,
+              "wallDurationMs": 76691.718642
+            },
+            {
+              "cliStartupTailMs": 84.17693299999519,
+              "eligibleDurationMs": 4267.514233000002,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 3,
+              "upperDurationMs": 4351.691165999997,
+              "upperWallRatio": 0.05714631962190255,
+              "wallDurationMs": 76149.98122
+            },
+            {
+              "cliStartupTailMs": 81.52358300001652,
+              "eligibleDurationMs": 4301.901444999996,
+              "occurrence": 1,
+              "reportContentDigest": "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3",
+              "sample": 4,
+              "upperDurationMs": 4383.425028000012,
+              "upperWallRatio": 0.05696316650248174,
+              "wallDurationMs": 76951.919936
+            }
+          ]
+        },
+        "wall": {
+          "kovoMedianMs": 77110.623829,
+          "kovoP95Ms": 78640.083238,
+          "nextMedianMs": 6586.218377
+        }
+      }
+    },
+    "policy": {
+      "appSourceTrustEligible": false,
+      "diskCacheEligible": false,
+      "peakRssMedianVsNextMaximumRatio": 2,
+      "sessionEligiblePhases": [
+        "config-trust",
+        "typescript",
+        "stylesheet"
+      ],
+      "upperWallMinimumRatio": 0.1,
+      "wallMedianVsNextMaximumRatio": 6
+    },
+    "reports": [
+      "sha256:6f221b662906aa3776482503b94dfc4f9a9ef6f5ae68079fc9cbb669cfc5cc75",
+      "sha256:cccf4be7247bd605bdffcf90761f601592c227f5daf07d3b90d5bd273665c426",
+      "sha256:9ae0c218f6b01501ead38fdb0efa694d0bffba9f1d66e11f9aab330aedb9cfc9",
+      "sha256:fe853bc9138fb12611cc201ca8985fc57f50ef350a7783f3de38b4f887e4cb5e",
+      "sha256:ef63e0bdcb7e195853f2eba319d2279e3fb003b4b005b6c8490b4642e0f45ad3"
+    ],
+    "schema": "kovo-build-persistence-evidence/v1"
+  },
+  "policy": {
+    "maxLoadPerCpu": 1,
+    "maxRegressionPct": 5,
+    "targets": {
+      "wallMedianVsNextMaximumRatio": 6,
+      "peakRssMedianVsNextMaximumRatio": 2
+    }
+  },
+  "schema": "kovo-build-performance-budget/v1",
+  "subject": {
+    "corpusSize": 24,
+    "host": {
+      "arch": "x64",
+      "browsers": [],
+      "cpu": {
+        "count": 4,
+        "model": "AMD EPYC 7763 64-Core Processor"
+      },
+      "memoryCapacityClassBytes": 17179869184,
+      "node": "v24.18.0",
+      "platform": "linux",
+      "release": "6.17.0-1022-azure",
+      "runnerImage": "github-actions/ubuntu-24.04 ImageOS=ubuntu24 ImageVersionDigest=sha256:daee8837c48a1f6d9e42a0303242b2433b2761aceff583672f517f05fda8e796",
+      "digest": "sha256:f1182961bbda39a54ca990b7611b5005d9891c8c154e95e9e3ca846e73816ce2",
+      "schema": "kovo-performance-host/v2",
+      "totalMemoryBytes": 16766406656
+    },
+    "locks": {
+      "pnpm-lock.yaml": "sha256:b44051d7c24ac90744743140c794ccee83991dd07d2e15d2e893fcc3d2b6d0a4",
+      "benchmarks/nextjs/pnpm-lock.yaml": "sha256:a9e68be4a032b6e2cc40a5f5392f942d14eae0277b6fc93408446b61d565086b",
+      "benchmarks/harness/pnpm-lock.yaml": "sha256:bfbf3b2e8725c5ef8a844f62c0907a154a1d5f68af4ff6ec26a91658d1227663"
+    },
+    "productArtifact": {
+      "digest": "sha256:cca56d8e4d0384e98adbd01d0f53efbcb29a0cb4bb9ecf3ac4844fb55dc24ca4",
+      "identity": {
+        "artifacts": [
+          {
+            "files": 83,
+            "manifestSha256": "sha256:437aeebfc96968adbe54a23a9ad74087f2ed9a9246619c0e41a866914f8474be",
+            "name": "@kovojs/browser",
+            "packageContentSha256": "sha256:ac94bba7b4fa6f1a9cbcba33faf4e90258be71ee16719d3be9572f8209df46e8",
+            "tarballBytes": 1270347,
+            "tarballFile": "kovojs-browser-0.3.0.tgz",
+            "tarballSha256": "sha256:92c6b9d0833f0c20c62dc7d8b09463f6f4626f22a75e6cc4736d94886afee6a5",
+            "unpackedBytes": 5684247,
+            "version": "0.3.0"
+          },
+          {
+            "files": 67,
+            "manifestSha256": "sha256:4aea5572e6ab467799a5d23a45218e7a10bbaf384d664e6facfbdaf811112295",
+            "name": "@kovojs/cli",
+            "packageContentSha256": "sha256:fd20726174c3c0b9cd0af6e7ffe8733949e069a49f021290250b195be3978768",
+            "tarballBytes": 2672778,
+            "tarballFile": "kovojs-cli-0.3.0.tgz",
+            "tarballSha256": "sha256:82a1a5ec7a9636fc30d9b3c7baada13ba7b21ba877e73380b7beb15cd6843bec",
+            "unpackedBytes": 8867715,
+            "version": "0.3.0"
+          },
+          {
+            "files": 53,
+            "manifestSha256": "sha256:3ca7218646b0a68f227ad81c6ec61812a8a75b72f4667d6bb8243114006dd925",
+            "name": "@kovojs/compiler",
+            "packageContentSha256": "sha256:ceb43d828ca4e8da980d5006242219fe63ca10a3d9eaf46e0fac8b7aa8476b8d",
+            "tarballBytes": 2989976,
+            "tarballFile": "kovojs-compiler-0.3.0.tgz",
+            "tarballSha256": "sha256:f0af891fb4a88a7f039c400f2cf9f39770a46f1d65ee832686134b260b28628f",
+            "unpackedBytes": 16197071,
+            "version": "0.3.0"
+          },
+          {
+            "files": 204,
+            "manifestSha256": "sha256:a14e8f749b2f237297623ccfc5695723388a88b0b737df95c8f8654ff224ce2c",
+            "name": "@kovojs/core",
+            "packageContentSha256": "sha256:772b13a643351d66917fcb74722f8af7e02e9bda6fdbf410cf61f8158c8df53e",
+            "tarballBytes": 639242,
+            "tarballFile": "kovojs-core-0.3.0.tgz",
+            "tarballSha256": "sha256:de6601835fbd86a8e455caa476993fb2ed9b6716a9331a1cdc7feba6fde037cb",
+            "unpackedBytes": 3105214,
+            "version": "0.3.0"
+          },
+          {
+            "files": 28,
+            "manifestSha256": "sha256:b814e95edd045cb78331c86ae7fd5095d024be15473a240c52dcb154745f0608",
+            "name": "@kovojs/drizzle",
+            "packageContentSha256": "sha256:9cf5380f7de83ee22bb927a76c0d2c52a248beb60d163dc9a3831f8831a8322e",
+            "tarballBytes": 1176251,
+            "tarballFile": "kovojs-drizzle-0.3.0.tgz",
+            "tarballSha256": "sha256:fb872f2f510f4da45e58b6f64f5a0108e698a2ddb9ff4c53490f71228abdd648",
+            "unpackedBytes": 6581792,
+            "version": "0.3.0"
+          },
+          {
+            "files": 231,
+            "manifestSha256": "sha256:3def2243903bd38fa41c8928524c0d99df4a00c2071764f5c091cabd9c140d13",
+            "name": "@kovojs/headless-ui",
+            "packageContentSha256": "sha256:f3dfbcc3a031e27c314fe772c4fc983d47ad2df129e6c2052ac0bf82cb1d2c3d",
+            "tarballBytes": 280856,
+            "tarballFile": "kovojs-headless-ui-0.3.0.tgz",
+            "tarballSha256": "sha256:736581146a561c797e7eca43d97d057f3dfded6a9b0535f671d70478b372c729",
+            "unpackedBytes": 1985640,
+            "version": "0.3.0"
+          },
+          {
+            "files": 6957,
+            "manifestSha256": "sha256:65de5a370da26c97a4b1a312c1ab2dbbb461574fab8cdcfc2856939bb8dfa145",
+            "name": "@kovojs/icons",
+            "packageContentSha256": "sha256:820cca4d291e62b882b47709d2f3ecf298da6d2840a17398f2c647ccf1d5aab0",
+            "tarballBytes": 523762,
+            "tarballFile": "kovojs-icons-0.3.0.tgz",
+            "tarballSha256": "sha256:567f3e6336011b9f1f2501d283fbe30686188dc37d95c466f3e58ac26bc5a513",
+            "unpackedBytes": 5159010,
+            "version": "0.3.0"
+          },
+          {
+            "files": 888,
+            "manifestSha256": "sha256:913804ebb3c294791529012281910fb9a325fc623c30a5bfa6a3189f0ffc77e9",
+            "name": "@kovojs/server",
+            "packageContentSha256": "sha256:7d7a1c356c3fb1489a2c790eeb3e26a582f9aa3954406aee680251161162adb8",
+            "tarballBytes": 2525511,
+            "tarballFile": "kovojs-server-0.3.0.tgz",
+            "tarballSha256": "sha256:7c5edaf26aa40aa164a739f69d88d6098d893ab3627f3f2105ee0ce769c0d7af",
+            "unpackedBytes": 11902831,
+            "version": "0.3.0"
+          },
+          {
+            "files": 11,
+            "manifestSha256": "sha256:ae118055e883ae9a576ec04340e2b832a67c9318c3e0c92caab73756b0cede9b",
+            "name": "@kovojs/style",
+            "packageContentSha256": "sha256:50f4dfc49bf8eb4a0873ef2950019aede8cf4d6b3a82c45fe304510b125b2f6f",
+            "tarballBytes": 68218,
+            "tarballFile": "kovojs-style-0.3.0.tgz",
+            "tarballSha256": "sha256:73ee4daf0d66ef1ee0af5e7478887bb453c95549238932dd4a21ccd02354d133",
+            "unpackedBytes": 312783,
+            "version": "0.3.0"
+          },
+          {
+            "files": 233,
+            "manifestSha256": "sha256:86230a6849ad8208be3de820d9a0b780fbff0aa72234f50c5638464581e6859e",
+            "name": "@kovojs/ui",
+            "packageContentSha256": "sha256:3c44d910785b7df1b950e014a60a61a9d595bf0d908208f0a0051e98b87582d2",
+            "tarballBytes": 261770,
+            "tarballFile": "kovojs-ui-0.3.0.tgz",
+            "tarballSha256": "sha256:c83d6e16c03d748f62ceaee87fc0cbb844efec8f407f3465f17c332bbc7f18ec",
+            "unpackedBytes": 1867377,
+            "version": "0.3.0"
+          },
+          {
+            "files": 18,
+            "manifestSha256": "sha256:4322dd3fa53568398cc57703e590a984708a413c950fc5750612f7a1eb9076e8",
+            "name": "@kovojs/verify",
+            "packageContentSha256": "sha256:6b4297a8a79ba786cc767ab312b2bda0c0b8014e536f7efc397358ae18a1070a",
+            "tarballBytes": 232501,
+            "tarballFile": "kovojs-verify-0.3.0.tgz",
+            "tarballSha256": "sha256:2e13e81b979bb21f292da50f32b422b2b271f174d4ea2ef2f62a53ffd64cd36a",
+            "unpackedBytes": 1053693,
+            "version": "0.3.0"
+          }
+        ],
+        "build": {
+          "commands": [
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/core",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/core"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/browser",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/browser"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/style",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/style"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/verify",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/verify"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/compiler",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/compiler"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/drizzle",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/drizzle"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/server",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/server"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/icons",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/icons"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/headless-ui",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/headless-ui"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/ui",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/ui"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--filter",
+                "@kovojs/cli",
+                "run",
+                "build:dist"
+              ],
+              "package": "@kovojs/cli"
+            }
+          ],
+          "packages": [
+            "@kovojs/core",
+            "@kovojs/browser",
+            "@kovojs/style",
+            "@kovojs/verify",
+            "@kovojs/compiler",
+            "@kovojs/drizzle",
+            "@kovojs/server",
+            "@kovojs/icons",
+            "@kovojs/headless-ui",
+            "@kovojs/ui",
+            "@kovojs/cli"
+          ],
+          "rootFrozenInstall": {
+            "argv": [
+              "pnpm",
+              "install",
+              "--offline",
+              "--frozen-lockfile",
+              "--ignore-scripts"
+            ]
+          }
+        },
+        "consumer": {
+          "frozenInstall": {
+            "argv": [
+              "pnpm",
+              "install",
+              "--prod",
+              "--ignore-scripts",
+              "--ignore-workspace",
+              "--offline",
+              "--frozen-lockfile",
+              "--strict-peer-dependencies",
+              "--store-dir",
+              "<isolated-store>"
+            ],
+            "lockSha256": "sha256:569625613c0348d5ae18c038e4feb081a926acde9f3ad91b3c8e4d4416e09224"
+          },
+          "lockResolution": {
+            "argv": [
+              "pnpm",
+              "install",
+              "--prod",
+              "--ignore-scripts",
+              "--ignore-workspace",
+              "--no-frozen-lockfile",
+              "--strict-peer-dependencies",
+              "--store-dir",
+              "<isolated-store>"
+            ]
+          },
+          "manifestSha256": "sha256:17cbba8082bcaad448057c101df79fdcc96303a022308cc3e6aa6029a9081207",
+          "packageCensusMatched": 11,
+          "packageFilesMatched": 8773,
+          "packageManager": "pnpm@10.12.1",
+          "pnpmVersion": "10.12.1",
+          "root": "<isolated-consumer>"
+        },
+        "integrity": {
+          "artifactAuthenticated": true,
+          "consumerFrozen": true,
+          "firstInstallMatchesFrozen": true,
+          "installedBytesMatchTarballs": true,
+          "packedResolutionConfined": true,
+          "workspaceSourceLoaded": false
+        },
+        "pack": {
+          "commands": [
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/core"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/browser"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/style"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/verify"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/compiler"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/drizzle"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/server"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/icons"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/headless-ui"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/ui"
+            },
+            {
+              "argv": [
+                "pnpm",
+                "--config.ignore-scripts=true",
+                "pack",
+                "--pack-destination",
+                "<temporary-tarballs>"
+              ],
+              "package": "@kovojs/cli"
+            }
+          ]
+        },
+        "primaryCli": {
+          "installedBin": "node_modules/@kovojs/cli/dist/bin.mjs",
+          "installedBinSha256": "sha256:03d9f89412a8cab3b41a97b287c2b38a988ae7a73a3e25dd0fd9f6f2a083a22c",
+          "name": "@kovojs/cli",
+          "packageContentSha256": "sha256:fd20726174c3c0b9cd0af6e7ffe8733949e069a49f021290250b195be3978768",
+          "tarballSha256": "sha256:82a1a5ec7a9636fc30d9b3c7baada13ba7b21ba877e73380b7beb15cd6843bec",
+          "version": "0.3.0"
+        },
+        "resolutionProof": {
+          "confined": true,
+          "loadedFileCount": 1,
+          "loadedFiles": [
+            ".pnpm/@kovojs+cli@file+..+tarballs+kovojs-cli-0.3.0.tgz_@electric-sql+pglite@0.5.1_@kovojs+st_6440dd70593a3842ea9e8d3889936fa2/node_modules/@kovojs/cli/dist/bin.mjs"
+          ],
+          "normalizedTraceSha256": "sha256:9daa935535a628365ab5c27cf4ac5b9c3474bcfc63c89151f140efb5039d2035",
+          "schema": "kovo-packed-cli-resolution-proof/v1",
+          "workspaceSourceLoaded": false
+        },
+        "schema": "kovo-packed-product-identity/v1",
+        "source": {
+          "commit": "01b2c759468f41a3fc4739225eb13c8f5aa11406",
+          "locks": {
+            "pnpm-lock.yaml": "sha256:b44051d7c24ac90744743140c794ccee83991dd07d2e15d2e893fcc3d2b6d0a4",
+            "benchmarks/nextjs/pnpm-lock.yaml": "sha256:a9e68be4a032b6e2cc40a5f5392f942d14eae0277b6fc93408446b61d565086b",
+            "benchmarks/harness/pnpm-lock.yaml": "sha256:bfbf3b2e8725c5ef8a844f62c0907a154a1d5f68af4ff6ec26a91658d1227663"
+          }
+        },
+        "typescript": {
+          "bytes": 24346827,
+          "contentSha256": "sha256:2ac1785d46a36443572ac468d19fc4f8d57b3b09655b362d908ce97f55586c6b",
+          "files": 140,
+          "name": "typescript",
+          "version": "6.0.3"
+        }
+      },
+      "schema": "kovo-packed-product-identity/v1"
+    },
+    "workloadIdentity": {
+      "complete": true,
+      "digest": "sha256:7131a6859d9513678ae656c371272286fe64af01223229b5aad3cf7828dff1d7",
+      "identity": {
+        "adapters": {
+          "browser": "kovo-browser-benchmark/v1",
+          "browserPrepare": "kovo-browser-benchmark-prepare/v1",
+          "build": "kovo-build-benchmark/v1",
+          "compare": "kovo-next-performance-comparison/v1",
+          "dev": "kovo-dev-loop-report/v1",
+          "server": "kovo-server-benchmark/v1",
+          "serverPrepare": "kovo-server-benchmark-prepare/v1"
+        },
+        "cells": [
+          "build"
+        ],
+        "corpus": {
+          "kovo": {
+            "manifestDigest": "sha256:50dde0bafa140b07fcfa7a65fc927a1cb0d10e3722696166eea0f29d5d7ffc1b",
+            "shapeDigest": "sha256:698809eae1c9e21680f079f7380398227c4c5b72bf0de5bf658edb9c3cb38c65",
+            "sourceDigest": "sha256:b4bf33728cb2fd2c665ddbfc14098ec34ffaaf5480e7c9dbbe3143ca245d4ed4"
+          },
+          "nextjs": {
+            "manifestDigest": "sha256:1c79ff77ba27f66fde54786699ce87d54ee6b6b5a61ba8fbe6f8e008fc2733f1",
+            "shapeDigest": "sha256:698809eae1c9e21680f079f7380398227c4c5b72bf0de5bf658edb9c3cb38c65",
+            "sourceDigest": "sha256:9835f8812668cf14310db50c4cdb50bc75dc9deffe4b8fd29a052c32b2c50950"
+          }
+        },
+        "fixture": null,
+        "lanes": [
+          "corpus-n24"
+        ],
+        "productArtifactPolicy": {
+          "concreteIdentity": "report-bound",
+          "corpusIsolation": "external-root-without-ancestor-node-modules",
+          "kovo": "required",
+          "nextjs": "forbidden",
+          "preparationTiming": "before-quiet-host-admission-and-outside-samples",
+          "schema": "kovo-packed-product-workload-policy/v1"
+        },
+        "policies": {
+          "bfcacheIterations": 10,
+          "browserSamples": 10,
+          "buildSamples": 10,
+          "buildModes": [
+            "clean",
+            "unchanged",
+            "edit"
+          ],
+          "corpusSize": 24,
+          "devEditSamples": 30,
+          "devEditSessionSamples": 0,
+          "devOccurrenceSchedule": [],
+          "devPortAllocationPosture": "unique-exact-port-outside-host-ephemeral/v2",
+          "devPortBase": 20000,
+          "devPortStride": 128,
+          "devReadySamples": 15,
+          "devWarmups": 3,
+          "lighthouseRuns": 5,
+          "quietHost": {
+            "ceilingPerCpu": 1,
+            "maxTotalWaitMs": 30000,
+            "pollMs": 1000,
+            "posture": "pre-benchmark-admission-then-post-benchmark-settle"
+          },
+          "skipLighthouse": false,
+          "server": {
+            "concurrencies": [
+              1,
+              8,
+              32
+            ],
+            "durationMs": 15000,
+            "encodings": [
+              "identity",
+              "br"
+            ],
+            "hostSettleMaxMs": 30000,
+            "hostSettlePollMs": 1000,
+            "modes": [
+              "HIT",
+              "304",
+              "dynamic"
+            ],
+            "routes": [
+              "listing",
+              "detail"
+            ],
+            "samples": 7,
+            "warmupMs": 5000
+          },
+          "warmups": 3
+        },
+        "serverSemantic": null
+      },
+      "schema": "kovo-performance-workload-identity/v1"
+    }
+  },
+  "digest": "sha256:7fd857d24f5a6770bbc777e1472d3910a74738fc56b8778347be7b54576fce06"
+}

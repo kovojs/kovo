@@ -5,12 +5,7 @@ import {
   type ChildProcess,
 } from 'node:child_process';
 import { Buffer as builtinBuffer } from 'node:buffer';
-import {
-  createHmac as builtinCreateHmac,
-  hash as builtinHash,
-  randomBytes as builtinRandomBytes,
-  timingSafeEqual as builtinTimingSafeEqual,
-} from 'node:crypto';
+import { hash as builtinHash } from 'node:crypto';
 import {
   accessSync as builtinAccessSync,
   constants as builtinFsConstants,
@@ -125,10 +120,11 @@ import type {
   StaticExportCompileDiagnostic,
   StaticExportResult,
 } from '@kovojs/server/static-export';
-import type {
-  CompilerClientModuleBuildInstaller,
-  KovoApp,
-  KovoNeutralBuild,
+import {
+  stagedRootedFilesEntryName,
+  type CompilerClientModuleBuildInstaller,
+  type KovoApp,
+  type KovoNeutralBuild,
 } from '@kovojs/server/internal/build';
 import type {
   KovoBuildPreset,
@@ -158,6 +154,8 @@ import {
 
 import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import { requireKovoCommandResultProtocol } from '../command-schema.js';
+import { readBoundedRegularFile } from './bounded-regular-file.js';
+import { KovoSourceCheckSessionFactCache } from './check-session-reuse.js';
 import type {
   KovoDiagnosticFormat,
   KovoDiagnosticRecord,
@@ -213,6 +211,11 @@ import { runSoundSubsetCheck } from './sound-subset.js';
 import { kovoBuildOneShotDigest, type KovoBuildOneShotIdentity } from './build-one-shot-handoff.js';
 import { STATIC_TRUST_WORKER_TIMEOUT_MS } from './build-security-deadlines.js';
 import {
+  authenticateStaticTrustWorkerPayload,
+  mintStaticTrustWorkerAuthority,
+  verifyStaticTrustWorkerPayload,
+} from './build-crypto-authority.js';
+import {
   buildByteLength,
   buildSecurityArrayAppend,
   buildArrayIsArray,
@@ -245,10 +248,7 @@ import {
 const execFile = builtinExecFile;
 const spawn = builtinSpawn;
 const bufferFrom = builtinBuffer.from;
-const createHmac = builtinCreateHmac;
 const hash = builtinHash;
-const randomBytes = builtinRandomBytes;
-const timingSafeEqual = builtinTimingSafeEqual;
 const jsonParse = JSON.parse;
 const accessSync = builtinAccessSync;
 const fsWriteOk = builtinFsConstants.W_OK;
@@ -338,7 +338,13 @@ const KOVO_FRAMEWORK_SOURCE_MAX_FILES = 40_000;
 const KOVO_FRAMEWORK_SOURCE_MAX_DEPTH = 64;
 const KOVO_FRAMEWORK_SOURCE_MAX_FILE_BYTES = 16 * 1024 * 1024;
 const KOVO_FRAMEWORK_SOURCE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
+const KOVO_NEUTRAL_BUILD_SEAL_MAX_DEPTH = 64;
+const KOVO_NEUTRAL_BUILD_SEAL_MAX_FILES = 40_000;
+const KOVO_NEUTRAL_BUILD_SEAL_MAX_FILE_BYTES = 64 * 1024 * 1024;
+const KOVO_NEUTRAL_BUILD_SEAL_MAX_TOTAL_BYTES = 512 * 1024 * 1024;
 const KOVO_DEVEX_CHECK_PHASE_CENSUS_ENV = 'KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE';
+const KOVO_DEVEX_BUILD_PHASE_CENSUS_ENV = 'KOVO_DEVEX_BUILD_PHASE_CENSUS_SOURCE';
+const KOVO_DEVEX_BUILD_SOURCE_PHASE_CENSUS_SCHEMA = 'kovo-build-source-phase-census/v1';
 const KOVO_DEVEX_CHECK_PHASE_CENSUS_SCHEMA = 'kovo-check-phase-census/v1';
 // A check that refuses or throws still has to say where its time went: the slowest apps are
 // exactly the ones that fail, so dropping the census on the failure path removes the instrument
@@ -347,6 +353,12 @@ const KOVO_DEVEX_CHECK_PHASE_CENSUS_SCHEMA = 'kovo-check-phase-census/v1';
 // it has no check-graph digest and no source content hash, because on this path neither has been
 // derived and claiming either would be a proof Kovo did not perform (SPEC §1.1 honesty boundary).
 const KOVO_DEVEX_CHECK_PHASE_CENSUS_INCOMPLETE_SCHEMA = 'kovo-check-phase-census-incomplete/v1';
+const KOVO_SOURCE_CHECK_PRODUCER_FACT_SCHEMA = 'kovo-check-producer-fact/v1';
+const KOVO_SOURCE_CHECK_STYLESHEET_FACT_SCHEMA = 'kovo-check-stylesheet-fact/v1';
+const KOVO_SOURCE_CHECK_STATIC_TRUST_FACT_SCHEMA = 'kovo-check-static-trust-fact/v1';
+const KOVO_SOURCE_CHECK_STYLESHEET_PACKAGE_IDENTITY_SCHEMA =
+  'kovo-check-stylesheet-package-identity/v1';
+const KOVO_SOURCE_CHECK_STYLESHEET_IDENTITY_SPECIFIER = '@kovojs/ui/button';
 const KOVO_SOURCE_CHECK_PHASES = [
   'lifecycle-policy',
   'config-trust',
@@ -360,9 +372,40 @@ const KOVO_SOURCE_CHECK_PHASES = [
   'build-check-graph',
   'graph-diagnostics',
 ] as const;
+const KOVO_PENDING_SERVER_HANDLER_SOURCE =
+  "throw new Error('Kovo build server handler was not finalized.');\n";
+const KOVO_NEUTRAL_BUILD_SEAL_SCHEMA = 'kovo-neutral-build-seal/v1';
 
 export type KovoSourceCheckPhase = (typeof KOVO_SOURCE_CHECK_PHASES)[number];
-export type KovoSourceCheckPhaseStatus = 'executed' | 'not-applicable';
+export type KovoSourceCheckPhaseStatus = 'executed' | 'not-applicable' | 'reused-authenticated';
+
+/**
+ * @internal Session-confined, serialized producer-fact cache used only by foreground source
+ * checking. Implementations authenticate their own entries and never persist them to disk.
+ */
+export interface KovoSourceCheckProducerFactSession {
+  consumeProducerFact(
+    phase: 'app-source-trust' | 'config-trust' | 'stylesheet',
+    inputDigest: string,
+  ): string | undefined;
+  runTypeScriptPreflight(input: {
+    readonly appModulePath: string;
+    readonly invocationEnv: NodeJS.ProcessEnv;
+    readonly invocationRoot: string;
+  }): Promise<
+    | {
+        readonly executed: boolean;
+        readonly inputDigest: string | null;
+        readonly reusedAuthenticated: boolean;
+      }
+    | undefined
+  >;
+  storeProducerFact(
+    phase: 'app-source-trust' | 'config-trust' | 'stylesheet',
+    inputDigest: string,
+    payload: string,
+  ): void;
+}
 
 export interface KovoSourceCheckPhaseCensus {
   readonly phases: {
@@ -756,6 +799,7 @@ export interface KovoBuildOneShotAnalysis {
   readonly checkGraph: CoreGraph.KovoCheckInput;
   readonly clientEntry?: BuildCheckSourceFile;
   readonly dependencyCapabilities: AppDependencyCapabilityManifest;
+  readonly phaseCensus?: KovoSourceCheckPhaseCensus;
   readonly queryShapeFacts: readonly QueryShapeFact[];
   readonly runtimeRegistry: KovoBuildCheckArtifacts['runtimeRegistry'];
   readonly selectedPresetName: KovoBuildPresetName;
@@ -772,6 +816,7 @@ export interface KovoBuildOneShotClientPhase {
   readonly discoveredServerClientModules: readonly KovoAppShellCompiledClientModule[];
   readonly discoveredServerClientModuleRoles: readonly CompilerOwnedViteClientModuleRole[];
   readonly manualClientModules: readonly { readonly path: string; readonly source: string }[];
+  readonly neutralBuild: KovoNeutralBuild;
   readonly nonCompilerClientModules: readonly { readonly path: string; readonly source: string }[];
   readonly selectedPresetName: KovoBuildPresetName;
   readonly serverProjectMutationFacts: ProjectMutationRegistryFacts;
@@ -779,9 +824,20 @@ export interface KovoBuildOneShotClientPhase {
 }
 
 export interface KovoBuildOneShotServerPhase {
-  readonly clientModules: readonly KovoAppShellCompiledClientModule[];
-  readonly clientModuleRoles: readonly CompilerOwnedViteClientModuleRole[];
+  readonly neutralBuildSeal: KovoNeutralBuildSeal;
   readonly serverHandlerSource: string;
+}
+
+/** Data-only witness that the finalized neutral artifact still matches source proof. */
+export interface KovoNeutralBuildSeal {
+  readonly artifactProvenanceDigest: string;
+  readonly checkGraphDigest: string;
+  readonly graphArtifactDigest: string;
+  readonly handlerDigest: string;
+  readonly invocationIdentityDigest: string;
+  readonly neutralBuildDigest: string;
+  readonly neutralTreeDigest: string;
+  readonly schema: typeof KOVO_NEUTRAL_BUILD_SEAL_SCHEMA;
 }
 
 interface LoadedBuildAppModule {
@@ -911,15 +967,36 @@ export async function runSourceCheckCommand(
 export async function produceKovoSourceCheckOneShotAnalysis(
   options: KovoSourceCheckOptions,
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+  producerSession?: KovoSourceCheckProducerFactSession,
 ): Promise<KovoSourceCheckOneShotAnalysis | CliCommandResult> {
   // Hoisted so the catch can still report where the run spent its time. A check that throws is
   // exactly the run whose cost nobody can otherwise measure.
   let phaseCensus: KovoSourceCheckPhaseCensus | undefined;
   try {
+    if (
+      producerSession !== undefined &&
+      !(producerSession instanceof KovoSourceCheckSessionFactCache)
+    ) {
+      throw new TypeError('Kovo source-check producer session is not framework-owned.');
+    }
     options = configurationBoundary(() => snapshotKovoSourceCheckOptions(options));
     const invocationRoot = security.invocationCwd;
     const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
-    phaseCensus = sourceCheckPhaseCensus(security.invocationEnv);
+    const artifactProvenance = resolveKovoArtifactProvenance({
+      appModulePath: resolvedAppModulePath,
+    });
+    const producerIdentity = sourceCheckProducerCommonIdentity(
+      resolvedAppModulePath,
+      invocationRoot,
+      artifactProvenance,
+      options,
+      security,
+    );
+    phaseCensus = sourceCheckPhaseCensus(
+      security.invocationEnv,
+      KOVO_DEVEX_CHECK_PHASE_CENSUS_ENV,
+      invocationRoot,
+    );
     assertReadableKovoInputFile(resolvedAppModulePath, 'kovo check app module');
     const strictLifecyclePolicy = declaresKovoLifecyclePolicy(invocationRoot);
     if (strictLifecyclePolicy) {
@@ -940,14 +1017,21 @@ export async function produceKovoSourceCheckOneShotAnalysis(
     let approvedConfig: PreEvaluationBuildConfigTrust | undefined;
     if (configPath !== undefined) {
       const startedAt = startSourceCheckPhase(phaseCensus, 'config-trust');
-      approvedConfig = await runPreEvaluationBuildConfigTrustPreflightInWorker(
+      const configTrust = await runPreEvaluationBuildConfigTrustPreflightForSourceCheck(
         configPath,
         invocationRoot,
         security.paranoidStaticAdvisory,
-        'check',
         security.invocationEnv,
+        producerIdentity,
+        producerSession,
       );
-      recordSourceCheckPhase(phaseCensus, 'config-trust', 'executed', startedAt);
+      approvedConfig = configTrust.trust;
+      recordSourceCheckPhase(
+        phaseCensus,
+        'config-trust',
+        configTrust.reusedAuthenticated ? 'reused-authenticated' : 'executed',
+        startedAt,
+      );
     } else {
       recordSourceCheckPhase(phaseCensus, 'config-trust', 'not-applicable');
     }
@@ -957,16 +1041,29 @@ export async function produceKovoSourceCheckOneShotAnalysis(
     // TypeScript, formatting, and lint still inspect it. Retaining both heaps made valid
     // 44-component apps exceed 2 GiB even when the processes did not overlap.
     const typescriptStartedAt = startSourceCheckPhase(phaseCensus, 'typescript');
-    const typescriptExecuted = await runTypeScriptBuildPreflight(
+    const sessionTypescript = await runSourceCheckSessionTypeScriptPreflight(
+      producerSession,
       resolvedAppModulePath,
       invocationRoot,
       security.invocationEnv,
-      'check',
     );
+    const typescriptExecuted =
+      sessionTypescript === undefined
+        ? await runTypeScriptBuildPreflight(
+            resolvedAppModulePath,
+            invocationRoot,
+            security.invocationEnv,
+            'check',
+          )
+        : sessionTypescript.executed;
     recordSourceCheckPhase(
       phaseCensus,
       'typescript',
-      typescriptExecuted ? 'executed' : 'not-applicable',
+      typescriptExecuted
+        ? sessionTypescript?.reusedAuthenticated === true
+          ? 'reused-authenticated'
+          : 'executed'
+        : 'not-applicable',
       typescriptStartedAt,
     );
     if (strictLifecyclePolicy) {
@@ -1010,6 +1107,8 @@ export async function produceKovoSourceCheckOneShotAnalysis(
       security,
       invocationRoot,
       phaseCensus,
+      producerIdentity,
+      producerSession,
     );
     return {
       ...(approvedConfig === undefined
@@ -1020,9 +1119,7 @@ export async function produceKovoSourceCheckOneShotAnalysis(
               path: approvedConfig.path,
             },
           }),
-      artifactProvenance: resolveKovoArtifactProvenance({
-        appModulePath: resolvedAppModulePath,
-      }),
+      artifactProvenance,
       ...(artifacts.devexCheckGraphDigest === undefined
         ? {}
         : { devexCheckGraphDigest: artifacts.devexCheckGraphDigest }),
@@ -1134,7 +1231,13 @@ export interface KovoBuildOutputTransaction {
   readonly finalOutDir: string;
   readonly stagedOutDir: string;
   promoted: boolean;
+  sealed: boolean;
 }
+
+// `sealed: true` is useful serialized state, but it is not authority by itself: an internal caller
+// could copy or forge that boolean. Promotion additionally requires this process-local witness,
+// which is acquired only after preset emission and all post-handler integrity checks complete.
+const promotableKovoBuildOutputTransactions = new WeakSet<KovoBuildOutputTransaction>();
 
 /** @internal */
 export function createKovoBuildOutputTransaction(finalOutDir: string): KovoBuildOutputTransaction {
@@ -1149,14 +1252,34 @@ export function createKovoBuildOutputTransaction(finalOutDir: string): KovoBuild
     buildId: basename(stagedOutDir),
     finalOutDir,
     promoted: false,
+    sealed: false,
     stagedOutDir,
   };
+}
+
+/** @internal */
+export function sealKovoBuildOutputTransaction(transaction: KovoBuildOutputTransaction): void {
+  if (transaction.promoted) {
+    throw new TypeError('Kovo build output transaction was already promoted.');
+  }
+  if (transaction.sealed || promotableKovoBuildOutputTransactions.has(transaction)) {
+    throw new TypeError('Kovo build output transaction was already sealed.');
+  }
+  const status = lstatSync(transaction.stagedOutDir);
+  if (!status.isDirectory() || status.isSymbolicLink()) {
+    throw new TypeError('Kovo build output transaction staging path is invalid.');
+  }
+  transaction.sealed = true;
+  promotableKovoBuildOutputTransactions.add(transaction);
 }
 
 /** @internal */
 export function promoteKovoBuildOutputTransaction(transaction: KovoBuildOutputTransaction): void {
   if (transaction.promoted) {
     throw new TypeError('Kovo build output transaction was already promoted.');
+  }
+  if (!transaction.sealed || !promotableKovoBuildOutputTransactions.has(transaction)) {
+    throw new TypeError('Kovo build output transaction is not sealed for promotion.');
   }
   const parent = dirname(transaction.finalOutDir);
   mkdirSync(parent, { recursive: true });
@@ -1166,6 +1289,7 @@ export function promoteKovoBuildOutputTransaction(transaction: KovoBuildOutputTr
   try {
     renameSync(transaction.stagedOutDir, transaction.finalOutDir);
     transaction.promoted = true;
+    promotableKovoBuildOutputTransactions.delete(transaction);
   } catch (error) {
     if (hadPrevious && existsSync(backup) && !existsSync(transaction.finalOutDir)) {
       renameSync(backup, transaction.finalOutDir);
@@ -1186,6 +1310,7 @@ export function promoteKovoBuildOutputTransaction(transaction: KovoBuildOutputTr
 /** @internal */
 export function abortKovoBuildOutputTransaction(transaction: KovoBuildOutputTransaction): void {
   if (transaction.promoted) return;
+  promotableKovoBuildOutputTransactions.delete(transaction);
   rmSync(transaction.stagedOutDir, { force: true, recursive: true });
 }
 
@@ -1224,15 +1349,25 @@ export async function produceKovoBuildOneShotAnalysis(
   inputOptions: KovoBuildOptions,
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<KovoBuildOneShotAnalysis | CliCommandResult> {
+  let phaseCensus: KovoSourceCheckPhaseCensus | undefined;
   try {
     const options = configurationBoundary(() => snapshotKovoBuildOptions(inputOptions));
     const invocationRoot = security.invocationCwd;
     const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
+    phaseCensus = sourceCheckPhaseCensus(
+      security.invocationEnv,
+      KOVO_DEVEX_BUILD_PHASE_CENSUS_ENV,
+      invocationRoot,
+    );
     assertReadableKovoInputFile(resolvedAppModulePath, 'kovo build app module');
     const strictLifecyclePolicy = declaresKovoLifecyclePolicy(invocationRoot);
     if (strictLifecyclePolicy) {
+      const startedAt = startSourceCheckPhase(phaseCensus, 'lifecycle-policy');
       const lifecyclePolicy = runLifecyclePolicyCheck(invocationRoot, 'kovo-build/v1');
       if (lifecyclePolicy.exitCode !== 0) return lifecyclePolicy;
+      recordSourceCheckPhase(phaseCensus, 'lifecycle-policy', 'executed', startedAt);
+    } else {
+      recordSourceCheckPhase(phaseCensus, 'lifecycle-policy', 'not-applicable');
     }
     const outDir = resolve(invocationRoot, options.outDir);
     assertKovoOutputDirectoryTarget(outDir, 'kovo build --out');
@@ -1243,38 +1378,58 @@ export async function produceKovoBuildOneShotAnalysis(
     const artifactProvenance = resolveKovoArtifactProvenance({
       appModulePath: resolvedAppModulePath,
     });
-    const approvedConfig =
-      configPath === undefined
-        ? undefined
-        : await runPreEvaluationBuildConfigTrustPreflightInWorker(
-            configPath,
-            invocationRoot,
-            security.paranoidStaticAdvisory,
-            'build',
-            security.invocationEnv,
-          );
-    await runTypeScriptBuildPreflight(
+    let approvedConfig: PreEvaluationBuildConfigTrust | undefined;
+    if (configPath === undefined) {
+      recordSourceCheckPhase(phaseCensus, 'config-trust', 'not-applicable');
+    } else {
+      const startedAt = startSourceCheckPhase(phaseCensus, 'config-trust');
+      approvedConfig = await runPreEvaluationBuildConfigTrustPreflightInWorker(
+        configPath,
+        invocationRoot,
+        security.paranoidStaticAdvisory,
+        'build',
+        security.invocationEnv,
+      );
+      recordSourceCheckPhase(phaseCensus, 'config-trust', 'executed', startedAt);
+    }
+    const typescriptStartedAt = startSourceCheckPhase(phaseCensus, 'typescript');
+    const typescriptExecuted = await runTypeScriptBuildPreflight(
       resolvedAppModulePath,
       invocationRoot,
       security.invocationEnv,
     );
+    recordSourceCheckPhase(
+      phaseCensus,
+      'typescript',
+      typescriptExecuted ? 'executed' : 'not-applicable',
+      typescriptStartedAt,
+    );
     if (strictLifecyclePolicy) {
+      const projectQualityStartedAt = startSourceCheckPhase(phaseCensus, 'project-quality');
       const projectQuality = await runProjectQualityCheck(
         invocationRoot,
         security.invocationEnv,
         'kovo-build/v1',
       );
       if (projectQuality.exitCode !== 0) return projectQuality;
+      recordSourceCheckPhase(phaseCensus, 'project-quality', 'executed', projectQualityStartedAt);
+      const soundSubsetStartedAt = startSourceCheckPhase(phaseCensus, 'sound-subset');
       const soundSubset = await runSoundSubsetCheck(
         invocationRoot,
         security.invocationEnv,
         'kovo-build/v1',
       );
       if (soundSubset.exitCode !== 0) return soundSubset;
+      recordSourceCheckPhase(phaseCensus, 'sound-subset', 'executed', soundSubsetStartedAt);
+    } else {
+      recordSourceCheckPhase(phaseCensus, 'project-quality', 'not-applicable');
+      recordSourceCheckPhase(phaseCensus, 'sound-subset', 'not-applicable');
     }
 
+    const sessionAuthorityStartedAt = startSourceCheckPhase(phaseCensus, 'session-authority');
     const reachableSessionAuthorityFacts =
       await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
+    recordSourceCheckPhase(phaseCensus, 'session-authority', 'executed', sessionAuthorityStartedAt);
     const loadedConfig = await configurationBoundaryAsync(() =>
       loadKovoBuildConfig(invocationRoot, resolvedAppModulePath, approvedConfig),
     );
@@ -1287,6 +1442,7 @@ export async function produceKovoBuildOneShotAnalysis(
       reachableSessionAuthorityFacts,
       security,
       invocationRoot,
+      phaseCensus,
     );
     return {
       ...(approvedConfig === undefined
@@ -1305,6 +1461,7 @@ export async function produceKovoBuildOneShotAnalysis(
         ? {}
         : { clientEntry: loadAndCheck.approvedClientEntry }),
       dependencyCapabilities: loadAndCheck.dependencyCapabilities,
+      ...(phaseCensus === undefined ? {} : { phaseCensus }),
       queryShapeFacts: loadAndCheck.queryShapeFacts,
       runtimeRegistry: loadAndCheck.runtimeRegistry,
       selectedPresetName: selectedPreset.name,
@@ -1690,6 +1847,7 @@ export async function runBuildCommand(
     }
 
     await preset.emit(neutralBuild, presetContext);
+    sealKovoBuildOutputTransaction(transaction);
     promoteKovoBuildOutputTransaction(transaction);
     transaction = undefined;
 
@@ -1764,8 +1922,12 @@ export async function produceKovoBuildOneShotClientPhase(
         analysis.sourceDerivedRegistryTransforms,
       ),
     );
-    const { declaredKovoAppId, deriveClosedKovoApp, snapshotVersionedClientModuleStaging } =
-      loadedBuildApp.serverInternalBuildModule;
+    const {
+      declaredKovoAppId,
+      deriveClosedKovoApp,
+      snapshotVersionedClientModuleStaging,
+      writeKovoNeutralBuild,
+    } = loadedBuildApp.serverInternalBuildModule;
     const app = appFromModule(
       loadedBuildApp.appModule,
       resolvedAppModulePath,
@@ -1867,6 +2029,33 @@ export async function produceKovoBuildOneShotClientPhase(
       ...graphWithProof,
       runtimePosture: createKovoRuntimePostureManifest(graphWithProof),
     };
+    // SPEC §5.2 rule 9: source proof has completed in the analysis worker, so deployment
+    // construction may begin. Materialize every app-dependent neutral artifact while this sole
+    // fresh app evaluation is still alive. The server phase replaces the non-deployable sentinel
+    // handler only after its independent final bundle and client-module parity proof complete;
+    // the transaction cannot be promoted before that replacement is revalidated.
+    const neutralBuildClientModules = adoptCompilerClientModulesForNeutralBuild(
+      discoveredClientModules,
+      loadedBuildApp.compilerClientModuleBuildInstaller,
+    );
+    const neutralBuild = await writeKovoNeutralBuild({
+      app: buildApp,
+      buildStylesheetCss: [
+        ...analysis.buildStylesheetCss.stylesheetCss,
+        ...clientBuild.stylesheetCss,
+      ],
+      clientModules: neutralBuildClientModules,
+      manifestFile: clientBuild.manifestFile,
+      outDir: join(transaction.stagedOutDir, '.kovo'),
+      serverHandlerSource: KOVO_PENDING_SERVER_HANDLER_SOURCE,
+      stylesheetSourceRoot: dirname(resolvedAppModulePath),
+    });
+    writeKovoBuildGraphArtifact(
+      neutralBuild,
+      completedCheckGraph,
+      escapeObligationManifestForBuild(completedCheckGraph),
+      escapeCensusReviewManifestForBuild(completedCheckGraph),
+    );
     const result: KovoBuildOneShotClientPhase = {
       appBuildToken,
       buildCssAssets,
@@ -1883,6 +2072,7 @@ export async function produceKovoBuildOneShotClientPhase(
         'discovered server compiler client modules',
       ),
       manualClientModules: appClientModuleStaging.stable,
+      neutralBuild,
       nonCompilerClientModules,
       selectedPresetName: selectedPreset.name,
       serverProjectMutationFacts,
@@ -1949,12 +2139,26 @@ export async function produceKovoBuildOneShotServerPhase(
         'Kovo final runtime-posture bundle changed the discovered client-module identity.',
       );
     }
+    const neutralRoot = join(clientPhase.transaction.stagedOutDir, '.kovo');
+    const expectedHandlerPath = join(neutralRoot, 'server', 'handler.mjs');
+    if (
+      clientPhase.neutralBuild.outDir !== neutralRoot ||
+      clientPhase.neutralBuild.serverHandlerPath !== expectedHandlerPath
+    ) {
+      throw new TypeError('Kovo build neutral handoff does not own the staged server handler.');
+    }
+    const neutralOutput = createFrameworkOutputFileSystemBoundary(neutralRoot);
+    await neutralOutput.writeFile('server/handler.mjs', serverHandlerBuild.source);
+    if (readFileSync(expectedHandlerPath, 'utf8') !== serverHandlerBuild.source) {
+      throw new TypeError('Kovo build could not authenticate the finalized server handler.');
+    }
     return {
-      clientModuleRoles: compilerClientModuleRoles(
-        clientModules,
-        'server-phase compiler client modules',
+      neutralBuildSeal: createKovoNeutralBuildSeal(
+        clientPhase.neutralBuild,
+        clientPhase.completedCheckGraph,
+        analysis.artifactProvenance,
+        expectedIdentity,
       ),
-      clientModules,
       serverHandlerSource: serverHandlerBuild.source,
     };
   } catch (error) {
@@ -2000,63 +2204,27 @@ export async function finishKovoBuildOneShot(
     ) {
       throw new TypeError('Kovo build final phase selected a stale preset.');
     }
-    const loadedBuildApp = await withBuildGraphDerivationContext(() =>
-      loadBuildAppModule(
-        resolvedAppModulePath,
-        invocationRoot,
-        analysis.approvedSourceFiles,
-        analysis.dependencyCapabilities,
-        analysis.sourceDerivedRegistryTransforms,
-      ),
-    );
-    const { cloudflare, node, vercel } = loadedBuildApp.serverBuildModule;
-    const { resolveKovoBuildPreset } = loadedBuildApp.serverBuildPresetModule;
-    const { deriveClosedKovoApp, writeKovoNeutralBuild } = loadedBuildApp.serverInternalBuildModule;
-    const app = appFromModule(
-      loadedBuildApp.appModule,
-      resolvedAppModulePath,
-      loadedBuildApp.serverInternalBuildModule.resolveKovoAppToken,
-    );
-    const buildApp = appWithBuildStylesheetAssets(
-      app,
-      clientPhase.buildCssAssets,
-      deriveClosedKovoApp,
-    );
-    const neutralBuildClientModules = adoptCompilerClientModulesForNeutralBuild(
-      serverPhase.clientModules,
-      loadedBuildApp.compilerClientModuleBuildInstaller,
-    );
-    const neutralBuild = await writeKovoNeutralBuild({
-      app: buildApp,
-      buildStylesheetCss: [
-        ...analysis.buildStylesheetCss.stylesheetCss,
-        ...clientPhase.clientBuild.stylesheetCss,
-      ],
-      clientModules: neutralBuildClientModules,
-      manifestFile: clientPhase.clientBuild.manifestFile,
-      outDir: join(transaction.stagedOutDir, '.kovo'),
-      serverHandlerSource: serverPhase.serverHandlerSource,
-      stylesheetSourceRoot: dirname(resolvedAppModulePath),
-    });
-    const escapeObligationManifest = escapeObligationManifestForBuild(
-      clientPhase.completedCheckGraph,
-    );
-    const escapeCensusReviewManifest = escapeCensusReviewManifestForBuild(
-      clientPhase.completedCheckGraph,
-    );
-    writeKovoBuildGraphArtifact(
+    // The client worker already consumed the sole fresh authored-app evaluation to materialize
+    // the app-dependent neutral artifact. Re-authenticate the independently bundled handler and
+    // finish deployment from data-only handoffs; evaluating app top-level code a third time added
+    // no proof and made build behavior depend on an unnecessary duplicate side effect.
+    const neutralBuild = clientPhase.neutralBuild;
+    const expectedHandlerPath = join(transaction.stagedOutDir, '.kovo', 'server', 'handler.mjs');
+    if (
+      neutralBuild.serverHandlerPath !== expectedHandlerPath ||
+      readFileSync(expectedHandlerPath, 'utf8') !== serverPhase.serverHandlerSource ||
+      serverPhase.serverHandlerSource === KOVO_PENDING_SERVER_HANDLER_SOURCE
+    ) {
+      throw new TypeError('Kovo build final phase refused an unauthenticated server handler.');
+    }
+    assertKovoNeutralBuildSeal(
       neutralBuild,
       clientPhase.completedCheckGraph,
-      escapeObligationManifest,
-      escapeCensusReviewManifest,
+      analysis.artifactProvenance,
+      expectedIdentity,
+      serverPhase.neutralBuildSeal,
     );
-    const presetToken =
-      selectedPreset.name === 'cloudflare'
-        ? cloudflare()
-        : selectedPreset.name === 'vercel'
-          ? vercel()
-          : node();
-    const preset = selectedPreset.preset ?? resolveKovoBuildPreset(presetToken);
+    const preset = selectedPreset.preset ?? (await defaultKovoBuildPreset(selectedPreset.name));
     if (preset === undefined) {
       throw new Error(
         `kovo build could not resolve framework-owned preset ${selectedPreset.name}.`,
@@ -2079,7 +2247,15 @@ export async function finishKovoBuildOneShot(
         return neutralBuild;
       },
     };
-    const presetDiagnostics = await inspectKovoBuildPreset(preset, neutralBuild, presetContext);
+    const presetDiagnostics = await inspectFinalizedKovoBuildPreset(
+      preset,
+      neutralBuild,
+      presetContext,
+      clientPhase.completedCheckGraph,
+      analysis.artifactProvenance,
+      expectedIdentity,
+      serverPhase.neutralBuildSeal,
+    );
     const blockingDiagnostics = buildFilterDense(
       presetDiagnostics,
       'Build preset diagnostics',
@@ -2100,6 +2276,14 @@ export async function finishKovoBuildOneShot(
       });
     }
     await preset.emit(neutralBuild, presetContext);
+    assertKovoNeutralBuildSeal(
+      neutralBuild,
+      clientPhase.completedCheckGraph,
+      analysis.artifactProvenance,
+      expectedIdentity,
+      serverPhase.neutralBuildSeal,
+    );
+    sealKovoBuildOutputTransaction(transaction);
     promoteKovoBuildOutputTransaction(transaction);
     return kovoBuildResult({
       appModulePath: resolvedAppModulePath,
@@ -2389,6 +2573,7 @@ export async function runBuildCommandFromOneShotAnalysis(
       });
     }
     await preset.emit(neutralBuild, presetContext);
+    sealKovoBuildOutputTransaction(transaction);
     promoteKovoBuildOutputTransaction(transaction);
     transaction = undefined;
     return kovoBuildResult({
@@ -2565,14 +2750,17 @@ function requireKovoSourceCheckOneShotAnalysis(value: unknown): KovoSourceCheckO
   };
 }
 
-function requireKovoSourceCheckPhaseCensus(value: unknown): void {
+function requireKovoSourceCheckPhaseCensus(
+  value: unknown,
+  expectedPhaseCount: number = KOVO_SOURCE_CHECK_PHASES.length - 1,
+): void {
   requireKovoBuildOneShotExactKeys(value, ['phases', 'sourcePath'], 'source-check phase census');
   const sourcePath = buildOwnDataValue(value, 'sourcePath', 'Kovo check handoff phase census');
   const phases = buildOwnDataValue(value, 'phases', 'Kovo check handoff phase census');
   if (typeof sourcePath !== 'string' || !buildArrayIsArray(phases)) {
     throw new TypeError('Kovo check handoff phase census is invalid.');
   }
-  if (phases.length !== KOVO_SOURCE_CHECK_PHASES.length - 1) {
+  if (phases.length !== expectedPhaseCount) {
     throw new TypeError('Kovo check handoff phase census is incomplete.');
   }
   for (let index = 0; index < phases.length; index += 1) {
@@ -2589,7 +2777,8 @@ function requireKovoSourceCheckPhaseCensus(value: unknown): void {
       typeof durationMs !== 'number' ||
       !(durationMs >= 0 && durationMs < Infinity) ||
       name !== KOVO_SOURCE_CHECK_PHASES[index] ||
-      (status !== 'executed' && status !== 'not-applicable')
+      (status !== 'executed' && status !== 'not-applicable' && status !== 'reused-authenticated') ||
+      (status === 'not-applicable' && durationMs !== 0)
     ) {
       throw new TypeError('Kovo check handoff phase census entry is invalid.');
     }
@@ -2654,7 +2843,7 @@ function requireKovoBuildOneShotAnalysis(value: unknown): KovoBuildOneShotAnalys
     'selectedPresetName',
     'sourceDerivedRegistryTransforms',
   ];
-  const allowed = [...required, 'approvedConfig', 'clientEntry'];
+  const allowed = [...required, 'approvedConfig', 'clientEntry', 'phaseCensus'];
   requireKovoBuildOneShotExactKeys(value, allowed, 'analysis', required);
   const selectedPresetName = buildOwnDataValue(
     value,
@@ -2691,6 +2880,10 @@ function requireKovoBuildOneShotAnalysis(value: unknown): KovoBuildOneShotAnalys
   if (graphErrors.length > 0) {
     throw new TypeError('Kovo build handoff analysis contains an invalid check graph.');
   }
+  const phaseCensus = buildOwnDataProperty(value, 'phaseCensus', 'Kovo build handoff analysis');
+  if (phaseCensus.present) {
+    requireKovoSourceCheckPhaseCensus(phaseCensus.value, KOVO_SOURCE_CHECK_PHASES.length);
+  }
   return value as KovoBuildOneShotAnalysis;
 }
 
@@ -2705,6 +2898,7 @@ function requireKovoBuildOneShotClientPhase(value: unknown): KovoBuildOneShotCli
     'discoveredServerClientModules',
     'discoveredServerClientModuleRoles',
     'manualClientModules',
+    'neutralBuild',
     'nonCompilerClientModules',
     'selectedPresetName',
     'serverProjectMutationFacts',
@@ -2776,8 +2970,12 @@ function requireKovoBuildOneShotClientPhase(value: unknown): KovoBuildOneShotCli
   if (graphErrors.length > 0) {
     throw new TypeError('Kovo build handoff client phase contains an invalid completed graph.');
   }
-  requireKovoBuildOneShotTransaction(
+  const transaction = requireKovoBuildOneShotTransaction(
     buildOwnDataValue(value, 'transaction', 'Kovo build handoff client phase'),
+  );
+  requireKovoBuildOneShotNeutralBuild(
+    buildOwnDataValue(value, 'neutralBuild', 'Kovo build handoff client phase'),
+    transaction,
   );
   return value as KovoBuildOneShotClientPhase;
 }
@@ -2785,31 +2983,195 @@ function requireKovoBuildOneShotClientPhase(value: unknown): KovoBuildOneShotCli
 function requireKovoBuildOneShotServerPhase(value: unknown): KovoBuildOneShotServerPhase {
   requireKovoBuildOneShotExactKeys(
     value,
-    ['clientModuleRoles', 'clientModules', 'serverHandlerSource'],
+    ['neutralBuildSeal', 'serverHandlerSource'],
     'server phase',
   );
-  const clientModules = buildOwnDataValue(
-    value,
-    'clientModules',
-    'Kovo build handoff server phase',
-  );
   if (
-    !buildArrayIsArray(clientModules) ||
     typeof buildOwnDataValue(value, 'serverHandlerSource', 'Kovo build handoff server phase') !==
-      'string'
+      'string' ||
+    buildOwnDataValue(value, 'serverHandlerSource', 'Kovo build handoff server phase') ===
+      KOVO_PENDING_SERVER_HANDLER_SOURCE
   ) {
     throw new TypeError('Kovo build handoff server phase is invalid.');
   }
-  validateCompilerClientModuleHandoffRecords(
-    clientModules,
-    'Kovo build handoff server compiler modules',
-  );
-  requireCompilerClientModuleRoleCensus(
-    buildOwnDataValue(value, 'clientModuleRoles', 'Kovo build handoff server phase'),
-    clientModules.length,
-    'Kovo build handoff server compiler roles',
+  requireKovoNeutralBuildSeal(
+    buildOwnDataValue(value, 'neutralBuildSeal', 'Kovo build handoff server phase'),
   );
   return value as KovoBuildOneShotServerPhase;
+}
+
+function requireKovoNeutralBuildSeal(value: unknown): asserts value is KovoNeutralBuildSeal {
+  const fields = [
+    'artifactProvenanceDigest',
+    'checkGraphDigest',
+    'graphArtifactDigest',
+    'handlerDigest',
+    'invocationIdentityDigest',
+    'neutralBuildDigest',
+    'neutralTreeDigest',
+    'schema',
+  ];
+  requireKovoBuildOneShotExactKeys(value, fields, 'neutral build seal');
+  if (
+    buildOwnDataValue(value, 'schema', 'Kovo build handoff neutral seal') !==
+    KOVO_NEUTRAL_BUILD_SEAL_SCHEMA
+  ) {
+    throw new TypeError('Kovo build handoff neutral seal has an invalid schema.');
+  }
+  for (let index = 0; index < fields.length - 1; index += 1) {
+    const digest = buildOwnDataValue(value, fields[index]!, 'Kovo build handoff neutral seal');
+    if (typeof digest !== 'string' || buildRegExpExec(/^sha256:[0-9a-f]{64}$/u, digest) === null) {
+      throw new TypeError('Kovo build handoff neutral seal has an invalid digest.');
+    }
+  }
+}
+
+function requireKovoBuildOneShotNeutralBuild(
+  value: unknown,
+  transaction: KovoBuildOutputTransaction,
+): KovoNeutralBuild {
+  const required = [
+    'clientDir',
+    'clientModules',
+    'manifestPath',
+    'metaPath',
+    'outDir',
+    'routeHints',
+    'routesPath',
+    'serverDir',
+    'serverHandlerPath',
+    'staticAssets',
+    'staticOnly',
+    'tasks',
+    'version',
+  ];
+  requireKovoBuildOneShotExactKeys(
+    value,
+    [...required, 'publicAssetDir', 'rootedFileRoots', 'staticOutput'],
+    'neutral build',
+    required,
+  );
+  const neutralRoot = join(transaction.stagedOutDir, '.kovo');
+  const expectedStrings = {
+    clientDir: join(neutralRoot, 'client'),
+    manifestPath: join(neutralRoot, 'manifest.json'),
+    metaPath: join(neutralRoot, 'meta.json'),
+    outDir: neutralRoot,
+    routesPath: join(neutralRoot, 'routes.json'),
+    serverDir: join(neutralRoot, 'server'),
+    serverHandlerPath: join(neutralRoot, 'server', 'handler.mjs'),
+    version: 'kovo-neutral-build/v1',
+  } as const;
+  const names = buildObjectKeys(expectedStrings) as (keyof typeof expectedStrings)[];
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    if (
+      buildOwnDataValue(value, name, 'Kovo build handoff neutral build') !== expectedStrings[name]
+    ) {
+      throw new TypeError(`Kovo build handoff neutral build has invalid ${name}.`);
+    }
+  }
+  for (const name of ['clientModules', 'routeHints', 'staticAssets', 'tasks']) {
+    if (!buildArrayIsArray(buildOwnDataValue(value, name, 'Kovo build handoff neutral build'))) {
+      throw new TypeError(`Kovo build handoff neutral build has invalid ${name}.`);
+    }
+  }
+  const publicAssetDir = buildOwnDataProperty(
+    value,
+    'publicAssetDir',
+    'Kovo build handoff neutral build',
+  );
+  if (publicAssetDir.present && publicAssetDir.value !== join(neutralRoot, 'public')) {
+    throw new TypeError('Kovo build handoff neutral build has invalid publicAssetDir.');
+  }
+  const rootedFileRoots = buildOwnDataProperty(
+    value,
+    'rootedFileRoots',
+    'Kovo build handoff neutral build',
+  );
+  if (rootedFileRoots.present) {
+    if (!buildArrayIsArray(rootedFileRoots.value)) {
+      throw new TypeError('Kovo build handoff neutral build has invalid rootedFileRoots.');
+    }
+    const entries = buildSnapshotDenseArray(
+      rootedFileRoots.value,
+      'Kovo build handoff neutral rooted file roots',
+    );
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index];
+      requireKovoBuildOneShotExactKeys(
+        entry,
+        ['root', 'spec'],
+        `neutral rooted file root ${index}`,
+      );
+      const root = buildOwnDataValue(entry, 'root', 'Kovo build handoff neutral rooted file root');
+      const spec = buildOwnDataValue(entry, 'spec', 'Kovo build handoff neutral rooted file root');
+      if (
+        typeof root !== 'string' ||
+        typeof spec !== 'string' ||
+        isAbsolute(spec) ||
+        root !== join(neutralRoot, 'rooted', stagedRootedFilesEntryName(spec))
+      ) {
+        throw new TypeError('Kovo build handoff neutral build has invalid rootedFileRoots.');
+      }
+    }
+  }
+  const staticOutput = buildOwnDataProperty(
+    value,
+    'staticOutput',
+    'Kovo build handoff neutral build',
+  );
+  if (staticOutput.present) {
+    requireKovoBuildOneShotExactKeys(
+      staticOutput.value,
+      ['complete', 'diagnostics', 'dir', 'manifestPath', 'routeDocuments'],
+      'neutral static output',
+    );
+    if (
+      typeof buildOwnDataValue(
+        staticOutput.value,
+        'complete',
+        'Kovo build handoff neutral static output',
+      ) !== 'boolean' ||
+      buildOwnDataValue(staticOutput.value, 'dir', 'Kovo build handoff neutral static output') !==
+        join(neutralRoot, 'static') ||
+      buildOwnDataValue(
+        staticOutput.value,
+        'manifestPath',
+        'Kovo build handoff neutral static output',
+      ) !== join(neutralRoot, 'static', 'kovo-static-manifest.json') ||
+      !buildArrayIsArray(
+        buildOwnDataValue(
+          staticOutput.value,
+          'diagnostics',
+          'Kovo build handoff neutral static output',
+        ),
+      ) ||
+      !buildArrayIsArray(
+        buildOwnDataValue(
+          staticOutput.value,
+          'routeDocuments',
+          'Kovo build handoff neutral static output',
+        ),
+      )
+    ) {
+      throw new TypeError('Kovo build handoff neutral build has invalid staticOutput.');
+    }
+  }
+  if (
+    typeof buildOwnDataValue(value, 'staticOnly', 'Kovo build handoff neutral build') !== 'boolean'
+  ) {
+    throw new TypeError('Kovo build handoff neutral build has invalid staticOnly.');
+  }
+  return value as KovoNeutralBuild;
+}
+
+/** @internal Regression seam for exact transaction-owned neutral-build path validation. */
+export function requireKovoBuildOneShotNeutralBuildForTesting(
+  value: unknown,
+  transaction: KovoBuildOutputTransaction,
+): KovoNeutralBuild {
+  return requireKovoBuildOneShotNeutralBuild(value, transaction);
 }
 
 function validateCompilerClientModuleHandoffRecords(
@@ -2867,7 +3229,7 @@ function requireCompilerClientModuleRoleCensus(
 function requireKovoBuildOneShotTransaction(value: unknown): KovoBuildOutputTransaction {
   requireKovoBuildOneShotExactKeys(
     value,
-    ['buildId', 'finalOutDir', 'promoted', 'stagedOutDir'],
+    ['buildId', 'finalOutDir', 'promoted', 'sealed', 'stagedOutDir'],
     'output transaction',
   );
   const buildId = buildOwnDataValue(value, 'buildId', 'Kovo build handoff output transaction');
@@ -2877,6 +3239,7 @@ function requireKovoBuildOneShotTransaction(value: unknown): KovoBuildOutputTran
     'Kovo build handoff output transaction',
   );
   const promoted = buildOwnDataValue(value, 'promoted', 'Kovo build handoff output transaction');
+  const sealed = buildOwnDataValue(value, 'sealed', 'Kovo build handoff output transaction');
   const stagedOutDir = buildOwnDataValue(
     value,
     'stagedOutDir',
@@ -2886,6 +3249,7 @@ function requireKovoBuildOneShotTransaction(value: unknown): KovoBuildOutputTran
     typeof buildId !== 'string' ||
     typeof finalOutDir !== 'string' ||
     promoted !== false ||
+    sealed !== false ||
     typeof stagedOutDir !== 'string' ||
     basename(stagedOutDir) !== buildId ||
     dirname(stagedOutDir) !== dirname(finalOutDir) ||
@@ -2897,7 +3261,7 @@ function requireKovoBuildOneShotTransaction(value: unknown): KovoBuildOutputTran
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
     throw new TypeError('Kovo build handoff output transaction staging path is invalid.');
   }
-  return { buildId, finalOutDir, promoted, stagedOutDir };
+  return { buildId, finalOutDir, promoted, sealed, stagedOutDir };
 }
 
 function requireKovoBuildOneShotExactKeys(
@@ -2933,7 +3297,9 @@ async function loadAndCheckBuildApp(
   reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[],
   security: KovoCommandSecurityDisposition,
   invocationRoot: string,
+  phaseCensus?: KovoSourceCheckPhaseCensus,
 ) {
+  const appSourceTrustStartedAt = startSourceCheckPhase(phaseCensus, 'app-source-trust');
   const preEvaluationStaticTrust = await runPreEvaluationStaticTrustPreflightInWorker(
     resolvedAppModulePath,
     invocationRoot,
@@ -2941,15 +3307,19 @@ async function loadAndCheckBuildApp(
     security.invocationEnv,
     options.cache,
   );
+  recordSourceCheckPhase(phaseCensus, 'app-source-trust', 'executed', appSourceTrustStartedAt);
   // Stylesheet compilation is source proof, so keep it post-trust, but finish it before app/Vite
   // evaluation allocates the authenticated runtime graph. The packed full-catalog workload proved
   // that overlapping those independent heaps can exceed the reviewed 2 GiB first-loop ceiling.
+  const stylesheetStartedAt = startSourceCheckPhase(phaseCensus, 'stylesheet');
   const buildStylesheetCss = await withBuildGraphDerivationContext(() =>
     kovoBuildStylesheetCss(resolvedAppModulePath),
   );
+  recordSourceCheckPhase(phaseCensus, 'stylesheet', 'executed', stylesheetStartedAt);
   // SPEC §6.6 rule 6: the exact app-resolved SSR graph must finish its trust-root transition
   // before any other build lane is allowed to evaluate authored modules. In particular, do not
   // race any authored module evaluation against the server/compiler/data-plane preload.
+  const appEvaluationStartedAt = startSourceCheckPhase(phaseCensus, 'app-evaluation');
   const loadedBuildApp = await withBuildGraphDerivationContext(() =>
     loadBuildAppModule(
       resolvedAppModulePath,
@@ -2959,6 +3329,7 @@ async function loadAndCheckBuildApp(
       preEvaluationStaticTrust.sourceGraphFacts.sourceDerivedRegistryTransforms,
     ),
   );
+  recordSourceCheckPhase(phaseCensus, 'app-evaluation', 'executed', appEvaluationStartedAt);
   const { cloudflare, node, vercel } = loadedBuildApp.serverBuildModule;
   const { resolveKovoBuildPreset } = loadedBuildApp.serverBuildPresetModule;
   const execution = loadedBuildApp.serverExecutionModule;
@@ -2981,6 +3352,7 @@ async function loadAndCheckBuildApp(
     preEvaluationStaticTrust,
     reachableSessionAuthorityFacts,
     root: invocationRoot,
+    ...(phaseCensus === undefined ? {} : { phaseCensus }),
   });
   return {
     app,
@@ -3012,23 +3384,82 @@ async function deriveCurrentSourceCheckArtifacts(
   security: KovoCommandSecurityDisposition,
   invocationRoot: string,
   phaseCensus: KovoSourceCheckPhaseCensus | undefined,
+  producerIdentity: KovoSourceCheckProducerCommonIdentity,
+  producerSession: KovoSourceCheckProducerFactSession | undefined,
 ): Promise<KovoBuildCheckArtifacts> {
   const appSourceTrustStartedAt = startSourceCheckPhase(phaseCensus, 'app-source-trust');
-  const preEvaluationStaticTrust = await runPreEvaluationStaticTrustPreflightInWorker(
+  const staticTrust = await runPreEvaluationStaticTrustPreflightForSourceCheck(
     resolvedAppModulePath,
     invocationRoot,
     security.paranoidStaticAdvisory,
     security.invocationEnv,
     cache,
+    producerIdentity,
+    producerSession,
   );
-  recordSourceCheckPhase(phaseCensus, 'app-source-trust', 'executed', appSourceTrustStartedAt);
+  const preEvaluationStaticTrust = staticTrust.trust;
+  recordSourceCheckPhase(
+    phaseCensus,
+    'app-source-trust',
+    staticTrust.reusedAuthenticated ? 'reused-authenticated' : 'executed',
+    appSourceTrustStartedAt,
+  );
   // Stylesheet compilation is source proof even though asset placement is deployment proof. Keep
   // it after authenticated source trust but before app/Vite evaluation so their independent
   // compiler heaps cannot overlap on valid copied-catalog projects (SPEC §5.2 rules 6/9; §11.4).
   const stylesheetStartedAt = startSourceCheckPhase(phaseCensus, 'stylesheet');
-  await withBuildGraphDerivationContext(() => kovoBuildStylesheetCss(resolvedAppModulePath));
+  const stylesheetPackageClosureDigest =
+    sourceCheckStylesheetPackageClosureDigest(resolvedAppModulePath);
+  // `staticTrust.sourceDigest` includes the exact app/client module closure and every stable raw
+  // src/**/*.css byte. `staticTrust.inputDigest` additionally binds app-resolved package facts.
+  // Package CSS extraction also reads @kovojs/ui's manifest + whole implementation tree even when
+  // no component import is selected, so that independent producer input is bound explicitly.
+  const stylesheetInputDigest =
+    stylesheetPackageClosureDigest === undefined
+      ? undefined
+      : sourceCheckStylesheetProducerInputDigest(
+          staticTrust.sourceDigest,
+          staticTrust.inputDigest,
+          stylesheetPackageClosureDigest,
+          producerIdentity,
+        );
+  const reusedStylesheet =
+    stylesheetInputDigest === undefined
+      ? undefined
+      : consumeSourceCheckProducerFact(
+          producerSession,
+          'stylesheet',
+          stylesheetInputDigest,
+          isReusableStylesheetProducerFact,
+        );
+  if (!reusedStylesheet) {
+    await withBuildGraphDerivationContext(() => kovoBuildStylesheetCss(resolvedAppModulePath));
+    // Close the read/compile race before retaining a passing sentinel. A concurrent source or
+    // installed-package edit leaves the successful revision intact, but never files its result
+    // under the identity observed before compilation.
+    if (
+      stylesheetInputDigest !== undefined &&
+      currentSourceCheckStylesheetProducerInputDigest(
+        resolvedAppModulePath,
+        invocationRoot,
+        producerIdentity,
+      ) === stylesheetInputDigest
+    ) {
+      storeSourceCheckProducerFact(
+        producerSession,
+        'stylesheet',
+        stylesheetInputDigest,
+        stylesheetProducerFactPayload,
+      );
+    }
+  }
   collectBuildGarbage?.();
-  recordSourceCheckPhase(phaseCensus, 'stylesheet', 'executed', stylesheetStartedAt);
+  recordSourceCheckPhase(
+    phaseCensus,
+    'stylesheet',
+    reusedStylesheet ? 'reused-authenticated' : 'executed',
+    stylesheetStartedAt,
+  );
   const appEvaluationStartedAt = startSourceCheckPhase(phaseCensus, 'app-evaluation');
   const loadedBuildApp = await withBuildGraphDerivationContext(() =>
     loadBuildAppModule(
@@ -3061,15 +3492,44 @@ async function deriveCurrentSourceCheckArtifacts(
 
 function sourceCheckPhaseCensus(
   invocationEnv: NodeJS.ProcessEnv,
+  environmentName:
+    | typeof KOVO_DEVEX_CHECK_PHASE_CENSUS_ENV
+    | typeof KOVO_DEVEX_BUILD_PHASE_CENSUS_ENV = KOVO_DEVEX_CHECK_PHASE_CENSUS_ENV,
+  invocationRoot: string = process.cwd(),
 ): KovoSourceCheckPhaseCensus | undefined {
-  const sourcePath = kovoInvocationEnvironmentValue(
-    invocationEnv,
-    KOVO_DEVEX_CHECK_PHASE_CENSUS_ENV,
-  );
-  if (sourcePath === undefined) return undefined;
+  const requestedSourcePath = kovoInvocationEnvironmentValue(invocationEnv, environmentName);
+  if (requestedSourcePath === undefined) return undefined;
+  if (
+    requestedSourcePath.length === 0 ||
+    requestedSourcePath.length > 4_096 ||
+    requestedSourcePath.trim() !== requestedSourcePath ||
+    isAbsolute(requestedSourcePath) ||
+    requestedSourcePath.includes('\\') ||
+    requestedSourcePath.includes(':')
+  ) {
+    throw new KovoCommandConfigurationError(
+      `${environmentName} must name one project-relative source file.`,
+    );
+  }
+  let canonicalRoot: string;
+  let canonicalSource: string;
+  try {
+    canonicalRoot = realpathSync(invocationRoot);
+    canonicalSource = realpathSync(resolve(canonicalRoot, requestedSourcePath));
+  } catch {
+    throw new KovoCommandConfigurationError(
+      `${environmentName} must name one existing project-relative source file.`,
+    );
+  }
+  if (!buildCheckPathWithinBoundary(canonicalRoot, canonicalSource)) {
+    throw new KovoCommandConfigurationError(
+      `${environmentName} must remain inside the invocation root.`,
+    );
+  }
+  const sourcePath = slashPath(relative(canonicalRoot, canonicalSource));
   if (!exactBuildAnalysisPath(sourcePath)) {
     throw new KovoCommandConfigurationError(
-      `${KOVO_DEVEX_CHECK_PHASE_CENSUS_ENV} must name one project-relative source file.`,
+      `${environmentName} must resolve to one canonical project-relative source file.`,
     );
   }
   return { phases: [], sourcePath };
@@ -3100,9 +3560,9 @@ function recordSourceCheckPhase(
     );
   }
   let durationMs = 0;
-  if (status === 'executed') {
+  if (status !== 'not-applicable') {
     if (startedAt === undefined) {
-      throw new TypeError(`kovo check phase census has no start time for executed phase ${name}.`);
+      throw new TypeError(`kovo check phase census has no start time for active phase ${name}.`);
     }
     durationMs = performanceNow() - startedAt;
   }
@@ -3237,6 +3697,53 @@ function appendSourceCheckPhaseCensus(
   };
 }
 
+/** @internal Render the source-proof portion of the paired production-build phase report. */
+export function kovoBuildSourcePhaseCensusLine(analysis: KovoBuildOneShotAnalysis): string {
+  const census = analysis.phaseCensus;
+  if (census === undefined) return '';
+  if (census.phases.length !== KOVO_SOURCE_CHECK_PHASES.length) {
+    throw new TypeError(
+      `kovo build source phase census recorded ${String(census.phases.length)} of ${String(
+        KOVO_SOURCE_CHECK_PHASES.length,
+      )} required phases.`,
+    );
+  }
+  let requestedSource: BuildCheckSourceFile | undefined;
+  const sourceFiles = buildSnapshotDenseArray(
+    analysis.approvedSourceFiles,
+    'Kovo build source phase census input files',
+  );
+  for (let index = 0; index < sourceFiles.length; index += 1) {
+    const candidate = sourceFiles[index]!;
+    if (candidate.fileName === census.sourcePath) {
+      requestedSource = candidate;
+      break;
+    }
+  }
+  if (requestedSource === undefined) {
+    throw new KovoCommandConfigurationError(
+      `${KOVO_DEVEX_BUILD_PHASE_CENSUS_ENV} source ${census.sourcePath} is outside the analyzed app closure.`,
+    );
+  }
+  const evidence = {
+    checkGraphDigest: kovoBuildOneShotDigest(analysis.checkGraph),
+    complete: true,
+    phases: census.phases,
+    schema: KOVO_DEVEX_BUILD_SOURCE_PHASE_CENSUS_SCHEMA,
+    source: {
+      codeUnitLength: requestedSource.source.length,
+      contentHash: `sha256:${hash('sha256', bufferFrom(requestedSource.source, 'utf16le'), 'hex')}`,
+      encoding: 'utf16le',
+      path: requestedSource.fileName,
+    },
+    sourceSetDigest: kovoBuildOneShotDigest({
+      clientEntry: analysis.clientEntry ?? null,
+      files: analysis.approvedSourceFiles,
+    }),
+  };
+  return `${KOVO_DEVEX_BUILD_SOURCE_PHASE_CENSUS_SCHEMA} ${stringifyBuildValue(evidence)}\n`;
+}
+
 interface PreEvaluationStaticTrust {
   readonly approvedSourceFiles: readonly BuildCheckSourceFile[];
   readonly capabilityClosure: AnalyzeCapabilityClosureResult;
@@ -3274,6 +3781,118 @@ interface PreEvaluationBuildConfigTrust {
   readonly facts: ReturnType<typeof collectStaticBuildTrustFactsFromProject>;
   readonly files: readonly BuildCheckSourceFile[];
   readonly path: string;
+}
+
+interface KovoSourceCheckProducerCommonIdentity {
+  readonly optionsDigest: string;
+  readonly packageClosureDigest: string;
+  readonly versionDigest: string;
+}
+
+function sourceCheckProducerCommonIdentity(
+  appModulePath: string,
+  invocationRoot: string,
+  artifactProvenance: ReturnType<typeof resolveKovoArtifactProvenance>,
+  options: KovoSourceCheckOptions,
+  security: KovoCommandSecurityDisposition,
+): KovoSourceCheckProducerCommonIdentity {
+  const manifestPath = findNearestFile(dirname(appModulePath), 'package.json', {
+    stopDir: invocationRoot,
+  });
+  const manifestDigest =
+    manifestPath === undefined
+      ? null
+      : `sha256:${hash(
+          'sha256',
+          readBoundedRegularFile(manifestPath, {
+            label: 'Kovo source-check package manifest',
+            limitMessage: 'Kovo source-check package manifest exceeds 1 MiB.',
+            maxBytes: 1024 * 1024,
+          }),
+          'hex',
+        )}`;
+  return {
+    optionsDigest: kovoBuildOneShotDigest({
+      cache: options.cache,
+      paranoidStaticAdvisory: security.paranoidStaticAdvisory,
+    }),
+    packageClosureDigest: kovoBuildOneShotDigest({
+      manifestDigest,
+      pnpmLock: artifactProvenance.pnpmLock,
+    }),
+    versionDigest: kovoBuildOneShotDigest({
+      frameworkPackages: artifactProvenance.frameworkPackages,
+      graphSchemaVersion: artifactProvenance.graphSchemaVersion,
+      node: process.version,
+      schema: KOVO_SOURCE_CHECK_PRODUCER_FACT_SCHEMA,
+      securityGuarantees: artifactProvenance.securityGuarantees,
+    }),
+  };
+}
+
+function sourceCheckProducerFactInputDigest(
+  phase: 'app-source-trust' | 'config-trust' | 'stylesheet',
+  sourceDigest: string,
+  identity: KovoSourceCheckProducerCommonIdentity,
+  resolvedPackageClosureDigest: string,
+): string {
+  return kovoBuildOneShotDigest({
+    optionsDigest: identity.optionsDigest,
+    packageClosureDigest: identity.packageClosureDigest,
+    phase,
+    resolvedPackageClosureDigest,
+    schema: KOVO_SOURCE_CHECK_PRODUCER_FACT_SCHEMA,
+    sourceDigest,
+    versionDigest: identity.versionDigest,
+  });
+}
+
+async function runSourceCheckSessionTypeScriptPreflight(
+  session: KovoSourceCheckProducerFactSession | undefined,
+  appModulePath: string,
+  invocationRoot: string,
+  invocationEnv: NodeJS.ProcessEnv,
+): Promise<
+  | {
+      readonly executed: boolean;
+      readonly inputDigest: string | null;
+      readonly reusedAuthenticated: boolean;
+    }
+  | undefined
+> {
+  if (session === undefined) return undefined;
+  try {
+    const result = await session.runTypeScriptPreflight({
+      appModulePath,
+      invocationEnv,
+      invocationRoot,
+    });
+    if (result === undefined) return undefined;
+    const executed = buildOwnDataValue(result, 'executed', 'Source-check TypeScript session fact');
+    const inputDigest = buildOwnDataValue(
+      result,
+      'inputDigest',
+      'Source-check TypeScript session fact',
+    );
+    const reusedAuthenticated = buildOwnDataValue(
+      result,
+      'reusedAuthenticated',
+      'Source-check TypeScript session fact',
+    );
+    if (typeof executed !== 'boolean' || typeof reusedAuthenticated !== 'boolean') {
+      return undefined;
+    }
+    if (executed) {
+      if (typeof inputDigest !== 'string' || !/^sha256:[0-9a-f]{64}$/u.test(inputDigest)) {
+        return undefined;
+      }
+      return { executed: true, inputDigest, reusedAuthenticated };
+    }
+    if (inputDigest !== null || reusedAuthenticated) return undefined;
+    return { executed: false, inputDigest: null, reusedAuthenticated: false };
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -3643,23 +4262,7 @@ function staticTrustAuthentication(
   requestDigest: string,
   payload: string,
 ): string {
-  if (!/^[0-9a-f]{64}$/u.test(authenticationKey)) {
-    throw new TypeError('Kovo static-trust worker authentication key is invalid.');
-  }
-  return `hmac-sha256:${createHmac('sha256', bufferFrom(authenticationKey, 'hex'))
-    .update(requestDigest, 'utf8')
-    .update('\0', 'utf8')
-    .update(payload, 'utf8')
-    .digest('hex')}`;
-}
-
-function equalStaticTrustAuthentication(actual: string, expected: string): boolean {
-  const actualBytes = bufferFrom(actual, 'utf8');
-  const expectedBytes = bufferFrom(expected, 'utf8');
-  return (
-    actualBytes.byteLength === expectedBytes.byteLength &&
-    timingSafeEqual(actualBytes, expectedBytes)
-  );
+  return authenticateStaticTrustWorkerPayload(authenticationKey, requestDigest, payload);
 }
 
 function staticTrustSourceDigest(
@@ -3869,10 +4472,11 @@ async function runPreEvaluationStaticTrustPreflightInWorker(
   invocationEnv: NodeJS.ProcessEnv,
   cache: boolean | null,
 ): Promise<PreEvaluationStaticTrust> {
+  const workerAuthority = mintStaticTrustWorkerAuthority();
   const workerRequest: StaticTrustWorkerRequest = {
-    authenticationKey: randomBytes(32).toString('hex'),
+    authenticationKey: workerAuthority.authenticationKey,
     cache,
-    challenge: randomBytes(32).toString('hex'),
+    challenge: workerAuthority.challenge,
     command: null,
     kind: 'app',
     modulePath: appModulePath,
@@ -3892,10 +4496,11 @@ async function runPreEvaluationBuildConfigTrustPreflightInWorker(
   command: 'build' | 'check',
   invocationEnv: NodeJS.ProcessEnv,
 ): Promise<PreEvaluationBuildConfigTrust> {
+  const workerAuthority = mintStaticTrustWorkerAuthority();
   const workerRequest: StaticTrustWorkerRequest = {
-    authenticationKey: randomBytes(32).toString('hex'),
+    authenticationKey: workerAuthority.authenticationKey,
     cache: null,
-    challenge: randomBytes(32).toString('hex'),
+    challenge: workerAuthority.challenge,
     command,
     kind: 'config',
     modulePath: configPath,
@@ -3906,6 +4511,436 @@ async function runPreEvaluationBuildConfigTrustPreflightInWorker(
     await executeStaticTrustWorker(workerRequest, invocationEnv),
     workerRequest,
   );
+}
+
+interface KovoSourceCheckStaticTrustPhaseResult<Trust> {
+  readonly inputDigest: string;
+  readonly reusedAuthenticated: boolean;
+  readonly sourceDigest: string;
+  readonly trust: Trust;
+}
+
+async function runPreEvaluationBuildConfigTrustPreflightForSourceCheck(
+  configPath: string,
+  root: string,
+  paranoidStaticAdvisory: boolean,
+  invocationEnv: NodeJS.ProcessEnv,
+  identity: KovoSourceCheckProducerCommonIdentity,
+  session: KovoSourceCheckProducerFactSession | undefined,
+): Promise<KovoSourceCheckStaticTrustPhaseResult<PreEvaluationBuildConfigTrust>> {
+  const current = snapshotKovoBuildConfigTrustSources(configPath, root);
+  const sourceDigest = kovoBuildOneShotDigest({ files: current.files, path: current.path });
+  const resolvedPackageClosureDigest = sourceCheckResolvedPackageClosureDigest(
+    current.files,
+    configPath,
+    root,
+  );
+  const inputDigest = sourceCheckProducerFactInputDigest(
+    'config-trust',
+    sourceDigest,
+    identity,
+    resolvedPackageClosureDigest,
+  );
+  const cached = consumeSourceCheckProducerFact(session, 'config-trust', inputDigest, (payload) =>
+    sourceCheckConfigTrustFromProducerFact(payload, configPath, root, paranoidStaticAdvisory),
+  );
+  if (cached !== undefined) {
+    revalidateKovoBuildConfigTrustSourceSnapshot(cached, root, configPath, 'check');
+    return { inputDigest, reusedAuthenticated: true, sourceDigest, trust: cached };
+  }
+
+  const workerAuthority = mintStaticTrustWorkerAuthority();
+  const workerRequest: StaticTrustWorkerRequest = {
+    authenticationKey: workerAuthority.authenticationKey,
+    cache: null,
+    challenge: workerAuthority.challenge,
+    command: 'check',
+    kind: 'config',
+    modulePath: configPath,
+    paranoidStaticAdvisory,
+    root,
+  };
+  const output = await executeStaticTrustWorker(workerRequest, invocationEnv);
+  const trust = staticConfigTrustFromWorkerEnvelopeForTesting(output, workerRequest);
+  if (reusableStaticTrustFacts(trust.facts) && !sourceCheckProducerFactContainsDiagnostics(trust)) {
+    storeSourceCheckProducerFact(
+      session,
+      'config-trust',
+      inputDigest,
+      sourceCheckStaticTrustProducerFact(workerRequest, output),
+    );
+  }
+  return { inputDigest, reusedAuthenticated: false, sourceDigest, trust };
+}
+
+async function runPreEvaluationStaticTrustPreflightForSourceCheck(
+  appModulePath: string,
+  root: string,
+  paranoidStaticAdvisory: boolean,
+  invocationEnv: NodeJS.ProcessEnv,
+  cache: boolean,
+  identity: KovoSourceCheckProducerCommonIdentity,
+  session: KovoSourceCheckProducerFactSession | undefined,
+): Promise<KovoSourceCheckStaticTrustPhaseResult<PreEvaluationStaticTrust>> {
+  const clientEntry = preEvaluationClientEntryFile(appModulePath, root);
+  const files = preEvaluationAppSourceFiles(appModulePath, root, clientEntry);
+  const approvedSourceFiles = preEvaluationApprovedBuildFiles(appModulePath, root, files);
+  const sourceDigest = staticTrustSourceDigest(approvedSourceFiles, clientEntry);
+  const resolvedPackageClosureDigest = sourceCheckResolvedPackageClosureDigest(
+    approvedSourceFiles,
+    appModulePath,
+    root,
+  );
+  const inputDigest = sourceCheckProducerFactInputDigest(
+    'app-source-trust',
+    sourceDigest,
+    identity,
+    resolvedPackageClosureDigest,
+  );
+  const cached = consumeSourceCheckProducerFact(
+    session,
+    'app-source-trust',
+    inputDigest,
+    (payload) =>
+      sourceCheckAppTrustFromProducerFact(
+        payload,
+        appModulePath,
+        root,
+        paranoidStaticAdvisory,
+        cache,
+      ),
+  );
+  if (
+    cached !== undefined &&
+    staticTrustSourceDigest(cached.approvedSourceFiles, cached.clientEntry) === sourceDigest
+  ) {
+    return { inputDigest, reusedAuthenticated: true, sourceDigest, trust: cached };
+  }
+
+  const workerAuthority = mintStaticTrustWorkerAuthority();
+  const workerRequest: StaticTrustWorkerRequest = {
+    authenticationKey: workerAuthority.authenticationKey,
+    cache,
+    challenge: workerAuthority.challenge,
+    command: null,
+    kind: 'app',
+    modulePath: appModulePath,
+    paranoidStaticAdvisory,
+    root,
+  };
+  const output = await executeStaticTrustWorker(workerRequest, invocationEnv);
+  const trust = staticTrustFromWorkerEnvelopeForTesting(output, workerRequest);
+  if (
+    reusableStaticTrustFacts(trust.facts) &&
+    trust.capabilityClosure.diagnostics.length === 0 &&
+    !sourceCheckProducerFactContainsDiagnostics(trust)
+  ) {
+    storeSourceCheckProducerFact(
+      session,
+      'app-source-trust',
+      inputDigest,
+      sourceCheckStaticTrustProducerFact(workerRequest, output),
+    );
+  }
+  return { inputDigest, reusedAuthenticated: false, sourceDigest, trust };
+}
+
+function sourceCheckResolvedPackageClosureDigest(
+  files: readonly BuildCheckSourceFile[],
+  entryPath: string,
+  root: string,
+): string {
+  const requests: Array<{
+    readonly importer: string;
+    readonly importedNames: readonly string[];
+    readonly specifier: string;
+  }> = [];
+  for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+    const file = files[fileIndex]!;
+    const specifiers = compilerSourceModuleSpecifiers(file.source);
+    for (let specifierIndex = 0; specifierIndex < specifiers.length; specifierIndex += 1) {
+      const specifier = specifiers[specifierIndex]!;
+      if (
+        buildStringStartsWith(specifier, './') ||
+        buildStringStartsWith(specifier, '../') ||
+        buildStringStartsWith(specifier, '/')
+      ) {
+        continue;
+      }
+      buildSecurityArrayAppend(
+        requests,
+        { importer: file.fileName, importedNames: [], specifier },
+        'Source-check producer package requests',
+      );
+    }
+  }
+  return kovoBuildOneShotDigest({
+    packages: resolveCapabilityPackages(requests, entryPath),
+    root: realpathSync(root),
+    schema: KOVO_SOURCE_CHECK_PRODUCER_FACT_SCHEMA,
+  });
+}
+
+function sourceCheckStylesheetProducerInputDigest(
+  sourceDigest: string,
+  appTrustInputDigest: string,
+  stylesheetPackageClosureDigest: string,
+  identity: KovoSourceCheckProducerCommonIdentity,
+): string {
+  return sourceCheckProducerFactInputDigest(
+    'stylesheet',
+    sourceDigest,
+    identity,
+    kovoBuildOneShotDigest({ appTrustInputDigest, stylesheetPackageClosureDigest }),
+  );
+}
+
+function currentSourceCheckStylesheetProducerInputDigest(
+  appModulePath: string,
+  root: string,
+  identity: KovoSourceCheckProducerCommonIdentity,
+): string | undefined {
+  const clientEntry = preEvaluationClientEntryFile(appModulePath, root);
+  const sourceFiles = preEvaluationAppSourceFiles(appModulePath, root, clientEntry);
+  const approvedSourceFiles = preEvaluationApprovedBuildFiles(appModulePath, root, sourceFiles);
+  const sourceDigest = staticTrustSourceDigest(approvedSourceFiles, clientEntry);
+  const appTrustInputDigest = sourceCheckProducerFactInputDigest(
+    'app-source-trust',
+    sourceDigest,
+    identity,
+    sourceCheckResolvedPackageClosureDigest(approvedSourceFiles, appModulePath, root),
+  );
+  const stylesheetPackageClosureDigest = sourceCheckStylesheetPackageClosureDigest(appModulePath);
+  return stylesheetPackageClosureDigest === undefined
+    ? undefined
+    : sourceCheckStylesheetProducerInputDigest(
+        sourceDigest,
+        appTrustInputDigest,
+        stylesheetPackageClosureDigest,
+        identity,
+      );
+}
+
+/**
+ * Bind every filesystem-backed package input read by `kovoBuildStylesheetCss` that can vary during
+ * a long-lived watch session. Compiler/headless producer modules are already loaded, immutable
+ * process values; @kovojs/ui is intentionally reopened on every extraction. One resolved UI
+ * subpath yields the resolver's whole source/dist tree digest, while the raw manifest digest also
+ * covers its `kovo.vendoredSource*` CSS-authentication ledger (SPEC §13.1).
+ */
+function sourceCheckStylesheetPackageClosureDigest(appModulePath: string): string | undefined {
+  try {
+    const packages = resolveCapabilityPackages(
+      [
+        {
+          importedNames: [],
+          specifier: KOVO_SOURCE_CHECK_STYLESHEET_IDENTITY_SPECIFIER,
+        },
+      ],
+      appModulePath,
+    );
+    if (packages.length !== 1) return undefined;
+    const packageFact = packages[0]!;
+    if (
+      packageFact.specifier !== KOVO_SOURCE_CHECK_STYLESHEET_IDENTITY_SPECIFIER ||
+      packageFact.packageName !== '@kovojs/ui' ||
+      packageFact.exportStatus !== 'resolved' ||
+      typeof packageFact.implementationDigest !== 'string'
+    ) {
+      return undefined;
+    }
+    const resolvedEntry = realpathSync(
+      createRequire(appModulePath).resolve(KOVO_SOURCE_CHECK_STYLESHEET_IDENTITY_SPECIFIER),
+    );
+    const manifestPath = findNearestFile(dirname(resolvedEntry), 'package.json');
+    if (manifestPath === undefined) return undefined;
+    const manifestBytes = readBoundedRegularFile(manifestPath, {
+      label: 'Kovo source-check stylesheet package manifest',
+      limitMessage: 'Kovo source-check stylesheet package manifest exceeds 1 MiB.',
+      maxBytes: 1024 * 1024,
+    });
+    const manifest = jsonParse(manifestBytes.toString('utf8')) as unknown;
+    if (
+      manifest === null ||
+      typeof manifest !== 'object' ||
+      buildOwnDataValue(manifest, 'name', 'Kovo source-check stylesheet package manifest') !==
+        '@kovojs/ui'
+    ) {
+      return undefined;
+    }
+    return kovoBuildOneShotDigest({
+      manifestDigest: `sha256:${hash('sha256', manifestBytes, 'hex')}`,
+      packageFact,
+      schema: KOVO_SOURCE_CHECK_STYLESHEET_PACKAGE_IDENTITY_SCHEMA,
+    });
+  } catch {
+    // Missing, changing, unsupported, or non-exact package identity disables this optional reuse.
+    return undefined;
+  }
+}
+
+/** @internal Exact package-style identity seam for source-check cache regression tests. */
+export function sourceCheckStylesheetPackageClosureDigestForTesting(
+  appModulePath: string,
+): string | undefined {
+  return sourceCheckStylesheetPackageClosureDigest(appModulePath);
+}
+
+function sourceCheckStaticTrustProducerFact(
+  request: StaticTrustWorkerRequest,
+  output: string,
+): string {
+  return stringifyBuildValue({
+    output,
+    request,
+    schema: KOVO_SOURCE_CHECK_STATIC_TRUST_FACT_SCHEMA,
+  });
+}
+
+function sourceCheckAppTrustFromProducerFact(
+  payload: string,
+  modulePath: string,
+  root: string,
+  paranoidStaticAdvisory: boolean,
+  cache: boolean,
+): PreEvaluationStaticTrust {
+  const { output, request } = parseSourceCheckStaticTrustProducerFact(payload);
+  if (
+    request.cache !== cache ||
+    request.command !== null ||
+    request.kind !== 'app' ||
+    request.modulePath !== modulePath ||
+    request.paranoidStaticAdvisory !== paranoidStaticAdvisory ||
+    request.root !== root
+  ) {
+    throw new TypeError('Kovo source-check app trust fact has stale invocation inputs.');
+  }
+  const trust = staticTrustFromWorkerEnvelopeForTesting(output, request);
+  if (
+    !reusableStaticTrustFacts(trust.facts) ||
+    trust.capabilityClosure.diagnostics.length !== 0 ||
+    sourceCheckProducerFactContainsDiagnostics(trust)
+  ) {
+    throw new TypeError('Kovo source-check app trust fact retained diagnostics.');
+  }
+  return trust;
+}
+
+function sourceCheckConfigTrustFromProducerFact(
+  payload: string,
+  modulePath: string,
+  root: string,
+  paranoidStaticAdvisory: boolean,
+): PreEvaluationBuildConfigTrust {
+  const { output, request } = parseSourceCheckStaticTrustProducerFact(payload);
+  if (
+    request.cache !== null ||
+    request.command !== 'check' ||
+    request.kind !== 'config' ||
+    request.modulePath !== modulePath ||
+    request.paranoidStaticAdvisory !== paranoidStaticAdvisory ||
+    request.root !== root
+  ) {
+    throw new TypeError('Kovo source-check config trust fact has stale invocation inputs.');
+  }
+  const trust = staticConfigTrustFromWorkerEnvelopeForTesting(output, request);
+  if (!reusableStaticTrustFacts(trust.facts) || sourceCheckProducerFactContainsDiagnostics(trust)) {
+    throw new TypeError('Kovo source-check config trust fact retained diagnostics.');
+  }
+  return trust;
+}
+
+function parseSourceCheckStaticTrustProducerFact(payload: string): {
+  readonly output: string;
+  readonly request: StaticTrustWorkerRequest;
+} {
+  if (payload.length > staticTrustWorkerMaxOutputBytes * 2) {
+    throw new TypeError('Kovo source-check static trust fact exceeds its byte limit.');
+  }
+  const value = jsonParse(payload) as unknown;
+  if (value === null || typeof value !== 'object' || buildArrayIsArray(value)) {
+    throw new TypeError('Kovo source-check static trust fact is invalid.');
+  }
+  assertStaticTrustExactKeys(value, ['output', 'request', 'schema'], 'source-check producer fact');
+  const output = buildOwnDataValue(value, 'output', 'Source-check static trust fact');
+  const requestValue = buildOwnDataValue(value, 'request', 'Source-check static trust fact');
+  const schema = buildOwnDataValue(value, 'schema', 'Source-check static trust fact');
+  if (typeof output !== 'string' || schema !== KOVO_SOURCE_CHECK_STATIC_TRUST_FACT_SCHEMA) {
+    throw new TypeError('Kovo source-check static trust fact is invalid.');
+  }
+  const request = parseStaticTrustWorkerRequest(stringifyBuildValue(requestValue));
+  return { output, request };
+}
+
+function reusableStaticTrustFacts(
+  facts: ReturnType<typeof collectStaticBuildTrustFactsFromProject>,
+): boolean {
+  return facts.diagnostics.length === 0 && facts.unregisteredSinks.length === 0;
+}
+
+function sourceCheckProducerFactContainsDiagnostics(value: unknown): boolean {
+  const pending: unknown[] = [value];
+  const seen = new Set<object>();
+  for (let index = 0; index < pending.length; index += 1) {
+    if (index > 1_000_000) return true;
+    const candidate = pending[index];
+    if (candidate === null || typeof candidate !== 'object' || seen.has(candidate)) continue;
+    seen.add(candidate);
+    if (candidate instanceof Map) {
+      for (const [key, entry] of candidate) {
+        pending.push(key, entry);
+      }
+      continue;
+    }
+    const keys = buildObjectKeys(candidate);
+    for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+      const key = keys[keyIndex]!;
+      const entry = buildOwnDataValue(candidate, key, 'Source-check producer fact');
+      if (key === 'diagnostics' && buildArrayIsArray(entry) && entry.length > 0) return true;
+      pending.push(entry);
+    }
+  }
+  return false;
+}
+
+function consumeSourceCheckProducerFact<Value>(
+  session: KovoSourceCheckProducerFactSession | undefined,
+  phase: 'app-source-trust' | 'config-trust' | 'stylesheet',
+  inputDigest: string,
+  parse: (payload: string) => Value,
+): Value | undefined {
+  if (session === undefined) return undefined;
+  try {
+    const payload = session.consumeProducerFact(phase, inputDigest);
+    return payload === undefined ? undefined : parse(payload);
+  } catch {
+    // An ambiguous, corrupt, or stale session fact is never a finding and never proof authority.
+    // Execute the complete producer phase below instead (SPEC §11.4).
+    return undefined;
+  }
+}
+
+function storeSourceCheckProducerFact(
+  session: KovoSourceCheckProducerFactSession | undefined,
+  phase: 'app-source-trust' | 'config-trust' | 'stylesheet',
+  inputDigest: string,
+  payload: string,
+): void {
+  if (session === undefined) return;
+  try {
+    session.storeProducerFact(phase, inputDigest, payload);
+  } catch {
+    // Cache storage is optional acceleration. A failed store cannot weaken this fresh proof.
+  }
+}
+
+const stylesheetProducerFactPayload = stringifyBuildValue({
+  passed: true,
+  schema: KOVO_SOURCE_CHECK_STYLESHEET_FACT_SCHEMA,
+});
+
+function isReusableStylesheetProducerFact(payload: string): boolean {
+  return payload === stylesheetProducerFactPayload;
 }
 
 async function executeStaticTrustWorker(
@@ -4165,9 +5200,11 @@ function authenticatedStaticTrustWorkerSuccess(
     typeof digest !== 'string' ||
     typeof payload !== 'string' ||
     requestDigest !== expectedRequestDigest ||
-    !equalStaticTrustAuthentication(
+    !verifyStaticTrustWorkerPayload(
+      expectedRequest.authenticationKey,
+      expectedRequestDigest,
+      payload,
       authentication,
-      staticTrustAuthentication(expectedRequest.authenticationKey, expectedRequestDigest, payload),
     ) ||
     digest !== staticTrustDigest(payload)
   ) {
@@ -5448,18 +6485,28 @@ async function runKovoBuildCheckPreflight(
     cache: boolean;
     execution: BuildExecutionModule;
     paranoidStaticAdvisory: boolean;
+    phaseCensus?: KovoSourceCheckPhaseCensus;
     preEvaluationStaticTrust: PreEvaluationStaticTrust;
     reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
     root: string;
   },
 ): Promise<KovoBuildCheckArtifacts> {
+  const graphStartedAt = startSourceCheckPhase(options.phaseCensus, 'build-check-graph');
   const artifacts = await buildCheckGraph(app, options);
+  recordSourceCheckPhase(options.phaseCensus, 'build-check-graph', 'executed', graphStartedAt);
+  const diagnosticsStartedAt = startSourceCheckPhase(options.phaseCensus, 'graph-diagnostics');
   const result = kovoCheckWithDiagnosticSourceCatalog(
     artifacts.graph,
     {
       paranoidStaticAdvisory: options.paranoidStaticAdvisory,
     },
     artifacts.diagnosticSourceCatalog,
+  );
+  recordSourceCheckPhase(
+    options.phaseCensus,
+    'graph-diagnostics',
+    'executed',
+    diagnosticsStartedAt,
   );
   if (result.exitCode === 0) return artifacts;
   if (options.paranoidStaticAdvisory && paranoidBuildCheckMayProceed(result.output)) {
@@ -5541,6 +6588,182 @@ function writeKovoBuildGraphArtifact(
     join(neutralBuild.outDir, 'escape-census-review-subjects.json'),
     `${stringifyBuildValue(escapeCensusReviews, 2)}\n`,
   );
+}
+
+function createKovoNeutralBuildSeal(
+  neutralBuild: KovoNeutralBuild,
+  completedCheckGraph: CoreGraph.KovoCheckInput,
+  artifactProvenance: unknown,
+  expectedIdentity: KovoBuildOneShotIdentity,
+): KovoNeutralBuildSeal {
+  const handlerPath = neutralBuild.serverHandlerPath;
+  if (
+    handlerPath === undefined ||
+    handlerPath !== join(neutralBuild.outDir, 'server', 'handler.mjs')
+  ) {
+    throw new TypeError('Kovo neutral build seal requires its exact staged server handler.');
+  }
+  const handlerSource = readFileSync(handlerPath, 'utf8');
+  if (handlerSource === KOVO_PENDING_SERVER_HANDLER_SOURCE) {
+    throw new TypeError('Kovo neutral build seal refused the pending server handler sentinel.');
+  }
+  const graphPath = join(neutralBuild.outDir, 'graph.json');
+  const graphSource = readFileSync(graphPath, 'utf8');
+  const expectedGraphSource = `${stringifyBuildValue(completedCheckGraph, 2)}\n`;
+  if (graphSource !== expectedGraphSource) {
+    throw new TypeError(
+      'Kovo neutral build graph artifact differs from the completed check graph.',
+    );
+  }
+  return {
+    artifactProvenanceDigest: kovoBuildOneShotDigest(artifactProvenance),
+    checkGraphDigest: kovoBuildOneShotDigest(completedCheckGraph),
+    graphArtifactDigest: kovoBuildArtifactByteDigest(bufferFrom(graphSource, 'utf8')),
+    handlerDigest: kovoBuildArtifactByteDigest(bufferFrom(handlerSource, 'utf8')),
+    invocationIdentityDigest: kovoBuildOneShotDigest(expectedIdentity),
+    neutralBuildDigest: kovoBuildOneShotDigest(neutralBuild),
+    neutralTreeDigest: kovoNeutralBuildTreeDigest(neutralBuild.outDir),
+    schema: KOVO_NEUTRAL_BUILD_SEAL_SCHEMA,
+  };
+}
+
+function assertKovoNeutralBuildSeal(
+  neutralBuild: KovoNeutralBuild,
+  completedCheckGraph: CoreGraph.KovoCheckInput,
+  artifactProvenance: unknown,
+  expectedIdentity: KovoBuildOneShotIdentity,
+  seal: KovoNeutralBuildSeal,
+): void {
+  requireKovoNeutralBuildSeal(seal);
+  const current = createKovoNeutralBuildSeal(
+    neutralBuild,
+    completedCheckGraph,
+    artifactProvenance,
+    expectedIdentity,
+  );
+  if (buildJsonStringify(current) !== buildJsonStringify(seal)) {
+    throw new TypeError('Kovo finalized neutral build integrity seal is stale.');
+  }
+}
+
+/** @internal Regression seam for post-handler neutral artifact integrity. */
+export function createKovoNeutralBuildSealForTesting(
+  neutralBuild: KovoNeutralBuild,
+  completedCheckGraph: CoreGraph.KovoCheckInput,
+  artifactProvenance: unknown,
+  expectedIdentity: KovoBuildOneShotIdentity,
+): KovoNeutralBuildSeal {
+  return createKovoNeutralBuildSeal(
+    neutralBuild,
+    completedCheckGraph,
+    artifactProvenance,
+    expectedIdentity,
+  );
+}
+
+/** @internal Regression seam for adversarial neutral artifact mutation tests. */
+export function assertKovoNeutralBuildSealForTesting(
+  neutralBuild: KovoNeutralBuild,
+  completedCheckGraph: CoreGraph.KovoCheckInput,
+  artifactProvenance: unknown,
+  expectedIdentity: KovoBuildOneShotIdentity,
+  seal: KovoNeutralBuildSeal,
+): void {
+  assertKovoNeutralBuildSeal(
+    neutralBuild,
+    completedCheckGraph,
+    artifactProvenance,
+    expectedIdentity,
+    seal,
+  );
+}
+
+function kovoNeutralBuildTreeDigest(root: string): string {
+  const rootStatus = lstatSync(root);
+  if (!rootStatus.isDirectory() || rootStatus.isSymbolicLink()) {
+    throw new TypeError('Kovo neutral build seal root must be one real directory.');
+  }
+  const entries: Array<
+    | { readonly kind: 'directory'; readonly path: string }
+    | {
+        readonly byteLength: number;
+        readonly contentDigest: string;
+        readonly kind: 'file';
+        readonly path: string;
+      }
+  > = [];
+  const pending: Array<{
+    readonly depth: number;
+    readonly path: string;
+    readonly relative: string;
+  }> = [{ depth: 0, path: root, relative: '' }];
+  let fileCount = 0;
+  let totalBytes = 0;
+  for (let pendingIndex = 0; pendingIndex < pending.length; pendingIndex += 1) {
+    const directory = pending[pendingIndex]!;
+    const names = uniqueSorted(readdirSync(directory.path, { encoding: 'utf8' }));
+    for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+      const name = names[nameIndex]!;
+      const relativePath = directory.relative === '' ? name : `${directory.relative}/${name}`;
+      if (!exactBuildAnalysisPath(relativePath)) {
+        throw new TypeError('Kovo neutral build seal encountered an invalid artifact path.');
+      }
+      const filePath = join(directory.path, name);
+      const status = lstatSync(filePath);
+      if (status.isSymbolicLink()) {
+        throw new TypeError(`Kovo neutral build seal refused symbolic link ${relativePath}.`);
+      }
+      if (status.isDirectory()) {
+        if (directory.depth >= KOVO_NEUTRAL_BUILD_SEAL_MAX_DEPTH) {
+          throw new TypeError('Kovo neutral build seal exceeded its directory depth limit.');
+        }
+        buildSecurityArrayAppend(
+          entries,
+          { kind: 'directory', path: relativePath },
+          'Kovo neutral build seal entries',
+        );
+        buildSecurityArrayAppend(
+          pending,
+          { depth: directory.depth + 1, path: filePath, relative: relativePath },
+          'Kovo neutral build seal directories',
+        );
+        continue;
+      }
+      if (!status.isFile()) {
+        throw new TypeError(`Kovo neutral build seal refused special file ${relativePath}.`);
+      }
+      fileCount += 1;
+      if (fileCount > KOVO_NEUTRAL_BUILD_SEAL_MAX_FILES) {
+        throw new TypeError('Kovo neutral build seal exceeded its file-count limit.');
+      }
+      if (status.size < 0 || status.size > KOVO_NEUTRAL_BUILD_SEAL_MAX_FILE_BYTES) {
+        throw new TypeError(`Kovo neutral build seal file ${relativePath} exceeds its byte limit.`);
+      }
+      const bytes = readFileSync(filePath);
+      if (bytes.byteLength !== status.size) {
+        throw new TypeError(`Kovo neutral build seal file ${relativePath} changed while reading.`);
+      }
+      totalBytes += bytes.byteLength;
+      if (totalBytes > KOVO_NEUTRAL_BUILD_SEAL_MAX_TOTAL_BYTES) {
+        throw new TypeError('Kovo neutral build seal exceeded its total byte limit.');
+      }
+      buildSecurityArrayAppend(
+        entries,
+        {
+          byteLength: bytes.byteLength,
+          contentDigest: kovoBuildArtifactByteDigest(bytes),
+          kind: 'file',
+          path: relativePath,
+        },
+        'Kovo neutral build seal entries',
+      );
+    }
+  }
+  return kovoBuildOneShotDigest({ entries, schema: 'kovo-neutral-build-tree/v1' });
+}
+
+function kovoBuildArtifactByteDigest(bytes: Uint8Array): string {
+  return `sha256:${hash('sha256', bytes, 'hex')}`;
 }
 
 /** @internal Derive detached review subjects without ever acquiring signing authority. */
@@ -8094,6 +9317,58 @@ async function inspectKovoBuildPreset(
   return preset.inspect(neutralBuild, context);
 }
 
+async function inspectFinalizedKovoBuildPreset(
+  preset: KovoBuildPreset,
+  neutralBuild: KovoNeutralBuild,
+  context: KovoBuildPresetContext,
+  completedCheckGraph: CoreGraph.KovoCheckInput,
+  artifactProvenance: unknown,
+  expectedIdentity: KovoBuildOneShotIdentity,
+  seal: KovoNeutralBuildSeal,
+): Promise<readonly KovoBuildPresetDiagnostic[]> {
+  // Config evaluation occurs in this final process before preset inspection. Recompute the seal
+  // immediately before handing the neutral build to the preset, then again after inspection. A
+  // configured built-in therefore cannot observe the client phase's sentinel or silently mutate
+  // source-bound neutral bytes before emission (SPEC §5.2 rule 9).
+  assertKovoNeutralBuildSeal(
+    neutralBuild,
+    completedCheckGraph,
+    artifactProvenance,
+    expectedIdentity,
+    seal,
+  );
+  const diagnostics = await inspectKovoBuildPreset(preset, neutralBuild, context);
+  assertKovoNeutralBuildSeal(
+    neutralBuild,
+    completedCheckGraph,
+    artifactProvenance,
+    expectedIdentity,
+    seal,
+  );
+  return diagnostics;
+}
+
+/** @internal Regression seam for finalized neutral-build preset sequencing. */
+export async function inspectFinalizedKovoBuildPresetForTesting(
+  preset: KovoBuildPreset,
+  neutralBuild: KovoNeutralBuild,
+  context: KovoBuildPresetContext,
+  completedCheckGraph: CoreGraph.KovoCheckInput,
+  artifactProvenance: unknown,
+  expectedIdentity: KovoBuildOneShotIdentity,
+  seal: KovoNeutralBuildSeal,
+): Promise<readonly KovoBuildPresetDiagnostic[]> {
+  return inspectFinalizedKovoBuildPreset(
+    preset,
+    neutralBuild,
+    context,
+    completedCheckGraph,
+    artifactProvenance,
+    expectedIdentity,
+    seal,
+  );
+}
+
 const kovoBuildEnvConventions = ['DATABASE_URL'] as const;
 
 function inferredKovoBuildDeclaredEnv(serverHandlerSource: string): readonly string[] {
@@ -8334,6 +9609,35 @@ function selectedKovoBuildPreset(
     return { name: 'cloudflare' };
   }
   return { name: 'node' };
+}
+
+async function defaultKovoBuildPreset(name: KovoBuildPresetName): Promise<KovoBuildPreset> {
+  // The final worker has no authored app to load. Resolve the built-in token in the same native
+  // framework graph that creates it; configured presets already carry their exact engine from the
+  // separately source-approved config evaluation. This preserves the private WeakMap witness while
+  // avoiding a Vite graph whose only previous purpose here was to evaluate the app again.
+  const [buildModule, presetModule] = await Promise.all([
+    import('@kovojs/server/build'),
+    import('@kovojs/server/internal/build-preset'),
+  ]);
+  const token =
+    name === 'cloudflare'
+      ? buildModule.cloudflare()
+      : name === 'vercel'
+        ? buildModule.vercel()
+        : buildModule.node();
+  const preset = presetModule.resolveKovoBuildPreset(token);
+  if (preset === undefined) {
+    throw new Error(`kovo build could not resolve framework-owned preset ${name}.`);
+  }
+  return preset;
+}
+
+/** @internal Regression seam proving the built-in token and resolver share one witness realm. */
+export async function defaultKovoBuildPresetForTesting(
+  name: KovoBuildPresetName,
+): Promise<KovoBuildPreset> {
+  return defaultKovoBuildPreset(name);
 }
 
 function requestedKovoBuildPresetName(
@@ -10678,21 +11982,6 @@ export function adoptKovoBuildOneShotClientPhaseCompilerModules(
   };
 }
 
-/** @internal Re-mint only a private, authenticated server-phase handoff in a fresh worker. */
-export function adoptKovoBuildOneShotServerPhaseCompilerModules(
-  input: KovoBuildOneShotServerPhase,
-  installer: CompilerClientModuleHandoffInstaller,
-): KovoBuildOneShotServerPhase {
-  const serverPhase = requireKovoBuildOneShotServerPhase(input);
-  const clientModules = adoptCompilerClientModuleHandoffRecords(
-    serverPhase.clientModules,
-    serverPhase.clientModuleRoles,
-    installer,
-  );
-  installer.seal();
-  return { ...serverPhase, clientModules };
-}
-
 function adoptCompilerClientModuleHandoffRecords(
   modules: readonly KovoAppShellCompiledClientModule[],
   roles: readonly CompilerOwnedViteClientModuleRole[],
@@ -11523,9 +12812,11 @@ export function kovoServerHandlerEntrySource(
       runtimeTarget === 'cloudflare'
         ? ''
         : "import '@kovojs/server/internal/sql-parser-authority-bootstrap';",
-      `import { createRequestHandler, deriveClosedKovoApp, resolveKovoAppToken, runWithGeneratedLiveTargetRegistry } from ${stringifyBuildValue(
-        generatedHandlerRuntimeHref(),
-      )};`,
+      `import { createRequestHandler, deriveClosedKovoApp, resolveKovoAppToken, runWithGeneratedLiveTargetRegistry${
+        runtimeTarget === 'cloudflare'
+          ? ''
+          : ', readFrameworkProvedDocumentCompressionWitnessForGeneratedHandler'
+      } } from ${stringifyBuildValue(generatedHandlerRuntimeHref())};`,
       generatedClientModuleEntry === undefined
         ? ''
         : `import { claimGeneratedBuildClientModuleInstaller } from ${stringifyBuildValue(
@@ -11548,6 +12839,12 @@ export function kovoServerHandlerEntrySource(
       "const app = resolveKovoAppToken(appToken, 'generated production handler');",
       `const stylesheetAssets = ${stringifyBuildValue(stylesheetAssets)};`,
       'export default createRequestHandler(appWithBuildStylesheetAssets(app, stylesheetAssets));',
+      runtimeTarget === 'cloudflare'
+        ? ''
+        : '// SPEC §§2/9.5/14: generated-only, read-only proof bridge for the emitted adapter.',
+      runtimeTarget === 'cloudflare'
+        ? ''
+        : 'export const __kovoReadProvedDocumentCompressionWitness = readFrameworkProvedDocumentCompressionWitnessForGeneratedHandler;',
       '',
       'function appWithBuildStylesheetAssets(app, assets) {',
       '  const liveTargetRenderers = [];',
@@ -12922,7 +14219,7 @@ function buildErrorResult(error: unknown): CliCommandResult {
 
 function sourceCheckErrorResult(
   error: unknown,
-  census?: KovoSourceCheckPhaseCensus | undefined,
+  census?: KovoSourceCheckPhaseCensus,
 ): CliCommandResult {
   const configurationError = error instanceof KovoCommandConfigurationError;
   const result: CliCommandResult = {

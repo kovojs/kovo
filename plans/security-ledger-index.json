@@ -47,48 +47,7 @@
       "summary": "Additional security capability follow-ups not owned by the primary backlog."
     }
   ],
-  "transientLedgers": [
-    {
-      "path": "plans/bugz-33.md",
-      "kind": "bugz",
-      "state": "closed-pending-publication",
-      "openedOn": "2026-07-17",
-      "closedOn": "2026-07-18",
-      "archiveBy": "2026-08-15",
-      "archivePath": "plans/history/bugz-33.md",
-      "summary": "Reviewed 2026-07-26: remediation remains complete; publish the exact verified tip, observe required CI, then archive."
-    },
-    {
-      "path": "plans/bugz-34.md",
-      "kind": "bugz",
-      "state": "closed-pending-publication",
-      "openedOn": "2026-07-18",
-      "closedOn": "2026-07-18",
-      "archiveBy": "2026-08-16",
-      "archivePath": "plans/history/bugz-34.md",
-      "summary": "Reviewed 2026-07-26: remediation remains complete; publish the exact verified tip, observe required CI, then archive."
-    },
-    {
-      "path": "plans/bugz-35.md",
-      "kind": "bugz",
-      "state": "closed-pending-publication",
-      "openedOn": "2026-07-21",
-      "closedOn": "2026-07-21",
-      "archiveBy": "2026-08-18",
-      "archivePath": "plans/history/bugz-35.md",
-      "summary": "All four security/evidence defects are remediated; publish the exact verified tip, observe required CI, then archive."
-    },
-    {
-      "path": "plans/bugz-36.md",
-      "kind": "bugz",
-      "state": "closed-pending-publication",
-      "openedOn": "2026-07-21",
-      "closedOn": "2026-07-22",
-      "archiveBy": "2026-08-18",
-      "archivePath": "plans/history/bugz-36.md",
-      "summary": "All compiler, browser, deploy-coherence, and security-evidence defects are remediated; publish the exact verified tip, observe required CI, then archive."
-    }
-  ],
+  "transientLedgers": [],
   "history": {
     "dedupRoots": ["plans"],
     "series": [
@@ -121,8 +80,8 @@
       },
       {
         "id": "numbered-bug-ledgers",
-        "summary": "Numbered bug ledgers through bugz-32; exact findings and refutations remain in the source files.",
-        "representativePaths": ["plans/bugz.md", "plans/bugz-32.md"]
+        "summary": "Numbered bug ledgers through bugz-36; exact findings and refutations remain in the source files and archived history.",
+        "representativePaths": ["plans/bugz.md", "plans/history/bugz-36.md"]
       }
     ]
   }

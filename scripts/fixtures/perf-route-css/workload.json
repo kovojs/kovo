@@ -1,0 +1,134 @@
+{
+  "schema": "kovo-route-css-workload/v2",
+  "name": "matched-commerce-listing-detail",
+  "description": "A counterfactual partition of the real capability-matched Kovo stylesheet for the matched-l0 listing and detail workload.",
+  "sources": [
+    {
+      "id": "stylesheet",
+      "file": "benchmarks/kovo/src/styles.css",
+      "expectedDigest": "sha256:5220da7b4cb35e65f9da9bb379c50924f421f833622ad891a8a0b0d04546a86f",
+      "evidence": [
+        {
+          "text": "[popover]:not(:popover-open) {\n  display: none;\n}",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "id": "routes",
+      "file": "benchmarks/kovo/src/app.tsx",
+      "expectedDigest": "sha256:06e437f3a574b4f8a036b312a3273f6552b3363276441b21db5d8a1f2c1e188d",
+      "evidence": [
+        {
+          "text": "const benchmarkStylesheets = [stylesheet('./styles.css')] as const;",
+          "occurrences": 1
+        },
+        {
+          "text": "const matchedL0HomeRoute = app.route('/matched/l0', {",
+          "occurrences": 1
+        },
+        {
+          "text": "const matchedL0ProductRoute = app.route('/matched/l0/product/:slug', {",
+          "occurrences": 1
+        },
+        {
+          "text": "stylesheets: benchmarkStylesheets,",
+          "occurrences": 8
+        }
+      ]
+    },
+    {
+      "id": "workload",
+      "file": "benchmarks/run-all.mjs",
+      "expectedDigest": "sha256:aadab2af7780f3fa77f5a211a3292c0d3f6f12667a969c2ca7ceebe67d00cbad",
+      "evidence": [
+        {
+          "text": "'matched-l0': { listing: '/matched/l0', scenarios: ['coldLoad', 'navigation'] }",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "id": "matched-fixture",
+      "file": "benchmarks/shared/matched-fixture.json",
+      "expectedDigest": "sha256:d25225ead82bd307b6ceba10b8a2db5404ef8aa3af9acb6231b5e5719383a919",
+      "evidence": [
+        {
+          "text": "\"schema\": \"kovo-benchmark-matched-fixture/v1\"",
+          "occurrences": 1
+        },
+        {
+          "text": "\"serverSemantic\": {",
+          "occurrences": 1
+        },
+        {
+          "text": "\"basePath\": \"/matched/l0\"",
+          "occurrences": 1
+        },
+        {
+          "text": "\"catalogItems\": 24",
+          "occurrences": 1
+        }
+      ]
+    }
+  ],
+  "stylesheetSource": "stylesheet",
+  "routeSource": "routes",
+  "componentOwnership": {
+    "shared": ["MatchedL0Shell"],
+    "listing": ["MatchedL0ListingPage", "MatchedProductCard"],
+    "detail": ["MatchedProductPage"]
+  },
+  "partitions": [
+    {
+      "id": "shared",
+      "classes": [
+        "brand",
+        "cart-button",
+        "cart-dialog",
+        "cart-line",
+        "cart-lines",
+        "cart-total",
+        "checkout",
+        "confirmation",
+        "detail-actions",
+        "modal-backdrop",
+        "nav",
+        "price",
+        "primary-button",
+        "secondary-button",
+        "shell"
+      ]
+    },
+    {
+      "id": "listing",
+      "classes": ["card", "card-actions", "grid", "hero"]
+    },
+    {
+      "id": "detail",
+      "classes": ["detail", "detail-copy", "detail-media", "qty-row"]
+    }
+  ],
+  "routes": [
+    {
+      "id": "listing",
+      "path": "/matched/l0",
+      "partitions": ["shared", "listing"]
+    },
+    {
+      "id": "detail",
+      "path": "/matched/l0/product/linen-field-jacket",
+      "partitions": ["shared", "detail"]
+    }
+  ],
+  "sessions": [
+    {
+      "id": "listing-to-detail",
+      "routes": ["listing", "detail"]
+    },
+    {
+      "id": "detail-to-listing",
+      "routes": ["detail", "listing"]
+    }
+  ]
+}

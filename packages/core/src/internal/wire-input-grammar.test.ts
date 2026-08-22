@@ -129,6 +129,12 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
         },
         {
           carrier: 'response-header',
+          grammar: 'content-security-policy',
+          id: 'response-header.content-security-policy',
+          name: 'content-security-policy',
+        },
+        {
+          carrier: 'response-header',
           grammar: 'http-field-value',
           id: 'response-header.vary',
           name: 'vary',

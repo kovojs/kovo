@@ -1,0 +1,2255 @@
+import { createHash } from 'node:crypto';
+import {
+  cpSync,
+  linkSync,
+  lstatSync,
+  mkdirSync,
+  renameSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { inspectDevPortAllocation } from '../benchmarks/harness/dev-port-allocation.mjs';
+import {
+  attachReadyProfileSealCapability,
+  collectDevReadyProfileControllerState,
+  createDevReadyProfiler,
+  DEV_READY_PROFILE_CONTROLLER_BINDING_SCHEMA,
+  DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA,
+  DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
+  DEV_READY_PROFILE_SCHEDULE,
+  DEV_READY_PROFILE_SCHEMA,
+  DEV_READY_PROFILE_WINDOW_SCHEMA,
+  devReadyProfileFailureDiagnostic,
+  devReadyProfileSchedule,
+  exactReadyCallEvidence,
+  parseDevReadyProfileArgs,
+  profiledReadyObservationFindings,
+  readStableReadyProfileFile,
+  runDevReadyProfile,
+  runReadyProfileCell,
+  sealDevReadyProfileArtifacts,
+  validReadyProfileAnalysis,
+  validateProfiledReadyObservation,
+  validateReadyCpuProfile,
+  validateReadyPreciseCoverage,
+} from './perf-dev-ready-profile.mjs';
+import {
+  DEV_CRITICAL_PATH_CANDIDATE,
+  DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
+} from './perf-dev-generation-spike.mjs';
+import {
+  publishReadyProfileArtifacts,
+  verifyProfileArtifactCustody,
+} from './perf-dev-ready-profile-bootstrap.mjs';
+import {
+  DEV_READY_PROFILER_CAPTURE_SUBSTAGES,
+  devReadyProfilerCaptureFailure,
+} from './lib/perf-dev-ready-failure.mjs';
+
+const roots = [];
+const CONTROLLER_FILE_PATHS = [
+  'benchmarks/corpora/dev-loop.mjs',
+  'benchmarks/corpora/dev-process-marker.mjs',
+  'benchmarks/corpora/generate.mjs',
+  'benchmarks/harness/dev-port-allocation.mjs',
+  'packages/icons/scripts/icon-plan.mjs',
+  'scripts/component-catalog-schema.mjs',
+  'scripts/lib/bounded-regular-file.mjs',
+  'scripts/lib/cli-entry.mjs',
+  'scripts/lib/deterministic-tarball.mjs',
+  'scripts/lib/pack-without-lifecycle.mjs',
+  'scripts/lib/perf-dev-ready-failure.mjs',
+  'scripts/lib/perf-dev-session-evidence.mjs',
+  'scripts/lib/perf-execution.mjs',
+  'scripts/lib/perf-host.mjs',
+  'scripts/lib/perf-packed-kovo-product.mjs',
+  'scripts/lib/perf-provenance.mjs',
+  'scripts/lib/perf-ready-route.mjs',
+  'scripts/lib/process-tree-rss.mjs',
+  'scripts/lib/repo-root.mjs',
+  'scripts/package-exports.mjs',
+  'scripts/perf-cli-startup-benchmark.mjs',
+  'scripts/perf-dev-edit-profile.mjs',
+  'scripts/perf-dev-generation-spike.mjs',
+  'scripts/perf-dev-ready-profile-bootstrap.mjs',
+  'scripts/perf-dev-ready-profile.mjs',
+  'scripts/public-packages.mjs',
+  'scripts/release-packages.mjs',
+];
+const CONTROLLER_LOCK_PATHS = [
+  'pnpm-lock.yaml',
+  'benchmarks/nextjs/pnpm-lock.yaml',
+  'benchmarks/harness/pnpm-lock.yaml',
+];
+const CONTROLLER_BOUND_PATHS = ['package.json', ...CONTROLLER_LOCK_PATHS, ...CONTROLLER_FILE_PATHS];
+
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
+});
+
+describe('authenticated cold-first-ready diagnostic', () => {
+  it('emits a bounded actionable diagnostic when an authenticated child is unproven', () => {
+    expect(
+      devReadyProfileFailureDiagnostic({
+        verdict: { reasons: ['block 0 baseline: inspector disconnected'], status: 'unproven' },
+      }),
+    ).toBe(
+      'fresh-ready diagnostic did not complete: {"reasons":["block 0 baseline: inspector disconnected"],"status":"unproven"}',
+    );
+    expect(
+      devReadyProfileFailureDiagnostic({
+        verdict: { reasons: ['x'.repeat(20_000)], status: 'unproven' },
+      }).length,
+    ).toBeLessThanOrEqual(8192);
+    expect(devReadyProfileFailureDiagnostic({ verdict: { status: 'diagnostic-only' } })).toBeNull();
+  });
+
+  it('reports deterministic bounded findings for each rejected profiled observation field', () => {
+    const valid = completeProfiledObservation();
+    expect(profiledReadyObservationFindings(valid)).toEqual([]);
+    expect(validateProfiledReadyObservation(valid)).toBe(valid);
+
+    const invalid = structuredClone(valid);
+    delete invalid.success;
+    invalid.browserContextClosed = false;
+    invalid.lifecycle.complete = false;
+    invalid.durationMs = -1;
+    invalid.paintFenceMs = Number.NaN;
+    invalid.peakRssBytes = 0;
+    invalid.rssSamples = 0;
+    invalid.browser.requestFailedCount = 2;
+    invalid.browser.unexpectedErrorCount = 1;
+    delete invalid.readinessProbe.path;
+    invalid.readinessProbe.status = 500;
+    const secretSchema = `do-not-disclose-${'x'.repeat(10_000)}`;
+    invalid.readyDiagnostic.schema = secretSchema;
+    invalid.readyDiagnostic.diagnosticOnly.acceptanceEligible = true;
+
+    const findings = profiledReadyObservationFindings(invalid);
+    expect(findings).toEqual([
+      'success: expected true; observed undefined',
+      'browserContextClosed: expected true; observed false',
+      'lifecycle.complete: expected true; observed false',
+      'durationMs: expected a finite non-negative number; observed number(-1)',
+      'paintFenceMs: expected a finite non-negative number; observed number(NaN)',
+      'peakRssBytes: expected a positive safe integer; observed number(0)',
+      'rssSamples: expected a positive safe integer; observed number(0)',
+      'browser.requestFailedCount: expected 0; observed number(2)',
+      'browser.unexpectedErrorCount: expected 0; observed number(1)',
+      'readinessProbe: expected an exact successful root-route probe; observed object(keys=3,attempts=number(1),path=undefined,status=number(500),transientFailures=number(0))',
+      `readyDiagnostic.schema: expected ${DEV_READY_PROFILE_WINDOW_SCHEMA}; observed string(length=${String(secretSchema.length)})`,
+      'readyDiagnostic.diagnosticOnly.acceptanceEligible: expected false; observed true',
+      `errorContext,stage=none,profilerSubstage=none,category=other,utf8Bytes=0,sha256=${sha256(Buffer.from(''))}`,
+    ]);
+    const message = (() => {
+      try {
+        validateProfiledReadyObservation(invalid);
+        throw new Error('expected profiled observation validation to fail');
+      } catch (error) {
+        return error.message;
+      }
+    })();
+    expect(message).toContain(findings.join('; '));
+    expect(message).not.toContain('do-not-disclose');
+    expect(message.length).toBeLessThan(4_096);
+  });
+
+  it('adds bounded deterministic error context only after an existing observation failure', () => {
+    const valid = completeProfiledObservation();
+    valid.error = `dev process exited before ready: ${'VALID_SECRET'.repeat(1_000)}`;
+    valid.failureStage = 'ready-wait';
+    valid.profilerFailureSubstage = 'cpu-validation';
+    expect(profiledReadyObservationFindings(valid)).toEqual([]);
+    expect(validateProfiledReadyObservation(valid)).toBe(valid);
+
+    const cases = [
+      [
+        'dev process exited before ready: PRIVATE_LOG_TAIL',
+        'ready-wait',
+        'process-exited-before-ready',
+        'none',
+      ],
+      ['dev ready timed out: PRIVATE_SELECTOR', 'ready-wait', 'dev-ready-timeout', 'none'],
+      [
+        'dev ready shared deadline expired during browser navigation',
+        'ready-wait',
+        'shared-deadline',
+        'none',
+      ],
+      [
+        'dev ready route probe timed out: PRIVATE_RESPONSE',
+        'ready-wait',
+        'route-probe-timeout',
+        'none',
+      ],
+      [
+        'unclassified; browser telemetry recorded 1 request failures',
+        'telemetry',
+        'browser',
+        'none',
+      ],
+      [
+        'fresh-ready diagnostic abort: PRIVATE_INSPECTOR_FAILURE',
+        'cleanup-profiler-abort',
+        'profiler',
+        'none',
+      ],
+      [
+        'fresh-ready profiler capture failure',
+        'evidence-capture-profiler',
+        'profiler',
+        'cpu-validation',
+      ],
+      [
+        'fresh ready did not produce process-tree RSS evidence',
+        'evidence-capture-rss',
+        'rss',
+        'none',
+      ],
+      [
+        'PRIVATE_OTHER_FAILURE_雪',
+        'not-framework-owned',
+        'other',
+        'PRIVATE_UNTRUSTED_SUBSTAGE',
+      ],
+    ];
+    expect(Buffer.byteLength(cases.at(-1)[0], 'utf8')).toBeGreaterThan(cases.at(-1)[0].length);
+    for (const [error, failureStage, category, profilerFailureSubstage] of cases) {
+      const invalid = completeProfiledObservation();
+      invalid.success = false;
+      invalid.error = error;
+      invalid.failureStage = failureStage;
+      invalid.profilerFailureSubstage = profilerFailureSubstage;
+      const expectedProfilerSubstage =
+        profilerFailureSubstage === 'PRIVATE_UNTRUSTED_SUBSTAGE'
+          ? 'unknown'
+          : profilerFailureSubstage;
+      const expectedContext = [
+        'errorContext',
+        `stage=${failureStage === 'not-framework-owned' ? 'unknown' : failureStage}`,
+        `profilerSubstage=${expectedProfilerSubstage}`,
+        `category=${category}`,
+        `utf8Bytes=${String(Buffer.byteLength(error, 'utf8'))}`,
+        `sha256=${sha256(Buffer.from(error))}`,
+      ].join(',');
+      const findings = profiledReadyObservationFindings(invalid);
+      expect(findings).toEqual([
+        'success: expected true; observed false',
+        expectedContext,
+      ]);
+      expect(profiledReadyObservationFindings(invalid)).toEqual(findings);
+      expect(findings.join('; ')).not.toContain('PRIVATE_');
+      expect(findings).toHaveLength(2);
+
+      let message = '';
+      try {
+        validateProfiledReadyObservation(invalid);
+      } catch (cause) {
+        message = cause.message;
+      }
+      expect(message).toContain(expectedContext);
+      expect(message).not.toContain('PRIVATE_');
+      expect(message.length).toBeLessThan(1_024);
+    }
+  });
+
+  it('fixes one N=216 first-ready window in exact B,S,S,B order', () => {
+    expect(DEV_READY_PROFILE_SCHEMA).toBe('kovo-dev-ready-profile/v1');
+    expect(DEV_READY_PROFILE_SCHEDULE).toEqual([
+      { lane: 'baseline', occurrence: 0, scheduleIndex: 0 },
+      { lane: 'spike', occurrence: 0, scheduleIndex: 1 },
+      { lane: 'spike', occurrence: 1, scheduleIndex: 2 },
+      { lane: 'baseline', occurrence: 1, scheduleIndex: 3 },
+    ]);
+    expect(devReadyProfileSchedule(20_000)).toEqual([
+      expect.objectContaining({ lane: 'baseline', port: 20_000, inspectorPort: 20_001 }),
+      expect.objectContaining({ lane: 'spike', port: 20_128, inspectorPort: 20_129 }),
+      expect.objectContaining({ lane: 'spike', port: 20_256, inspectorPort: 20_257 }),
+      expect.objectContaining({ lane: 'baseline', port: 20_384, inspectorPort: 20_385 }),
+    ]);
+    expect(() => devReadyProfileSchedule(65_400)).toThrow(/profile cell 2 port/u);
+    expect(
+      parseDevReadyProfileArgs([
+        '--diagnose',
+        '--baseline-root',
+        '/tmp/baseline',
+        '--spike-root',
+        '/tmp/spike',
+        '--out',
+        '/tmp/report.json',
+      ]),
+    ).toMatchObject({ diagnose: true, out: '/tmp/report.json' });
+  });
+
+  it('binds committed controller inputs without publishing its local checkout path', async () => {
+    const root = await temporaryRoot();
+    await Promise.all(
+      CONTROLLER_BOUND_PATHS.map(async (file) => {
+        await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+        await writeFile(
+          path.join(root, file),
+          file === 'package.json'
+            ? `${JSON.stringify({ packageManager: 'pnpm@10.15.1' })}\n`
+            : `${file}\n`,
+        );
+      }),
+    );
+    const binding = await controllerBindingFixture(root);
+    const state = collectDevReadyProfileControllerState({
+      binding,
+      pnpmVersion: '10.15.1',
+      root,
+    });
+
+    expect(state).not.toHaveProperty('root');
+    expect(state).toMatchObject({
+      commit: 'a'.repeat(40),
+      dirty: false,
+      immutableSnapshot: true,
+      packageManager: 'pnpm@10.15.1',
+      pnpmVersion: '10.15.1',
+      tree: 'b'.repeat(40),
+    });
+    expect(Object.keys(state.locks).sort()).toEqual([...CONTROLLER_LOCK_PATHS].sort());
+    expect(state.manifest).toMatchObject({ gitBlob: 'c'.repeat(40) });
+    expect(Object.keys(state.scripts).sort()).toEqual([...CONTROLLER_FILE_PATHS].sort());
+    expect(Object.values(state.scripts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          gitBlob: 'c'.repeat(40),
+          sha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+        }),
+      ]),
+    );
+    await writeFile(path.join(root, CONTROLLER_FILE_PATHS[0]), 'different immutable bytes\n');
+    expect(() =>
+      collectDevReadyProfileControllerState({ binding, pnpmVersion: '10.15.1', root }),
+    ).toThrow(/bytes differ from committed blob/u);
+  });
+
+  it('authenticates the paused process identity and rejects a wrong PID/target', async () => {
+    const root = await temporaryRoot();
+    const product = await syntheticPackedScript(root);
+    const profileDir = path.join(root, 'profiles');
+    await mkdir(profileDir);
+    const marker = 'KOVO_PERF_DEV_SESSION_READY_WRONG';
+    const closed = vi.fn();
+    await expect(
+      createDevReadyProfiler(profilerOptions({ marker, product, profileDir }), {
+        connectInspector: async () => ({
+          close: closed,
+          identity: inspectorIdentity(8_888, marker, 'wrong-target'),
+          send: vi.fn(),
+        }),
+      }),
+    ).rejects.toThrow(/does not belong to the spawned process/u);
+    expect(closed).toHaveBeenCalledOnce();
+    await expect(readFile(path.join(profileDir, '.cell-000-baseline.lock'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it('requires the exact --inspect-brk invocation before starting either sampler', async () => {
+    const root = await temporaryRoot();
+    const product = await syntheticPackedScript(root);
+    const profileDir = path.join(root, 'profiles');
+    await mkdir(profileDir);
+    const marker = 'KOVO_PERF_DEV_SESSION_READY_UNPAUSED';
+    const commands = [];
+    const session = inspectorSession({
+      commands,
+      execArgv: ['--inspect=127.0.0.1:21216'],
+      marker,
+      product,
+    });
+    await expect(
+      createDevReadyProfiler(profilerOptions({ marker, product, profileDir }), {
+        connectInspector: async () => session,
+      }),
+    ).rejects.toThrow(/not the exact paused packed CLI invocation/u);
+    expect(commands).toEqual(['close']);
+  });
+
+  it('retains an exact lexical entrypoint across a canonical parent-path alias', async () => {
+    const root = await temporaryRoot();
+    const canonicalParent = path.join(root, 'canonical-parent');
+    const lexicalParent = path.join(root, 'lexical-parent');
+    await mkdir(canonicalParent);
+    symlinkSync(canonicalParent, lexicalParent, 'dir');
+    const product = await syntheticPackedScript(lexicalParent);
+    const expectedEntrypoint = packedEntrypoint(product);
+    const canonicalEntrypoint = await realpath(expectedEntrypoint);
+    const profileDir = path.join(root, 'profiles');
+    await mkdir(profileDir);
+    const marker = 'KOVO_PERF_DEV_SESSION_READY_LEXICAL_ALIAS';
+    const commands = [];
+    const session = inspectorSession({ commands, marker, product });
+    const connectInspector = vi.fn(async (options) => {
+      expect(options.expectedEntrypoint).toBe(expectedEntrypoint);
+      expect(options.expectedEntrypoint).not.toBe(canonicalEntrypoint);
+      return session;
+    });
+
+    const profiler = await createDevReadyProfiler(
+      profilerOptions({ marker, product, profileDir }),
+      { connectInspector },
+    );
+    await profiler.abort();
+
+    expect(connectInspector).toHaveBeenCalledOnce();
+    expect(commands).toEqual(['close']);
+  });
+
+  it('rejects lexical and canonical entrypoint escapes, final symlinks, and substitutions', async () => {
+    const root = await temporaryRoot();
+    const profileDir = path.join(root, 'profiles');
+    await mkdir(profileDir);
+    const connectInspector = vi.fn();
+    const optionsFor = (product, suffix) =>
+      profilerOptions({
+        marker: `KOVO_PERF_DEV_SESSION_READY_PATH_${suffix}`,
+        product,
+        profileDir,
+      });
+
+    const unnormalizedProduct = await syntheticPackedScript(path.join(root, 'unnormalized'));
+    await expect(
+      createDevReadyProfiler(
+        {
+          ...optionsFor(unnormalizedProduct, 'UNNORMALIZED'),
+          expectedEntrypoint: `${unnormalizedProduct.consumerRoot}${path.sep}node_modules${path.sep}..${path.sep}outside.mjs`,
+        },
+        { connectInspector },
+      ),
+    ).rejects.toThrow(/absolute normalized path/u);
+
+    const lexicalEscapeProduct = await syntheticPackedScript(path.join(root, 'lexical-escape'));
+    const externalEntrypoint = path.join(root, 'external-entrypoint.mjs');
+    await writeFile(externalEntrypoint, '#!/usr/bin/env node\n');
+    await expect(
+      createDevReadyProfiler(
+        {
+          ...optionsFor(lexicalEscapeProduct, 'LEXICAL_ESCAPE'),
+          expectedEntrypoint: externalEntrypoint,
+        },
+        { connectInspector },
+      ),
+    ).rejects.toThrow(/escaped the lexical packed consumer/u);
+
+    const canonicalEscapeProduct = await syntheticPackedScript(path.join(root, 'canonical-escape'));
+    const externalDirectory = path.join(root, 'external-directory');
+    await mkdir(externalDirectory);
+    await writeFile(path.join(externalDirectory, 'bin.mjs'), '#!/usr/bin/env node\n');
+    const escapedDirectory = path.join(canonicalEscapeProduct.consumerRoot, 'escaped-directory');
+    symlinkSync(externalDirectory, escapedDirectory, 'dir');
+    await expect(
+      createDevReadyProfiler(
+        {
+          ...optionsFor(canonicalEscapeProduct, 'CANONICAL_ESCAPE'),
+          expectedEntrypoint: path.join(escapedDirectory, 'bin.mjs'),
+        },
+        { connectInspector },
+      ),
+    ).rejects.toThrow(/escaped the canonical packed consumer/u);
+
+    const substitutedProduct = await syntheticPackedScript(path.join(root, 'substituted'));
+    const substitutedEntrypoint = packedEntrypoint(substitutedProduct);
+    const replacementEntrypoint = path.join(path.dirname(substitutedEntrypoint), 'replacement.mjs');
+    await writeFile(replacementEntrypoint, '#!/usr/bin/env node\n');
+    unlinkSync(substitutedEntrypoint);
+    symlinkSync(replacementEntrypoint, substitutedEntrypoint);
+    await expect(
+      createDevReadyProfiler(optionsFor(substitutedProduct, 'SUBSTITUTED'), {
+        connectInspector,
+      }),
+    ).rejects.toThrow(/regular non-symlink file/u);
+
+    const rootTargetProduct = await syntheticPackedScript(path.join(root, 'root-target'));
+    const rootAlias = path.join(root, 'final-root-symlink');
+    symlinkSync(rootTargetProduct.consumerRoot, rootAlias, 'dir');
+    const rootAliasProduct = { ...rootTargetProduct, consumerRoot: rootAlias };
+    await expect(
+      createDevReadyProfiler(optionsFor(rootAliasProduct, 'FINAL_ROOT_SYMLINK'), {
+        connectInspector,
+      }),
+    ).rejects.toThrow(/packed consumer root must be a non-symlink directory/u);
+
+    expect(connectInspector).not.toHaveBeenCalled();
+  });
+
+  it('starts stop and precise-coverage capture concurrently without changing tuple or command order', async () => {
+    const root = await temporaryRoot();
+    const product = await syntheticPackedScript(root);
+    const profileDir = path.join(root, 'profiles');
+    await mkdir(profileDir);
+    const marker = 'KOVO_PERF_DEV_SESSION_READY_CONCURRENT_CAPTURE';
+    const commands = [];
+    const cpu = deferredPromise();
+    const coverage = deferredPromise();
+    const session = inspectorSession({ commands, marker, product });
+    const originalSend = session.send.bind(session);
+    session.send = async (method) => {
+      if (method === 'Profiler.stop') {
+        commands.push(method);
+        return cpu.promise;
+      }
+      if (method === 'Profiler.takePreciseCoverage') {
+        commands.push(method);
+        return coverage.promise;
+      }
+      return originalSend(method);
+    };
+    const profiler = await createDevReadyProfiler(
+      profilerOptions({ marker, product, profileDir }),
+      { connectInspector: async () => session },
+    );
+
+    await profiler.startAndResume();
+    const capture = profiler.captureAtReady();
+    expect(commands.slice(-2)).toEqual([
+      'Profiler.stop',
+      'Profiler.takePreciseCoverage',
+    ]);
+    coverage.resolve(product.coverage);
+    cpu.resolve({ profile: syntheticCpuProfile(product) });
+    await expect(capture).resolves.toMatchObject({ schema: DEV_READY_PROFILE_WINDOW_SCHEMA });
+    expect(commands).toEqual([
+      'Profiler.enable',
+      'Profiler.setSamplingInterval',
+      'Profiler.startPreciseCoverage',
+      'Profiler.start',
+      'Runtime.runIfWaitingForDebugger',
+      'Profiler.stop',
+      'Profiler.takePreciseCoverage',
+      'Profiler.stopPreciseCoverage',
+      'close',
+    ]);
+  });
+
+  it('keeps first concurrent Inspector failure precedence and safely retains an opaque cause', async () => {
+    expect(DEV_READY_PROFILER_CAPTURE_SUBSTAGES).toEqual([
+      'none',
+      'inspector-profiler-stop',
+      'inspector-take-precise-coverage',
+      'inspector-stop-precise-coverage',
+      'cpu-validation',
+      'coverage-validation',
+      'exact-call-evidence',
+      'attribution-capture',
+      'cpu-serialization',
+      'coverage-serialization',
+      'artifact-write',
+      'session-close',
+      'unknown',
+    ]);
+    expect(Object.isFrozen(DEV_READY_PROFILER_CAPTURE_SUBSTAGES)).toBe(true);
+
+    for (const first of ['stop', 'coverage']) {
+      const root = await temporaryRoot();
+      const product = await syntheticPackedScript(root);
+      const profileDir = path.join(root, 'profiles');
+      await mkdir(profileDir);
+      const marker = `KOVO_PERF_DEV_SESSION_READY_FIRST_${first.toUpperCase()}`;
+      const commands = [];
+      const cpu = deferredPromise();
+      const coverage = deferredPromise();
+      const opaqueCause = new Proxy(Object.create(null), {
+        get() {
+          throw new Error('opaque cause getter must not run');
+        },
+        getPrototypeOf() {
+          throw new Error('opaque cause prototype trap must not run');
+        },
+      });
+      const session = inspectorSession({ commands, marker, product });
+      let stopCalls = 0;
+      const originalSend = session.send.bind(session);
+      session.send = async (method) => {
+        if (method === 'Profiler.stop') {
+          commands.push(method);
+          stopCalls += 1;
+          return stopCalls === 1 ? cpu.promise : {};
+        }
+        if (method === 'Profiler.takePreciseCoverage') {
+          commands.push(method);
+          return coverage.promise;
+        }
+        return originalSend(method);
+      };
+      const profiler = await createDevReadyProfiler(
+        profilerOptions({ marker, product, profileDir }),
+        { connectInspector: async () => session },
+      );
+      await profiler.startAndResume();
+      const capture = profiler.captureAtReady();
+      const firstPromise = first === 'stop' ? cpu : coverage;
+      const secondPromise = first === 'stop' ? coverage : cpu;
+      firstPromise.reject(opaqueCause);
+      const failure = await capturedProfilerFailure(capture);
+      secondPromise.reject(new Error('later concurrent failure'));
+      await Promise.resolve();
+
+      expect(failure.substage).toBe(
+        first === 'stop'
+          ? 'inspector-profiler-stop'
+          : 'inspector-take-precise-coverage',
+      );
+      expect(failure.cause).toBe(opaqueCause);
+      await profiler.abort();
+    }
+  });
+
+  it('attributes each sequential capture boundary to its finite profiler substage', async () => {
+    const scenarios = [
+      {
+        failMethod: 'Profiler.stopPreciseCoverage',
+        substage: 'inspector-stop-precise-coverage',
+      },
+      { cpuProfile: {}, substage: 'cpu-validation' },
+      { coverage: {}, substage: 'coverage-validation' },
+      {
+        coverage: (product) => ({
+          ...product.coverage,
+          result: product.coverage.result.map((script) => ({ ...script, functions: [] })),
+        }),
+        substage: 'exact-call-evidence',
+      },
+      {
+        cpuProfile: (product, root) => {
+          const cpu = syntheticCpuProfile(product);
+          cpu.nodes[0].callFrame.url = pathToFileURL(path.join(root, 'missing-runtime.mjs')).href;
+          return cpu;
+        },
+        substage: 'attribution-capture',
+      },
+      {
+        cpuProfile: (product) => {
+          const cpu = syntheticCpuProfile(product);
+          cpu.toJSON = () => {
+            throw new Error('private CPU serialization failure');
+          };
+          return cpu;
+        },
+        substage: 'cpu-serialization',
+      },
+      {
+        coverage: (product) => {
+          const coverage = structuredClone(product.coverage);
+          coverage.toJSON = () => {
+            throw new Error('private coverage serialization failure');
+          };
+          return coverage;
+        },
+        substage: 'coverage-serialization',
+      },
+      { removeProfileDir: true, substage: 'artifact-write' },
+      { closeFailure: new Error('private close failure'), substage: 'session-close' },
+    ];
+
+    for (const [index, scenario] of scenarios.entries()) {
+      const root = await temporaryRoot();
+      const product = await syntheticPackedScript(root);
+      const profileDir = path.join(root, 'profiles');
+      await mkdir(profileDir);
+      const marker = `KOVO_PERF_DEV_SESSION_READY_SUBSTAGE_${String(index)}`;
+      const commands = [];
+      const cpuProfile =
+        typeof scenario.cpuProfile === 'function'
+          ? scenario.cpuProfile(product, root)
+          : scenario.cpuProfile;
+      const coverage =
+        typeof scenario.coverage === 'function'
+          ? scenario.coverage(product, root)
+          : scenario.coverage;
+      const session = inspectorSession({
+        closeFailure: scenario.closeFailure,
+        commands,
+        coverage,
+        cpuProfile,
+        failMethod: scenario.failMethod,
+        marker,
+        product,
+      });
+      const profiler = await createDevReadyProfiler(
+        profilerOptions({ marker, product, profileDir }),
+        { connectInspector: async () => session },
+      );
+      await profiler.startAndResume();
+      if (scenario.removeProfileDir === true) {
+        await rm(profileDir, { force: true, recursive: true });
+      }
+      const failure = await capturedProfilerFailure(profiler.captureAtReady());
+      expect(failure.substage).toBe(scenario.substage);
+      await profiler.abort();
+    }
+  });
+
+  it('writes exclusive raw CPU/coverage artifacts with exact packed ranges and source-map digests', async () => {
+    const root = await temporaryRoot();
+    const product = await syntheticPackedScript(root);
+    const profileDir = path.join(root, 'profiles');
+    await mkdir(profileDir);
+    const marker = 'KOVO_PERF_DEV_SESSION_READY_PROFILE';
+    const commands = [];
+    const session = inspectorSession({ commands, marker, product });
+    const profiler = await createDevReadyProfiler(
+      profilerOptions({ marker, product, profileDir }),
+      { connectInspector: async () => session },
+    );
+
+    await profiler.startAndResume();
+    const evidence = await profiler.captureAtReady();
+    await profiler.abort();
+
+    expect(commands).toEqual([
+      'Profiler.enable',
+      'Profiler.setSamplingInterval',
+      'Profiler.startPreciseCoverage',
+      'Profiler.start',
+      'Runtime.runIfWaitingForDebugger',
+      'Profiler.stop',
+      'Profiler.takePreciseCoverage',
+      'Profiler.stopPreciseCoverage',
+      'close',
+    ]);
+    expect(evidence).toMatchObject({
+      artifact: {
+        coverage: {
+          file: 'cell-000-baseline.coverage.json',
+          schema: DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA,
+        },
+        cpu: {
+          file: 'cell-000-baseline.cpuprofile',
+          schema: DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
+        },
+      },
+      diagnosticOnly: {
+        acceptanceEligible: false,
+        cpuSamplingIntervalMicros: 500,
+        profilerPerturbsWallAndRss: true,
+      },
+      product: {
+        digest: digest('a'),
+        scriptAssets: [
+          {
+            file: 'node_modules/@kovojs/compiler/dist/vite-config.mjs',
+            sha256: sha256(Buffer.from(product.source)),
+            sourceMap: { sha256: sha256(Buffer.from(product.sourceMap)) },
+          },
+        ],
+      },
+      schema: DEV_READY_PROFILE_WINDOW_SCHEMA,
+    });
+    expect(
+      evidence.calls.find((entry) => entry.name === 'resolveComponentQueryRuntimeNames'),
+    ).toMatchObject({ callCount: 3, present: true });
+    expect(
+      evidence.calls.find((entry) => entry.name === 'resolveFreshDirectQueryRuntimeNames'),
+    ).toMatchObject({ callCount: 3, present: true, required: false });
+    const cpuArtifact = JSON.parse(
+      await readFile(path.join(profileDir, evidence.artifact.cpu.file), 'utf8'),
+    );
+    const coverageArtifact = JSON.parse(
+      await readFile(path.join(profileDir, evidence.artifact.coverage.file), 'utf8'),
+    );
+    expect(cpuArtifact).toMatchObject({
+      binding: evidence.binding,
+      profile: syntheticCpuProfile(product),
+      schema: DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
+    });
+    expect(coverageArtifact).toMatchObject({
+      binding: evidence.binding,
+      calls: evidence.calls,
+      coverage: product.coverage,
+      schema: DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA,
+    });
+    expect(coverageArtifact.attribution).toEqual(evidence.attribution.coverage);
+  });
+
+  it('seals the exact eight-file census and recomputes calls plus retained frame attribution', async () => {
+    const fixture = await capturedSealableFixture();
+    const seal = sealDevReadyProfileArtifacts({
+      cells: fixture.cells,
+      profileDir: fixture.profileDir,
+      schedule: fixture.schedule,
+    });
+
+    expect(seal).toMatchObject({
+      analysis: {
+        overall: {
+          ranking: {
+            calls: {
+              census: {
+                authenticatedCallCount: 84,
+                totalCallCount: 84,
+                unattributedCallCount: 0,
+              },
+            },
+            cpu: {
+              census: {
+                idleSamples: 12,
+                rankedSamples: 68,
+                totalSamples: 88,
+                unattributedSamples: 8,
+              },
+            },
+          },
+          windows: 4,
+        },
+        policy: { wallTimeClaims: false },
+        schema: 'kovo-dev-ready-profile-analysis/v1',
+      },
+      cells: expect.arrayContaining([
+        expect.objectContaining({
+          artifacts: {
+            coverage: expect.objectContaining({ sealed: true }),
+            cpu: expect.objectContaining({ sealed: true }),
+          },
+        }),
+      ]),
+      directory: { files: expect.any(Array) },
+      schema: 'kovo-dev-ready-profile-artifact-seal/v1',
+    });
+    expect(seal.directory.files).toHaveLength(8);
+    expect(seal.analysis.overall.ranking.cpu.topFive.map((entry) => entry.rank)).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
+    expect(seal.analysis.overall.ranking.cpu.topFive.map((entry) => entry.selfSamples)).toEqual([
+      20, 16, 12, 8, 8,
+    ]);
+    expect(
+      seal.analysis.overall.ranking.cpu.topFive
+        .slice(3)
+        .map((entry) => entry.identity.functionName),
+    ).toEqual(['exactEntryCompilerHost', 'queryIdentityCompilerOptions']);
+    expect(validReadyProfileAnalysis(seal.analysis)).toBe(true);
+    expect(fixture.cells[0].profile.attribution.coverage[0]).toMatchObject({
+      contentBase64: expect.any(String),
+      map: {
+        contentBase64: expect.any(String),
+        kind: 'file',
+        sha256: sha256(Buffer.from(fixture.product.sourceMap)),
+      },
+      sha256: sha256(Buffer.from(fixture.product.source)),
+    });
+  });
+
+  it('rejects reordered, census-confused, or report-detached CPU/call rankings', async () => {
+    const fixture = await capturedSealableFixture();
+    const seal = sealDevReadyProfileArtifacts({
+      cells: fixture.cells,
+      profileDir: fixture.profileDir,
+      schedule: fixture.schedule,
+    });
+    const reordered = structuredClone(seal.analysis);
+    [reordered.overall.ranking.cpu.topFive[0], reordered.overall.ranking.cpu.topFive[1]] = [
+      reordered.overall.ranking.cpu.topFive[1],
+      reordered.overall.ranking.cpu.topFive[0],
+    ];
+    expect(validReadyProfileAnalysis(reordered)).toBe(false);
+
+    const censusConfused = structuredClone(seal.analysis);
+    censusConfused.overall.ranking.cpu.census.totalSamples += 1;
+    expect(validReadyProfileAnalysis(censusConfused)).toBe(false);
+
+    const detached = publicationReport(fixture.cells, seal);
+    detached.analysis.overall.ranking.calls.topFive[0].callCount += 1;
+    expect(() => verifyProfileArtifactCustody(detached, fixture.profileDir)).toThrow(/ranking/u);
+
+    const reorderedSeal = structuredClone(seal);
+    const forged = publicationReport(fixture.cells, reorderedSeal);
+    [
+      forged.analysis.overall.ranking.cpu.topFive[0],
+      forged.analysis.overall.ranking.cpu.topFive[1],
+    ] = [
+      forged.analysis.overall.ranking.cpu.topFive[1],
+      forged.analysis.overall.ranking.cpu.topFive[0],
+    ];
+    forged.artifactSeal.analysis = structuredClone(forged.analysis);
+    expect(() => verifyProfileArtifactCustody(forged, fixture.profileDir)).toThrow(/ranking/u);
+  });
+
+  it('publishes artifacts without clobber and rebinds the exact final-path directory identity', async () => {
+    const fixture = await capturedSealableFixture();
+    const seal = sealDevReadyProfileArtifacts({
+      cells: fixture.cells,
+      profileDir: fixture.profileDir,
+      schedule: fixture.schedule,
+    });
+    const report = publicationReport(fixture.cells, seal);
+    const controllerSeal = structuredClone(seal);
+    const target = path.join(fixture.root, 'published-profiles');
+    const publication = publishReadyProfileArtifacts(report, fixture.profileDir, target);
+    const finalIdentity = verifyProfileArtifactCustody(report, target);
+
+    expect(() => lstatSync(fixture.profileDir)).toThrow();
+    expect(report.artifactSeal.directory).toMatchObject({
+      controllerIdentity: controllerSeal.directory.identity,
+      identity: finalIdentity,
+      publication: 'exclusive-directory-plus-hardlinks/v1',
+    });
+    expect(publication.attestation).toMatchObject({
+      controllerDirectoryIdentity: controllerSeal.directory.identity,
+      finalDirectoryIdentity: finalIdentity,
+      publication: 'exclusive-directory-plus-hardlinks/v1',
+    });
+    expect(finalIdentity.ctimeNs).not.toBe(controllerSeal.directory.identity.ctimeNs);
+    for (const [index, cell] of report.artifactSeal.cells.entries()) {
+      for (const kind of ['cpu', 'coverage']) {
+        const before = controllerSeal.cells[index].artifacts[kind];
+        const after = cell.artifacts[kind];
+        expect(after).toMatchObject({
+          bytes: before.bytes,
+          dev: before.dev,
+          ino: before.ino,
+          mode: before.mode,
+          mtimeNs: before.mtimeNs,
+          sha256: before.sha256,
+        });
+        expect(after.ctimeNs).not.toBe(before.ctimeNs);
+      }
+    }
+  });
+
+  it('does not replace a profile target that appears at the publication boundary', async () => {
+    const fixture = await capturedSealableFixture();
+    const seal = sealDevReadyProfileArtifacts({
+      cells: fixture.cells,
+      profileDir: fixture.profileDir,
+      schedule: fixture.schedule,
+    });
+    const report = publicationReport(fixture.cells, seal);
+    const target = path.join(fixture.root, 'appearing-profile-target');
+    const marker = path.join(target, 'owned-by-other.json');
+
+    expect(() =>
+      publishReadyProfileArtifacts(report, fixture.profileDir, target, {
+        beforeTargetCreate() {
+          mkdirSync(target);
+          writeFileSync(marker, '{"owner":"other"}\n');
+        },
+      }),
+    ).toThrow();
+    expect(await readFile(marker, 'utf8')).toBe('{"owner":"other"}\n');
+    expect(verifyProfileArtifactCustody(report, fixture.profileDir)).toEqual(
+      seal.directory.identity,
+    );
+  });
+
+  it('rejects final-path replacement, swap, symlink, and same-byte new-inode races', async () => {
+    const mutations = [
+      {
+        hook: 'afterArtifactReopen',
+        mutate({ report, target }) {
+          const file = path.join(target, report.artifactSeal.directory.files[0]);
+          const replacement = `${file}.replacement`;
+          cpSync(file, replacement);
+          renameSync(replacement, file);
+        },
+      },
+      {
+        hook: 'afterFinalIdentity',
+        mutate({ report, target }) {
+          const [leftName, rightName] = report.artifactSeal.directory.files;
+          const left = path.join(target, leftName);
+          const right = path.join(target, rightName);
+          const temporary = `${left}.swap`;
+          renameSync(left, temporary);
+          renameSync(right, left);
+          renameSync(temporary, right);
+        },
+      },
+      {
+        hook: 'afterFinalDirectoryCensus',
+        mutate({ target }) {
+          const saved = `${target}.saved`;
+          renameSync(target, saved);
+          symlinkSync(saved, target);
+        },
+      },
+      {
+        hook: 'afterArtifactReopen',
+        mutate({ target }) {
+          const replacement = `${target}.replacement`;
+          const original = `${target}.original`;
+          cpSync(target, replacement, { recursive: true });
+          renameSync(target, original);
+          renameSync(replacement, target);
+        },
+      },
+    ];
+
+    for (const mutation of mutations) {
+      const fixture = await capturedSealableFixture();
+      const seal = sealDevReadyProfileArtifacts({
+        cells: fixture.cells,
+        profileDir: fixture.profileDir,
+        schedule: fixture.schedule,
+      });
+      const report = publicationReport(fixture.cells, seal);
+      const target = path.join(fixture.root, `published-${mutation.hook}`);
+      let mutated = false;
+      expect(() =>
+        publishReadyProfileArtifacts(report, fixture.profileDir, target, {
+          [mutation.hook](context) {
+            if (mutated) return;
+            mutated = true;
+            mutation.mutate({ ...context, report, target });
+          },
+        }),
+      ).toThrow();
+    }
+  });
+
+  it('rejects missing, replaced, re-inoded, linked, swapped, or extra final artifacts', async () => {
+    const mutations = [
+      async (fixture) => {
+        unlinkSync(artifactPath(fixture, 0, 'cpu'));
+      },
+      async (fixture) => {
+        writeFileSync(artifactPath(fixture, 0, 'cpu'), '{"changed":true}\n');
+      },
+      async (fixture) => {
+        const file = artifactPath(fixture, 0, 'cpu');
+        const bytes = await readFile(file);
+        unlinkSync(file);
+        writeFileSync(file, bytes, { mode: 0o600 });
+      },
+      async (fixture) => {
+        const file = artifactPath(fixture, 0, 'cpu');
+        const target = `${file}.target`;
+        renameSync(file, target);
+        symlinkSync(target, file);
+      },
+      async (fixture) => {
+        const target = artifactPath(fixture, 1, 'coverage');
+        unlinkSync(target);
+        linkSync(artifactPath(fixture, 0, 'cpu'), target);
+      },
+      async (fixture) => {
+        const left = artifactPath(fixture, 0, 'cpu');
+        const right = artifactPath(fixture, 1, 'cpu');
+        const temporary = `${left}.swap`;
+        renameSync(left, temporary);
+        renameSync(right, left);
+        renameSync(temporary, right);
+      },
+      async (fixture) => {
+        await writeFile(path.join(fixture.profileDir, 'unexpected.json'), '{}\n');
+      },
+    ];
+    for (const mutate of mutations) {
+      const fixture = await capturedSealableFixture();
+      await mutate(fixture);
+      expect(() =>
+        sealDevReadyProfileArtifacts({
+          cells: fixture.cells,
+          profileDir: fixture.profileDir,
+          schedule: fixture.schedule,
+        }),
+      ).toThrow();
+    }
+  });
+
+  it('rejects missing or cross-cell-confused PID, marker, target, port, product, calls, and ranges', async () => {
+    const mutations = [
+      (cell) => {
+        delete cell.profile.artifact.coverage.sha256;
+      },
+      (cell) => {
+        cell.profile.binding.inspectorProcess.pid += 1;
+      },
+      (cell) => {
+        cell.processMarker = `${cell.processMarker}_WRONG`;
+      },
+      (cell) => {
+        cell.profile.binding.inspectorProcess.targetId = 'wrong-target';
+      },
+      (cell) => {
+        cell.profile.binding.cell.inspectorPort += 1;
+      },
+      (cell) => {
+        cell.profile.binding.invocation.pauseFlag = '--inspect-brk=127.0.0.1:1';
+      },
+      (cell) => {
+        cell.profile.binding.invocation.argv[8] = '1';
+      },
+      (cell) => {
+        cell.profile.binding.invocation.argvSha256 = digest('f');
+      },
+      (cell) => {
+        cell.profile.binding.invocation.unexpected = true;
+      },
+      (cell) => {
+        cell.profile.binding.productDigest = digest('f');
+      },
+      (cell) => {
+        cell.profile.calls[0].callCount += 1;
+      },
+      (cell) => {
+        cell.profile.calls[0].instances[0].ranges[0].endOffset += 1;
+      },
+      (cell) => {
+        cell.profile.product.scriptAssets[0].sha256 = digest('f');
+      },
+      (cell) => {
+        cell.profile.artifact.cpu.file = 'cell-999-spike.cpuprofile';
+      },
+    ];
+    for (const mutate of mutations) {
+      const fixture = await capturedSealableFixture();
+      mutate(fixture.cells[0]);
+      expect(() =>
+        sealDevReadyProfileArtifacts({
+          cells: fixture.cells,
+          profileDir: fixture.profileDir,
+          schedule: fixture.schedule,
+        }),
+      ).toThrow();
+    }
+  });
+
+  it('rejects a final-component symlink and an lstat-to-open identity race', async () => {
+    const root = await temporaryRoot();
+    const declaredFile = path.join(root, 'evidence.json');
+    const replacement = path.join(root, 'replacement.json');
+    await Promise.all([writeFile(declaredFile, '{"a":1}\n'), writeFile(replacement, '{"a":1}\n')]);
+    const file = await realpath(declaredFile);
+    const link = path.join(root, 'link.json');
+    symlinkSync(file, link);
+    expect(() => readStableReadyProfileFile(link, 1024, 'symlink evidence')).toThrow(
+      /regular file/u,
+    );
+    expect(() =>
+      readStableReadyProfileFile(file, 1024, 'raced evidence', {
+        afterLstat() {
+          unlinkSync(file);
+          renameSync(replacement, file);
+        },
+      }),
+    ).toThrow(/changed identity/u);
+  });
+
+  it('fails closed on incomplete CPU profiles and precise coverage', async () => {
+    expect(() => validateReadyCpuProfile({ nodes: [], samples: [], timeDeltas: [] })).toThrow(
+      /CPU profile is incomplete/u,
+    );
+    expect(() =>
+      validateReadyCpuProfile({
+        ...syntheticCpuProfile(),
+        samples: [99],
+      }),
+    ).toThrow(/do not match/u);
+    expect(() => validateReadyPreciseCoverage({ result: [], timestamp: 1 })).toThrow(
+      /coverage is incomplete/u,
+    );
+    const root = await temporaryRoot();
+    expect(() =>
+      exactReadyCallEvidence(
+        { result: [coverageScript('1', 'file:///missing.mjs', [])], timestamp: 1 },
+        {
+          consumerRoot: root,
+        },
+      ),
+    ).toThrow(/omitted required production function/u);
+  });
+
+  it('refuses artifact clobbering before connecting to a process', async () => {
+    const root = await temporaryRoot();
+    const product = await syntheticPackedScript(root);
+    const profileDir = path.join(root, 'profiles');
+    await mkdir(profileDir);
+    await writeFile(path.join(profileDir, 'cell-000-baseline.cpuprofile'), '{}\n');
+    const connectInspector = vi.fn();
+
+    await expect(
+      createDevReadyProfiler(
+        profilerOptions({
+          marker: 'KOVO_PERF_DEV_SESSION_READY_CLOBBER',
+          product,
+          profileDir,
+        }),
+        { connectInspector },
+      ),
+    ).rejects.toThrow(/artifact already exists/u);
+    expect(connectInspector).not.toHaveBeenCalled();
+  });
+
+  it('runs the exact packed cell paused and authenticates product/corpus on both sides', async () => {
+    const root = await temporaryRoot();
+    const consumerRoot = path.join(root, 'consumer');
+    const corpusRoot = path.join(root, 'corpus');
+    await Promise.all([mkdir(consumerRoot), mkdir(corpusRoot)]);
+    const expectedCorpus = { modules: 216, schema: 'test-corpus/v1' };
+    const stop = vi.fn(async () => ({ complete: true }));
+    const startAndResume = vi.fn();
+    const abort = vi.fn();
+    const profiler = { abort, captureAtReady: vi.fn(), startAndResume };
+    const createProfiler = vi.fn(async () => profiler);
+    const launch = vi.fn(async (options) => ({
+      handoff: { complete: true, target: options.targetSession },
+      session: {
+        inspectorInvocation: {
+          argv: [
+            '--inspect-brk=127.0.0.1:21216',
+            '/consumer/bin.mjs',
+            'dev',
+            './src/app.tsx',
+            '--host',
+            'localhost',
+            '--strict-port',
+            '--port',
+            '20000',
+          ],
+          executable: process.execPath,
+          pauseOnStart: true,
+          port: 21_216,
+          schema: 'kovo-profiled-process-invocation/v1',
+        },
+        pid: 9_201,
+        processMarker: 'KOVO_PERF_DEV_SESSION_CELL',
+        stop,
+      },
+      started: 10,
+    }));
+    const verifyProduct = vi.fn(() => ({
+      cliEntry: '/consumer/bin.mjs',
+      consumerRoot,
+      identity: { digest: digest('a') },
+    }));
+    const measure = vi.fn(async (_options, dependencies) => {
+      expect(dependencies.readyDiagnostic).toBe(profiler);
+      return completeProfiledObservation();
+    });
+
+    const cell = await runReadyProfileCell(
+      {
+        browser: {},
+        expectedCorpus,
+        inspectorPort: 21_216,
+        lane: 'baseline',
+        manifestPath: path.join(root, 'manifest.json'),
+        occurrence: 0,
+        port: 20_000,
+        priorProcessMarker: null,
+        priorSession: null,
+        product: {
+          descriptorPath: path.join(root, 'descriptor.json'),
+          externalRoot: root,
+          identity: { digest: digest('a') },
+        },
+        profileDir: path.join(root, 'profiles'),
+        readyTimeoutMs: 600_000,
+        scheduleIndex: 0,
+        sourceState: sourceState(DEV_CRITICAL_PATH_CANDIDATE.parent),
+      },
+      cellDependencies({
+        createProfiler,
+        expectedCorpus,
+        launch,
+        measure,
+        profiler,
+        root: corpusRoot,
+        verifyProduct,
+      }),
+    );
+
+    expect(launch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inspectorPauseOnStart: true,
+        inspectorPort: 21_216,
+        targetSession: 'ready[0]',
+      }),
+    );
+    expect(startAndResume).toHaveBeenCalledOnce();
+    expect(createProfiler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedEntrypoint: '/consumer/bin.mjs',
+        inspectorInvocation: expect.objectContaining({
+          pauseOnStart: true,
+          port: 21_216,
+        }),
+      }),
+    );
+    expect(verifyProduct).toHaveBeenCalledTimes(2);
+    expect(cell).toMatchObject({
+      authentication: {
+        corpus: { afterVerified: true, beforeVerified: true },
+        product: { afterVerified: true, beforeVerified: true },
+      },
+      profile: { schema: DEV_READY_PROFILE_WINDOW_SCHEMA },
+    });
+  });
+
+  it('terminates a paused packed session when Inspector attachment fails', async () => {
+    const root = await temporaryRoot();
+    const stop = vi.fn(async () => ({ complete: true }));
+    const launch = vi.fn(async () => ({
+      handoff: { complete: true },
+      session: {
+        pid: 9_201,
+        processMarker: 'KOVO_PERF_DEV_SESSION_CELL',
+        stop,
+      },
+      started: 10,
+    }));
+    await expect(
+      runReadyProfileCell(
+        {
+          browser: {},
+          expectedCorpus: { modules: 216, schema: 'test-corpus/v1' },
+          inspectorPort: 21_216,
+          lane: 'baseline',
+          manifestPath: path.join(root, 'manifest.json'),
+          occurrence: 0,
+          port: 20_000,
+          priorProcessMarker: null,
+          priorSession: null,
+          product: {
+            descriptorPath: path.join(root, 'descriptor.json'),
+            externalRoot: root,
+            identity: { digest: digest('a') },
+          },
+          profileDir: path.join(root, 'profiles'),
+          readyTimeoutMs: 600_000,
+          scheduleIndex: 0,
+          sourceState: sourceState(DEV_CRITICAL_PATH_CANDIDATE.parent),
+        },
+        cellDependencies({
+          createProfiler: async () => {
+            throw new Error('wrong Inspector target');
+          },
+          expectedCorpus: { modules: 216, schema: 'test-corpus/v1' },
+          launch,
+          root,
+          verifyProduct: () => ({ consumerRoot: root }),
+        }),
+      ),
+    ).rejects.toThrow(/wrong Inspector target/u);
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it('rejects an ephemeral Inspector collision before preparation or process launch', async () => {
+    const root = await temporaryRoot();
+    const prepare = vi.fn();
+    await expect(
+      runDevReadyProfile(runnerOptions(root), {
+        collectControllerState: () => controllerState(),
+        inspectPortAllocation: (options) =>
+          inspectDevPortAllocation(options, {
+            inspectHostRanges: async () => linuxEphemeralEvidence('20001 20001\n'),
+          }),
+        prepare,
+      }),
+    ).rejects.toThrow(/port allocation refused/u);
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it('rejects a dirty or unauthenticated diagnostic controller before preparation', async () => {
+    const root = await temporaryRoot();
+    const prepare = vi.fn();
+    const malformedLock = controllerState();
+    malformedLock.locks['pnpm-lock.yaml'] = null;
+    const confusedLockKeys = controllerState();
+    delete confusedLockKeys.locks['pnpm-lock.yaml'];
+    confusedLockKeys.locks['package-lock.json'] = digest('4');
+    const mismatchedPackageManager = controllerState();
+    mismatchedPackageManager.packageManager = 'pnpm@0.0.0';
+    const malformedPnpmVersion = controllerState();
+    malformedPnpmVersion.pnpmVersion = '10.15';
+    malformedPnpmVersion.packageManager = 'pnpm@10.15';
+    const malformedScriptBlob = controllerState();
+    malformedScriptBlob.scripts['scripts/perf-dev-ready-profile.mjs'].gitBlob = 'not-a-blob';
+    for (const state of [
+      { ...controllerState(), dirty: true, dirtyPaths: [' M x'] },
+      malformedLock,
+      confusedLockKeys,
+      mismatchedPackageManager,
+      malformedPnpmVersion,
+      malformedScriptBlob,
+    ]) {
+      await expect(
+        runDevReadyProfile(runnerOptions(root), {
+          collectControllerState: () => state,
+          prepare,
+        }),
+      ).rejects.toThrow(/controller is dirty or unauthenticated before preparation/u);
+    }
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it('publishes only diagnostic status after four authenticated serialized cells', async () => {
+    const root = await temporaryRoot();
+    const prepared = preparedFixture(root);
+    const release = vi.fn();
+    const closeBrowser = vi.fn();
+    const calls = [];
+    const prepare = vi.fn(async (options) => {
+      expect(options).toMatchObject({
+        baselineRoot: prepared.roots.baseline,
+        candidateRepository: prepared.roots.spike,
+        spikeRoot: prepared.roots.spike,
+      });
+      return prepared;
+    });
+    const report = await runDevReadyProfile(runnerOptions(root), {
+      acquireLock: () => ({ release }),
+      collectControllerState: () => controllerState(),
+      collectState: (sourceRoot) =>
+        prepared.source.before[sourceRoot === prepared.roots.baseline ? 'baseline' : 'spike'],
+      createHostAdmission: () => quietHostAdmission(),
+      hostFingerprint: () => ({ schema: 'test-host/v1' }),
+      inspectPortAllocation: completePortAllocation,
+      launchBrowser: async () => ({ close: closeBrowser }),
+      prepare,
+      runCell: async (options) => {
+        calls.push({
+          lane: options.lane,
+          occurrence: options.occurrence,
+          priorProcessMarker: options.priorProcessMarker,
+          priorSession: options.priorSession,
+          scheduleIndex: options.scheduleIndex,
+        });
+        return successfulCell(options);
+      },
+      sealArtifacts: () => ({
+        analysis: readyAnalysisFixture(),
+        schema: 'kovo-dev-ready-profile-artifact-seal/v1',
+      }),
+    });
+
+    expect(calls.map(({ lane }) => lane)).toEqual(['baseline', 'spike', 'spike', 'baseline']);
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(calls[0]).toMatchObject({ priorProcessMarker: null, priorSession: null });
+    expect(calls[1]).toMatchObject({
+      priorProcessMarker: 'KOVO_PERF_DEV_SESSION_CELL_0',
+      priorSession: 'ready[0]',
+    });
+    expect(report).toMatchObject({
+      integrity: {
+        analysisBound: true,
+        complete: true,
+        controllerStable: true,
+        exactSchedule: true,
+        productAndCorpusVerifiedBeforeAndAfter: true,
+        serialized: true,
+        sourceStable: true,
+      },
+      policy: {
+        acceptanceEligible: false,
+        excludedFromAcceptance: ['durationMs', 'paintFenceMs', 'peakRssBytes', 'rssSamples'],
+        profilerPerturbsWallAndRss: true,
+        readyWindowsPerCell: 1,
+      },
+      schema: DEV_READY_PROFILE_SCHEMA,
+      verdict: { reasons: [], status: 'diagnostic-only' },
+    });
+    expect(report.controller).toMatchObject({
+      after: { commit: 'a'.repeat(40), tree: 'b'.repeat(40) },
+      before: { commit: 'a'.repeat(40), tree: 'b'.repeat(40) },
+      stable: true,
+    });
+    expect(report).not.toHaveProperty('analysis.acceptance');
+    expect(release).toHaveBeenCalledOnce();
+    expect(closeBrowser).toHaveBeenCalledOnce();
+    expect(prepared.cleanup).toHaveBeenCalledOnce();
+  });
+
+  it('marks a schedule-confused or incomplete cell unproven and stops serialization', async () => {
+    const root = await temporaryRoot();
+    const prepared = preparedFixture(root);
+    const report = await runDevReadyProfile(runnerOptions(root), {
+      acquireLock: () => ({ release() {} }),
+      collectControllerState: () => controllerState(),
+      collectState: (sourceRoot) =>
+        prepared.source.before[sourceRoot === prepared.roots.baseline ? 'baseline' : 'spike'],
+      createHostAdmission: () => quietHostAdmission(),
+      hostFingerprint: () => ({ schema: 'test-host/v1' }),
+      inspectPortAllocation: completePortAllocation,
+      launchBrowser: async () => ({ close() {} }),
+      prepare: async () => prepared,
+      runCell: async (options) => ({ ...successfulCell(options), lane: 'spike' }),
+      sealArtifacts: () => ({ schema: 'kovo-dev-ready-profile-artifact-seal/v1' }),
+    });
+
+    expect(report.cells).toEqual([]);
+    expect(report.integrity.complete).toBe(false);
+    expect(report.verdict).toMatchObject({
+      reasons: [expect.stringMatching(/schedule-confused/u)],
+      status: 'unproven',
+    });
+    expect(prepared.cleanup).toHaveBeenCalledOnce();
+  });
+
+  it('marks controller commit/tree/blob drift after the cells unproven', async () => {
+    const root = await temporaryRoot();
+    const prepared = preparedFixture(root);
+    let controllerReads = 0;
+    const report = await runDevReadyProfile(runnerOptions(root), {
+      acquireLock: () => ({ release() {} }),
+      collectControllerState: () => {
+        controllerReads += 1;
+        return controllerReads === 1
+          ? controllerState()
+          : { ...controllerState(), tree: 'e'.repeat(40) };
+      },
+      collectState: (sourceRoot) =>
+        prepared.source.before[sourceRoot === prepared.roots.baseline ? 'baseline' : 'spike'],
+      createHostAdmission: () => quietHostAdmission(),
+      hostFingerprint: () => ({ schema: 'test-host/v1' }),
+      inspectPortAllocation: completePortAllocation,
+      launchBrowser: async () => ({ close() {} }),
+      prepare: async () => prepared,
+      runCell: async (options) => successfulCell(options),
+      sealArtifacts: () => ({ schema: 'kovo-dev-ready-profile-artifact-seal/v1' }),
+    });
+
+    expect(report.controller.stable).toBe(false);
+    expect(report.integrity).toMatchObject({ complete: false, controllerStable: false });
+    expect(report.verdict).toMatchObject({
+      reasons: ['diagnostic controller changed during fresh-ready profiling'],
+      status: 'unproven',
+    });
+  });
+});
+
+async function capturedSealableFixture() {
+  const root = await temporaryRoot();
+  const product = await syntheticPackedScript(root);
+  const corpusRoot = path.join(root, 'corpus');
+  const profileDir = path.join(root, 'profiles');
+  await Promise.all([mkdir(corpusRoot), mkdir(profileDir)]);
+  const schedule = devReadyProfileSchedule(24_000);
+  const cells = [];
+  for (const scheduled of schedule) {
+    const marker = `KOVO_PERF_DEV_SESSION_SEAL_${String(scheduled.scheduleIndex)}`;
+    const pid = 10_000 + scheduled.scheduleIndex;
+    const commands = [];
+    const inspector = inspectorSession({
+      commands,
+      execArgv: [`--inspect-brk=127.0.0.1:${String(scheduled.inspectorPort)}`],
+      marker,
+      pid,
+      product,
+    });
+    const profiler = await createDevReadyProfiler(
+      profilerOptions({
+        cell: scheduled,
+        marker,
+        pid,
+        product,
+        profileDir,
+      }),
+      { connectInspector: async () => inspector },
+    );
+    await profiler.startAndResume();
+    const profile = await profiler.captureAtReady();
+    const cell = {
+      authentication: {
+        corpus: { afterVerified: true, beforeVerified: true },
+        product: {
+          afterVerified: true,
+          beforeVerified: true,
+          digest: digest('a'),
+        },
+      },
+      inspectorPort: scheduled.inspectorPort,
+      lane: scheduled.lane,
+      observation: { success: true },
+      occurrence: scheduled.occurrence,
+      port: scheduled.port,
+      process: { pid, processMarkerSha256: sha256(Buffer.from(marker)) },
+      processMarker: marker,
+      profile,
+      scheduleIndex: scheduled.scheduleIndex,
+    };
+    cells.push(
+      attachReadyProfileSealCapability(cell, {
+        consumer: product.consumerRoot,
+        corpus: corpusRoot,
+      }),
+    );
+  }
+  return { cells, product, profileDir, root, schedule };
+}
+
+function publicationReport(cells, artifactSeal) {
+  return {
+    analysis: structuredClone(artifactSeal.analysis),
+    artifactSeal,
+    cells,
+    integrity: {
+      analysisBound: true,
+      artifactsSealed: true,
+      complete: true,
+      exactSchedule: true,
+    },
+    verdict: { status: 'diagnostic-only' },
+  };
+}
+
+function readyAnalysisFixture() {
+  const ranking = () => ({
+    calls: {
+      census: {
+        authenticatedCallCount: 0,
+        authenticatedFunctions: 0,
+        authenticatedIdentities: 0,
+        totalCallCount: 0,
+        totalFunctions: 0,
+        unattributedCallCount: 0,
+        unattributedFunctions: 0,
+      },
+      topFive: [],
+    },
+    cpu: {
+      census: {
+        authenticatedFrames: 0,
+        idleSamples: 0,
+        rankedSamples: 0,
+        totalSamples: 0,
+        unattributedSamples: 0,
+      },
+      topFive: [],
+    },
+    schema: 'kovo-dev-ready-profile-ranking/v1',
+  });
+  return {
+    cells: [
+      { lane: 'baseline', ranking: ranking(), scheduleIndex: 0 },
+      { lane: 'spike', ranking: ranking(), scheduleIndex: 1 },
+      { lane: 'spike', ranking: ranking(), scheduleIndex: 2 },
+      { lane: 'baseline', ranking: ranking(), scheduleIndex: 3 },
+    ],
+    lanes: [
+      { lane: 'baseline', ranking: ranking(), windows: 2 },
+      { lane: 'spike', ranking: ranking(), windows: 2 },
+    ],
+    overall: { ranking: ranking(), windows: 4 },
+    policy: {
+      coverageMetric: 'precise-coverage-outer-range-call-count',
+      cpuMetric: 'inspector-self-sample-count',
+      top: 5,
+      wallTimeClaims: false,
+    },
+    schema: 'kovo-dev-ready-profile-analysis/v1',
+  };
+}
+
+function artifactPath(fixture, cellIndex, kind) {
+  return path.join(fixture.profileDir, fixture.cells[cellIndex].profile.artifact[kind].file);
+}
+
+async function syntheticPackedScript(root) {
+  const consumerRoot = path.join(root, 'consumer');
+  const dist = path.join(consumerRoot, 'node_modules/@kovojs/compiler/dist');
+  const cliEntry = path.join(consumerRoot, 'node_modules/@kovojs/cli/dist/bin.mjs');
+  await Promise.all([
+    mkdir(dist, { recursive: true }),
+    mkdir(path.dirname(cliEntry), { recursive: true }),
+  ]);
+  await writeFile(cliEntry, '#!/usr/bin/env node\n');
+  const names = [
+    'queryPlanBootstrapInputForComponent',
+    'resolveViteComponentQueryRuntimeNames',
+    'resolveComponentQueryRuntimeNames',
+    'queryIdentityCompilerOptions',
+    'exactEntryCompilerHost',
+    'resolveFreshDirectQueryRuntimeNames',
+    'freshDirectImportedQueryRuntimeName',
+  ];
+  const declarations = names.map((name, index) =>
+    index === 0
+      ? `const ${name} = () => ${JSON.stringify(name)};`
+      : index === 1
+        ? `async function ${name}() { return ${JSON.stringify(name)}; }`
+        : `function ${name}() { return ${JSON.stringify(name)}; }`,
+  );
+  const source = `${declarations.join('\n')}\n//# sourceMappingURL=vite-config.mjs.map\n`;
+  const sourceMap = `${JSON.stringify({ mappings: '', names: [], sources: ['vite.ts'], version: 3 })}\n`;
+  const scriptPath = path.join(dist, 'vite-config.mjs');
+  await writeFile(scriptPath, source);
+  await writeFile(`${scriptPath}.map`, sourceMap);
+  const functions = names.map((name, index) => {
+    const declarationStart = source.indexOf(declarations[index]);
+    const startOffset = index === 0 ? source.indexOf('() =>', declarationStart) : declarationStart;
+    const endOffset = source.indexOf('\n', startOffset);
+    return {
+      functionName: name,
+      isBlockCoverage: true,
+      ranges: [{ count: 3, endOffset, startOffset }],
+    };
+  });
+  return {
+    consumerRoot,
+    coverage: {
+      result: [coverageScript('17', pathToFileURL(scriptPath).href, functions)],
+      timestamp: 5,
+    },
+    source,
+    sourceMap,
+  };
+}
+
+function inspectorSession({
+  closeFailure = null,
+  commands,
+  coverage,
+  cpuProfile,
+  execArgv = ['--inspect-brk=127.0.0.1:21216'],
+  failMethod = null,
+  failure = new Error('expected Inspector failure'),
+  marker,
+  pid = 9_201,
+  product,
+}) {
+  const entrypoint = packedEntrypoint(product);
+  const capturedCpu = cpuProfile ?? syntheticCpuProfile(product);
+  const capturedCoverage = coverage ?? product.coverage;
+  return {
+    close() {
+      commands.push('close');
+      if (closeFailure !== null) throw closeFailure;
+    },
+    identity: inspectorIdentity(pid, marker, 'owned-target'),
+    invocation: pausedInvocationEvidence(entrypoint, execArgv[0]),
+    async send(method) {
+      commands.push(method);
+      if (method === failMethod) throw failure;
+      if (method === 'Profiler.stop') return { profile: capturedCpu };
+      if (method === 'Profiler.takePreciseCoverage') return capturedCoverage;
+      return {};
+    },
+    async startAndResume() {
+      for (const method of [
+        'Profiler.enable',
+        'Profiler.setSamplingInterval',
+        'Profiler.startPreciseCoverage',
+        'Profiler.start',
+        'Runtime.runIfWaitingForDebugger',
+      ]) {
+        commands.push(method);
+      }
+    },
+  };
+}
+
+function deferredPromise() {
+  let reject;
+  let resolve;
+  const promise = new Promise((promiseResolve, promiseReject) => {
+    reject = promiseReject;
+    resolve = promiseResolve;
+  });
+  return { promise, reject, resolve };
+}
+
+async function capturedProfilerFailure(promise) {
+  try {
+    await promise;
+  } catch (error) {
+    return devReadyProfilerCaptureFailure(error);
+  }
+  throw new Error('expected profiler capture to fail');
+}
+
+function inspectorIdentity(pid, marker, targetId) {
+  return {
+    bootstrap: {
+      contextId: 1,
+      contextName: `${process.execPath}[${String(pid)}]`,
+      contextOrigin: '',
+      processGlobals: 'pid-argv-execArgv-undefined',
+      processMarkerMatched: true,
+      schema: 'kovo-paused-inspector-bootstrap/v1',
+      targetId,
+    },
+    pid,
+    processMarkerMatched: true,
+    processMarkerSha256: sha256(Buffer.from(marker)),
+    targetId,
+  };
+}
+
+function profilerOptions({
+  cell = { lane: 'baseline', occurrence: 0, port: 21_215, scheduleIndex: 0 },
+  marker,
+  pid = 9_201,
+  product,
+  profileDir,
+}) {
+  return {
+    artifactStem: `cell-${String(cell.scheduleIndex).padStart(3, '0')}-${cell.lane}`,
+    attributionRoots: { consumer: product.consumerRoot },
+    cell,
+    consumerRoot: product.consumerRoot,
+    expectedEntrypoint: packedEntrypoint(product),
+    expectedPid: pid,
+    inspectorInvocation: profiledInvocationFixture(product, cell.port + 1),
+    inspectorPort: cell.port + 1,
+    processMarker: marker,
+    productDigest: digest('a'),
+    profileDir,
+  };
+}
+
+function packedEntrypoint(product) {
+  return path.join(product.consumerRoot, 'node_modules/@kovojs/cli/dist/bin.mjs');
+}
+
+function profiledInvocationFixture(product, inspectorPort) {
+  const pauseFlag = `--inspect-brk=127.0.0.1:${String(inspectorPort)}`;
+  return {
+    argv: [
+      pauseFlag,
+      packedEntrypoint(product),
+      'dev',
+      './src/app.tsx',
+      '--host',
+      'localhost',
+      '--strict-port',
+      '--port',
+      String(inspectorPort - 1),
+    ],
+    executable: process.execPath,
+    pauseOnStart: true,
+    port: inspectorPort,
+    schema: 'kovo-profiled-process-invocation/v1',
+  };
+}
+
+function pausedInvocationEvidence(entrypoint, pauseFlag) {
+  const executable = process.execPath;
+  const inspectorPort = Number(pauseFlag.slice(pauseFlag.lastIndexOf(':') + 1));
+  const argv = [
+    pauseFlag,
+    entrypoint,
+    'dev',
+    './src/app.tsx',
+    '--host',
+    'localhost',
+    '--strict-port',
+    '--port',
+    String(inspectorPort - 1),
+  ];
+  return {
+    argv,
+    argvSha256: sha256(JSON.stringify([executable, ...argv])),
+    entrypoint,
+    executable,
+    execArgv: [pauseFlag],
+    pauseFlag,
+    schema: 'kovo-profiled-process-invocation/v1',
+  };
+}
+
+function syntheticCpuProfile(product = null) {
+  if (product !== null) {
+    const functions = product.coverage.result[0].functions.slice(0, 6);
+    const nodes = [
+      {
+        callFrame: {
+          columnNumber: 0,
+          functionName: '(root)',
+          lineNumber: 0,
+          url: '',
+        },
+        children: functions.map((_fn, index) => index + 2),
+        id: 1,
+      },
+      ...functions.map((fn, index) => ({
+        callFrame: {
+          columnNumber: 0,
+          functionName: fn.functionName,
+          lineNumber: index,
+          url: product.coverage.result[0].url,
+        },
+        children: [],
+        id: index + 2,
+      })),
+      {
+        callFrame: { columnNumber: 0, functionName: '(idle)', lineNumber: 0, url: '' },
+        children: [],
+        id: functions.length + 2,
+      },
+    ];
+    const samples = [
+      ...Array(5).fill(2),
+      ...Array(4).fill(3),
+      ...Array(3).fill(4),
+      ...Array(2).fill(5),
+      ...Array(2).fill(6),
+      7,
+      1,
+      1,
+      functions.length + 2,
+      functions.length + 2,
+      functions.length + 2,
+    ];
+    return {
+      endTime: samples.length * 500,
+      nodes,
+      samples,
+      startTime: 0,
+      timeDeltas: samples.map(() => 500),
+    };
+  }
+  return {
+    endTime: 1_000,
+    nodes: [
+      {
+        callFrame: { columnNumber: 0, functionName: '(root)', lineNumber: 0, url: '' },
+        children: [],
+        id: 1,
+      },
+    ],
+    samples: [1],
+    startTime: 0,
+    timeDeltas: [500],
+  };
+}
+
+function coverageScript(scriptId, url, functions) {
+  return { functions, scriptId, url };
+}
+
+function runnerOptions(root) {
+  return {
+    baselineRoot: path.join(root, 'baseline'),
+    diagnose: true,
+    out: path.join(root, 'report.json'),
+    profileDir: path.join(root, 'profiles'),
+    spikeRoot: path.join(root, 'spike'),
+  };
+}
+
+function preparedFixture(root) {
+  const baselineRoot = path.join(root, 'baseline');
+  const spikeRoot = path.join(root, 'spike');
+  const baseline = sourceState(DEV_CRITICAL_PATH_CANDIDATE.parent);
+  const spike = sourceState(DEV_CRITICAL_PATH_CANDIDATE.commit);
+  const corpus = { modules: 216, schema: 'test-corpus/v1', sourceDigest: digest('c') };
+  return {
+    candidateBinding: {
+      baseline: { commit: DEV_CRITICAL_PATH_CANDIDATE.parent, root: baselineRoot },
+      schema: DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
+      spike: { commit: DEV_CRITICAL_PATH_CANDIDATE.commit, root: spikeRoot },
+    },
+    cleanup: vi.fn(),
+    corpus: { baseline: corpus, spike: structuredClone(corpus) },
+    manifestPaths: {
+      baseline: path.join(root, 'external-baseline/manifest.json'),
+      spike: path.join(root, 'external-spike/manifest.json'),
+    },
+    products: {
+      baseline: productFixture(root, 'baseline'),
+      spike: productFixture(root, 'spike'),
+    },
+    roots: { baseline: baselineRoot, spike: spikeRoot },
+    source: { before: { baseline, spike } },
+  };
+}
+
+function productFixture(root, lane) {
+  return {
+    descriptorPath: path.join(root, `consumer-${lane}/descriptor.json`),
+    externalRoot: path.join(root, `external-${lane}`),
+    identity: {
+      digest: digest(lane === 'baseline' ? 'a' : 'b'),
+      schema: 'kovo-packed-product-identity/v1',
+    },
+  };
+}
+
+function sourceState(commit) {
+  return {
+    commit,
+    dirty: false,
+    dirtyPaths: [],
+    locks: {
+      'benchmarks/harness/pnpm-lock.yaml': digest('1'),
+      'benchmarks/nextjs/pnpm-lock.yaml': digest('2'),
+      'pnpm-lock.yaml': digest('3'),
+    },
+    packageManager: 'pnpm@10.15.1',
+    pnpmVersion: '10.15.1',
+  };
+}
+
+function successfulCell(options) {
+  const marker = `KOVO_PERF_DEV_SESSION_CELL_${String(options.scheduleIndex)}`;
+  const markerSha = sha256(Buffer.from(marker));
+  const pid = 9_000 + options.scheduleIndex;
+  const targetId = `target-${String(options.scheduleIndex)}`;
+  const inspectFlag = `--inspect-brk=127.0.0.1:${String(options.inspectorPort)}`;
+  const entrypoint = '/tmp/kovo-ready-profile/node_modules/@kovojs/cli/dist/bin.mjs';
+  const binding = {
+    bootstrap: {
+      contextId: 1,
+      contextName: `${process.execPath}[${String(pid)}]`,
+      contextOrigin: '',
+      processGlobals: 'pid-argv-execArgv-undefined',
+      processMarkerMatched: true,
+      schema: 'kovo-paused-inspector-bootstrap/v1',
+      targetId,
+    },
+    cell: {
+      inspectorPort: options.inspectorPort,
+      lane: options.lane,
+      occurrence: options.occurrence,
+      port: options.port,
+      scheduleIndex: options.scheduleIndex,
+    },
+    inspectorProcess: { pid, processMarkerSha256: markerSha, targetId },
+    invocation: pausedInvocationEvidence(entrypoint, inspectFlag),
+    productDigest: options.product.identity.digest,
+    schema: 'kovo-dev-ready-profile-window-binding/v1',
+  };
+  const calls = [
+    'queryPlanBootstrapInputForComponent',
+    'resolveViteComponentQueryRuntimeNames',
+    'resolveComponentQueryRuntimeNames',
+    'queryIdentityCompilerOptions',
+    'exactEntryCompilerHost',
+    'resolveFreshDirectQueryRuntimeNames',
+    'freshDirectImportedQueryRuntimeName',
+  ].map((name, index) => ({
+    callCount: 1,
+    instances: [
+      {
+        callCount: 1,
+        ranges: [{ count: 1, endOffset: index + 2, startOffset: index + 1 }],
+        script: 'module.mjs',
+        scriptId: String(index + 1),
+      },
+    ],
+    name,
+    present: true,
+    required: index < 5,
+  }));
+  const stem = `cell-${String(options.scheduleIndex).padStart(3, '0')}-${options.lane}`;
+  const artifact = (file, schema, ino) => ({
+    bytes: 10,
+    ctimeNs: '1',
+    dev: '1',
+    file,
+    ino,
+    mode: '33152',
+    mtimeNs: '1',
+    nlink: 1,
+    schema,
+    sha256: digest('e'),
+  });
+  return {
+    authentication: {
+      corpus: { afterVerified: true, beforeVerified: true },
+      product: {
+        afterVerified: true,
+        beforeVerified: true,
+        digest: options.product.identity.digest,
+      },
+    },
+    inspectorPort: options.inspectorPort,
+    lane: options.lane,
+    observation: { success: true },
+    occurrence: options.occurrence,
+    port: options.port,
+    process: { pid, processMarkerSha256: markerSha },
+    processMarker: marker,
+    profile: {
+      artifact: {
+        coverage: artifact(
+          `${stem}.coverage.json`,
+          DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA,
+          String(options.scheduleIndex * 2 + 2),
+        ),
+        cpu: artifact(
+          `${stem}.cpuprofile`,
+          DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
+          String(options.scheduleIndex * 2 + 1),
+        ),
+      },
+      attribution: { coverage: [], cpu: [] },
+      binding,
+      calls,
+      diagnosticOnly: { acceptanceEligible: false },
+      inspectorProcess: binding.inspectorProcess,
+      product: { digest: options.product.identity.digest, scriptAssets: [] },
+      schema: DEV_READY_PROFILE_WINDOW_SCHEMA,
+    },
+    scheduleIndex: options.scheduleIndex,
+  };
+}
+
+function completeProfiledObservation() {
+  return {
+    browser: { requestFailedCount: 0, unexpectedErrorCount: 0 },
+    browserContextClosed: true,
+    durationMs: 123,
+    failureStage: 'none',
+    lifecycle: { complete: true },
+    paintFenceMs: 4,
+    peakRssBytes: 1_024,
+    profilerFailureSubstage: 'none',
+    readinessProbe: { attempts: 1, path: '/', status: 200, transientFailures: 0 },
+    readyDiagnostic: {
+      diagnosticOnly: { acceptanceEligible: false },
+      schema: DEV_READY_PROFILE_WINDOW_SCHEMA,
+    },
+    rssSamples: 2,
+    success: true,
+  };
+}
+
+function cellDependencies({
+  createProfiler,
+  expectedCorpus,
+  launch,
+  measure,
+  profiler,
+  root,
+  verifyProduct,
+}) {
+  return {
+    cleanOutputs: async () => undefined,
+    createProfiler: createProfiler ?? (async () => profiler),
+    inspectCorpus: () => structuredClone(expectedCorpus),
+    launch,
+    loadManifest: async () => ({
+      appRoot: root,
+      manifest: {
+        build: { outputs: { absent: [], requiredNonempty: [] } },
+        dev: { command: { argv: ['kovo', 'dev'], cwd: '.', env: {} } },
+        framework: 'kovo',
+        modules: 216,
+      },
+    }),
+    materializeCommand: () => ({
+      argv: ['node', 'bin.mjs', 'dev'],
+      origin: 'http://localhost:20000',
+    }),
+    measure,
+    verifyProduct,
+    verifySources: async () => undefined,
+  };
+}
+
+function controllerState() {
+  const evidence = (index = 0) => ({
+    bytes: index + 1,
+    ctimeNs: '1',
+    dev: '1',
+    gitBlob: 'c'.repeat(40),
+    ino: String(index + 2),
+    mode: '33188',
+    mtimeNs: '1',
+    nlink: 1,
+    sha256: digest('d'),
+  });
+  return {
+    commit: 'a'.repeat(40),
+    dirty: false,
+    dirtyPaths: [],
+    immutableSnapshot: true,
+    locks: Object.fromEntries(CONTROLLER_LOCK_PATHS.map((file, index) => [file, evidence(index)])),
+    manifest: evidence(20),
+    packageManager: 'pnpm@10.15.1',
+    pnpmVersion: '10.15.1',
+    scripts: Object.fromEntries(
+      CONTROLLER_FILE_PATHS.map((file, index) => [file, evidence(index + 30)]),
+    ),
+    tree: 'b'.repeat(40),
+  };
+}
+
+async function controllerBindingFixture(root) {
+  return {
+    commit: 'a'.repeat(40),
+    files: Object.fromEntries(
+      await Promise.all(
+        CONTROLLER_BOUND_PATHS.map(async (file) => {
+          const snapshot = readStableReadyProfileFile(
+            path.join(root, file),
+            32 * 1024 * 1024,
+            `test controller ${file}`,
+          );
+          return [
+            file,
+            {
+              bytes: snapshot.bytes.byteLength,
+              gitBlob: 'c'.repeat(40),
+              sha256: sha256(snapshot.bytes),
+              snapshotIdentity: snapshot.identity,
+            },
+          ];
+        }),
+      ),
+    ),
+    packageManager: 'pnpm@10.15.1',
+    pnpmVersion: '10.15.1',
+    privateRoot: root,
+    schema: DEV_READY_PROFILE_CONTROLLER_BINDING_SCHEMA,
+    tree: 'b'.repeat(40),
+  };
+}
+
+function quietHostAdmission() {
+  return {
+    async admit(label) {
+      return { comparable: true, label };
+    },
+    markBenchmarkWork() {},
+    async observe(label) {
+      return { comparable: true, label };
+    },
+  };
+}
+
+async function completePortAllocation(options) {
+  return inspectDevPortAllocation(options, {
+    inspectHostRanges: async () => linuxEphemeralEvidence('49152 65535\n'),
+  });
+}
+
+function linuxEphemeralEvidence(source) {
+  const bytes = Buffer.from(source);
+  const [minimum, maximum] = source.trim().split(/\s+/u).map(Number);
+  return {
+    complete: true,
+    error: null,
+    platform: 'linux',
+    probe: {
+      bytes: bytes.byteLength,
+      contentBase64: bytes.toString('base64'),
+      kind: 'procfs',
+      locator: '/proc/sys/net/ipv4/ip_local_port_range',
+      sha256: sha256(bytes),
+    },
+    ranges: [{ label: 'default', maximum, minimum }],
+    schema: 'kovo-host-ephemeral-port-ranges/v1',
+    scope: 'tcp-loopback-v4-v6/v1',
+  };
+}
+
+function digest(seed) {
+  return `sha256:${seed.repeat(64).slice(0, 64)}`;
+}
+
+function sha256(bytes) {
+  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+}
+
+async function temporaryRoot() {
+  const declared = await mkdtemp(path.join(os.tmpdir(), 'kovo-dev-ready-profile-test-'));
+  const root = await realpath(declared);
+  roots.push(root);
+  return root;
+}

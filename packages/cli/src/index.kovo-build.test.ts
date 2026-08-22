@@ -218,6 +218,8 @@ describe('kovo build', { concurrent: false, timeout: BUILD_INTEGRATION_TEST_TIME
       expect(output).toContain('kovo-build/v1\nAPP module=');
       expect(output).toContain(`SUMMARY preset=node outDir=${JSON.stringify(outDir)}`);
       const handlerSource = readFileSync(join(outDir, '.kovo/server/handler.mjs'), 'utf8');
+      expect(readFileSync(join(outDir, 'server/server/handler.mjs'), 'utf8')).toBe(handlerSource);
+      expect(handlerSource).not.toContain('Kovo build server handler was not finalized');
       expect(handlerSource).not.toContain('vite');
       expect(handlerSource).not.toContain('@node-rs/argon2');
       // SPEC §6.6 rule 6: a non-DB handler keeps the platform-neutral default-deny registry but
@@ -1881,9 +1883,21 @@ export default app.assemble({
         args: ['build', './app.mjs', '--out', outDir],
         cwd: root,
         deadlineMs: HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS,
+        env: { KOVO_DEVEX_BUILD_PHASE_CENSUS_SOURCE: './app.mjs' },
       });
       expect(build.exitCode, build.stderr).toBe(0);
       expect(build.stderr).not.toContain('UNGUARDED');
+      const sourceCensusLine = build.stdout
+        .split('\n')
+        .find((line) => line.startsWith('kovo-build-source-phase-census/v1 '));
+      expect(sourceCensusLine).toBeDefined();
+      expect(JSON.parse(sourceCensusLine!.slice(sourceCensusLine!.indexOf(' ') + 1))).toMatchObject(
+        {
+          complete: true,
+          schema: 'kovo-build-source-phase-census/v1',
+          source: { path: 'app.mjs' },
+        },
+      );
       expect(existsSync(outDir)).toBe(true);
       const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
         escapeCensus?: Record<string, unknown>;

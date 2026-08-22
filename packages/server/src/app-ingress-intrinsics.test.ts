@@ -181,7 +181,7 @@ describe('request ingress intrinsic authority', () => {
     // the ordinary full text/html document with the bootstrap. (plans/good-perf.md O2: every
     // 200 document representation now carries the Accept negotiation dimension.)
     expect(response.headers.get('content-type')).toContain('text/html');
-    expect(response.headers.get('vary')).toBe('Accept');
+    expect(response.headers.get('vary')).toBe('Accept, Cookie');
     await expect(response.text()).resolves.toContain('installInlineKovoBootstrap');
   });
 

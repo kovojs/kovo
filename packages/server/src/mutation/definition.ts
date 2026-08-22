@@ -271,9 +271,12 @@ export type MutationOptimisticMap<
  * queues are explicit values instead of ad hoc strings.
  */
 export class MutationQueue<Name extends string = string> {
+  readonly name: Name;
   private readonly __mutationQueueBrand!: Name;
 
-  private constructor(readonly name: Name) {}
+  private constructor(name: Name) {
+    this.name = name;
+  }
 
   /** @internal */
   static create<const Name extends string>(name: Name): MutationQueue<Name> {

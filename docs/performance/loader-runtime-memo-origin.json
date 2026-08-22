@@ -1,0 +1,151 @@
+{
+  "schema": "kovo-loader-runtime-memo-origin/v1",
+  "authenticatedAt": "2026-08-13T21:37:42Z",
+  "historical": {
+    "branch": "spike/loader-memo",
+    "durableEvidenceRef": "refs/heads/perf-spike/loader-memo-e54c595b5",
+    "worktree": {
+      "path": "/Users/mini/kovo-wasm-loader-memo",
+      "stateAtAuthentication": "removed"
+    },
+    "commits": {
+      "baseline": "ce327123caf5b73a205d8c537f89191413a6edb4",
+      "productionCandidate": "b545756ae94e0717d5e043b9f9b60e23014130a8",
+      "postureRefresh": "3279995d3469d045ec8f37fe9ddbcff79f8230f8",
+      "fixtureOnlyAdmission": "e54c595b5906df9ab9b9b5e3fbf18e76c99e79b9"
+    },
+    "productionPatch": {
+      "serialization": {
+        "command": [
+          "git",
+          "-C",
+          "<repository-root>",
+          "diff",
+          "--binary",
+          "--full-index",
+          "--no-ext-diff",
+          "ce327123caf5b73a205d8c537f89191413a6edb4",
+          "b545756ae94e0717d5e043b9f9b60e23014130a8"
+        ],
+        "digest": "SHA-256 over the command's exact stdout bytes"
+      },
+      "sha256": "sha256:0c5bd1a78d29316d3a90fec9b1ddc23a5fe0a706b634ff6cc96287045795091f",
+      "stablePatchId": "c36f0151ec4fa0524c094d1b7700e727753bac70",
+      "paths": [
+        "packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts",
+        "packages/server/src/client-modules.ts",
+        "packages/server/src/loader-runtime-client-module.ts",
+        "security/framework-public-runtime-export-posture.json"
+      ]
+    }
+  },
+  "scratchpad": {
+    "root": "/private/tmp/claude-501/-Users-mini-kovo/72186f46-fffb-4409-a300-24aa19913e24/scratchpad",
+    "availability": "host-local exploratory evidence; absence on another host does not authenticate or invalidate a new run",
+    "artifacts": [
+      {
+        "path": "ab-driver.sh",
+        "bytes": 1647,
+        "sha256": "sha256:6416fd6fc1533791e2815cb6c91dd9ab3e13145b5ab5c9debd531d8800d5422a"
+      },
+      {
+        "path": "ab-results.jsonl",
+        "bytes": 9022,
+        "sha256": "sha256:60ce60cb074a1bfccf80a30af71fe2e562c67f2c6d5f2f525f08fe9a193ac0af"
+      },
+      {
+        "path": "prof-dist-baseline/CPU.20260813.111920.28807.0.001.cpuprofile",
+        "bytes": 1075917,
+        "sha256": "sha256:390e07049120d5ce4c464a965ba3e47fa213f6ecd7242576629bbafecdcd287e"
+      },
+      {
+        "path": "prof-dist-memo/CPU.20260813.111934.29297.0.001.cpuprofile",
+        "bytes": 1164329,
+        "sha256": "sha256:7fffca1df20ce1ace91af65f72398166b76b6b997442fe809a67c85363db85bf"
+      },
+      {
+        "path": "doc-root-dist-baseline.html",
+        "bytes": 18105,
+        "sha256": "sha256:b4c3edb750c6d65430f49ee03dba57a1cd0bcb78a61d37664d463dd3ca143bfa"
+      },
+      {
+        "path": "doc-root-dist-memo.html",
+        "bytes": 18105,
+        "sha256": "sha256:b4c3edb750c6d65430f49ee03dba57a1cd0bcb78a61d37664d463dd3ca143bfa"
+      },
+      {
+        "path": "doc-product-dist-baseline.html",
+        "bytes": 25246,
+        "sha256": "sha256:09e743dd6a43a392bf2602057663570e11747c1cddf115506f5c7082cae32c27"
+      },
+      {
+        "path": "doc-product-dist-memo.html",
+        "bytes": 25246,
+        "sha256": "sha256:09e743dd6a43a392bf2602057663570e11747c1cddf115506f5c7082cae32c27"
+      },
+      {
+        "path": "prof-load-dist-baseline.json",
+        "bytes": 101,
+        "sha256": "sha256:e64477e6d7ef3c005b5b588119a6c9d2ab7f3dcbd0f9874551f863659dba1538"
+      },
+      {
+        "path": "prof-load-dist-memo.json",
+        "bytes": 101,
+        "sha256": "sha256:caf9a917516903a53cb01ca16b1a87ac883bfe96ae1cfb1f9c3f085034c75332"
+      },
+      {
+        "path": "cpuprof-share.mjs",
+        "bytes": 2381,
+        "sha256": "sha256:2e7c09360411ae4b226ccf816da01397c7ca786798926bd4bceafdc22bf96e19"
+      },
+      {
+        "path": "spike-verify-server.log",
+        "bytes": 641,
+        "sha256": "sha256:b73cf61aeed4721b87d72b9a71d3bc1afa197c93194b9608189d81364ce69152"
+      },
+      {
+        "path": "wasm-spikes.json",
+        "bytes": 29213,
+        "sha256": "sha256:45ff2bb03d4b7824fbb0ab958f857cc194f10fd024430e6894c3a5e0ce066c80"
+      }
+    ]
+  },
+  "exploratoryProtocol": {
+    "sampleOrder": "baseline then memo once per concurrency, not B,S,S,B",
+    "samplesPerArm": 5,
+    "warmupSeconds": 3,
+    "measurementSeconds": 5,
+    "routes": ["product with Cookie: k=1", "root without cookie"],
+    "concurrencies": [1, 8, 32],
+    "missingAcceptanceEvidence": [
+      "paired bootstrap confidence intervals",
+      "p95 latency",
+      "process CPU",
+      "peak process-tree RSS",
+      "quiet-host admission",
+      "clean current-head baseline/candidate worktrees"
+    ]
+  },
+  "authenticatedExploratoryFacts": {
+    "forcedProductMedianRequestsPerSecond": {
+      "c1": { "baseline": 623.7, "candidate": 854.3 },
+      "c8": { "baseline": 712.5, "candidate": 946.8 },
+      "c32": { "baseline": 758.0, "candidate": 1006.8 }
+    },
+    "loaderSelectionBusySubtree": {
+      "baselineBusyHits": 6498,
+      "baselineSubtreeHits": 1700,
+      "baselinePercent": 26.16,
+      "candidateBusyHits": 6504,
+      "candidateSubtreeHits": 0,
+      "candidatePercent": 0.0,
+      "functionPattern": "ensureKovoLoaderRuntimeClientModule"
+    },
+    "renderedDocumentParity": {
+      "rootSha256": "sha256:b4c3edb750c6d65430f49ee03dba57a1cd0bcb78a61d37664d463dd3ca143bfa",
+      "productSha256": "sha256:09e743dd6a43a392bf2602057663570e11747c1cddf115506f5c7082cae32c27"
+    },
+    "repeatedModuleSourceBytes": 276420
+  },
+  "disposition": "exploratory-only; the current authenticated B,S,S,B runner owns acceptance"
+}

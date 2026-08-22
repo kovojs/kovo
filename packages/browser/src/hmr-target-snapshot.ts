@@ -7,6 +7,10 @@ import type {
   FrameworkWireTargetCodec,
 } from '@kovojs/core/internal/wire-input-grammar';
 
+interface HmrLiveTargetEntrySnapshot extends FrameworkWireEntrySnapshot {
+  readonly component: string;
+}
+
 /** @internal Closed HMR target producer serialized into the dev-only client module. */
 export function createHmrTargetSnapshotReader(
   grammar: FrameworkWireInputGrammar,
@@ -360,9 +364,9 @@ export function createHmrTargetSnapshotReader(
     targetIdentity(element) ??
     '';
 
-  const liveTargets = (root: unknown): readonly FrameworkWireEntrySnapshot[] => {
+  const liveTargets = (root: unknown): readonly HmrLiveTargetEntrySnapshot[] => {
     const seen: string[] = [];
-    const output: FrameworkWireEntrySnapshot[] = [];
+    const output: HmrLiveTargetEntrySnapshot[] = [];
     const elements = queryElements(root, '[kovo-deps]');
     const elementCount = ownArrayLength(
       elements,
@@ -425,11 +429,13 @@ export function createHmrTargetSnapshotReader(
       }
       appendDense(
         output,
-        apply(objectFreeze, NativeObject, [{ target, wireEntry }]) as FrameworkWireEntrySnapshot,
+        apply(objectFreeze, NativeObject, [
+          { component, target, wireEntry },
+        ]) as HmrLiveTargetEntrySnapshot,
         'Kovo HMR live-target header snapshot',
       );
     }
-    return apply(objectFreeze, NativeObject, [output]) as readonly FrameworkWireEntrySnapshot[];
+    return apply(objectFreeze, NativeObject, [output]) as readonly HmrLiveTargetEntrySnapshot[];
   };
 
   const dependencyTargets = (root: unknown): readonly FrameworkWireEntrySnapshot[] => {
@@ -469,6 +475,127 @@ export function createHmrTargetSnapshotReader(
     return apply(objectFreeze, NativeObject, [output]) as readonly FrameworkWireEntrySnapshot[];
   };
 
+  const componentRefreshTargetIdentities = (event: unknown): readonly string[] => {
+    assertControls();
+    if (ownData<unknown>(event, 'impact') !== 'componentRefresh') {
+      throw new NativeTypeError('Kovo HMR component refresh impact is invalid.');
+    }
+    const values = ownData<unknown>(event, 'liveTargets');
+    const length = ownArrayLength(
+      values,
+      'Kovo HMR component refresh targets',
+      maxEntries as number,
+    );
+    if (length === 0) {
+      throw new NativeTypeError('Kovo HMR component refresh requires a proven live target.');
+    }
+    const output: string[] = [];
+    for (let index = 0; index < length; index += 1) {
+      const target = ownArrayEntry<unknown>(values, index);
+      if (
+        typeof target !== 'string' ||
+        target === '' ||
+        apply<boolean>(identityIsValid!, codec, [target]) !== true
+      ) {
+        throw new NativeTypeError('Kovo HMR component refresh target identity is invalid.');
+      }
+      if (contains(output, target)) {
+        throw new NativeTypeError('Kovo HMR component refresh target identities must be unique.');
+      }
+      appendDense(output, target, 'Kovo HMR component refresh target snapshot');
+    }
+    return apply(objectFreeze, NativeObject, [output]) as readonly string[];
+  };
+  const selectTargetEntries = (
+    entries: readonly FrameworkWireEntrySnapshot[],
+    requestedTargets: readonly string[],
+    label: string,
+  ): readonly FrameworkWireEntrySnapshot[] => {
+    const length = ownArrayLength(entries, label, maxEntries as number);
+    const output: FrameworkWireEntrySnapshot[] = [];
+    for (let index = 0; index < length; index += 1) {
+      const entry = ownArrayEntry<FrameworkWireEntrySnapshot>(entries, index);
+      const target = ownData<unknown>(entry, 'target');
+      const wireEntry = ownData<unknown>(entry, 'wireEntry');
+      if (typeof target !== 'string' || typeof wireEntry !== 'string') {
+        throw new NativeTypeError(label + ' contains malformed target metadata.');
+      }
+      if (contains(requestedTargets, target)) {
+        appendDense(output, entry, label + ' selection');
+      }
+    }
+    return apply(objectFreeze, NativeObject, [output]) as readonly FrameworkWireEntrySnapshot[];
+  };
+  const selectLiveTargetEntries = (
+    entries: readonly HmrLiveTargetEntrySnapshot[],
+    requestedComponents: readonly string[],
+  ): readonly HmrLiveTargetEntrySnapshot[] => {
+    const length = ownArrayLength(entries, 'Kovo HMR live-target snapshot', maxEntries as number);
+    const output: HmrLiveTargetEntrySnapshot[] = [];
+    for (let index = 0; index < length; index += 1) {
+      const entry = ownArrayEntry<HmrLiveTargetEntrySnapshot>(entries, index);
+      const component = ownData<unknown>(entry, 'component');
+      const target = ownData<unknown>(entry, 'target');
+      const wireEntry = ownData<unknown>(entry, 'wireEntry');
+      if (
+        typeof component !== 'string' ||
+        typeof target !== 'string' ||
+        typeof wireEntry !== 'string'
+      ) {
+        throw new NativeTypeError('Kovo HMR live-target snapshot is malformed.');
+      }
+      if (contains(requestedComponents, component)) {
+        appendDense(output, entry, 'Kovo HMR live-target selection');
+      }
+    }
+    return apply(objectFreeze, NativeObject, [output]) as readonly HmrLiveTargetEntrySnapshot[];
+  };
+  const componentRefreshSnapshot = (
+    event: unknown,
+    root: unknown,
+  ): Readonly<{
+    liveTargets: readonly FrameworkWireEntrySnapshot[];
+    targets: readonly FrameworkWireEntrySnapshot[];
+  }> => {
+    // SPEC §9.5.1: a component event carries compiler-proven impacted live-target ids. Keep
+    // that closed set through the browser/server handoff so refreshing one leaf cannot replace an
+    // unrelated state-owning ancestor that merely happens to be live in the same document.
+    const requestedComponents = componentRefreshTargetIdentities(event);
+    const selectedLiveTargets = selectLiveTargetEntries(liveTargets(root), requestedComponents);
+    if (
+      ownArrayLength(
+        selectedLiveTargets,
+        'Kovo HMR selected live-target snapshot',
+        maxEntries as number,
+      ) === 0
+    ) {
+      throw new NativeTypeError('Kovo HMR component refresh target is not live in this document.');
+    }
+    const selectedTargetIdentities: string[] = [];
+    for (let index = 0; index < selectedLiveTargets.length; index += 1) {
+      appendDense(
+        selectedTargetIdentities,
+        ownArrayEntry<HmrLiveTargetEntrySnapshot>(selectedLiveTargets, index).target,
+        'Kovo HMR selected target identity snapshot',
+      );
+    }
+    return apply<
+      Readonly<{
+        liveTargets: readonly FrameworkWireEntrySnapshot[];
+        targets: readonly FrameworkWireEntrySnapshot[];
+      }>
+    >(objectFreeze, NativeObject, [
+      {
+        liveTargets: selectedLiveTargets,
+        targets: selectTargetEntries(
+          dependencyTargets(root),
+          selectedTargetIdentities,
+          'Kovo HMR dependency-target snapshot',
+        ),
+      },
+    ]);
+  };
+
   const currentBuild = (root: unknown): string => {
     const elements = queryElements(root, 'meta[name="kovo-build"]');
     const length = ownArrayLength(elements, 'Kovo HMR build-meta snapshot', maxCollectionElements);
@@ -492,6 +619,13 @@ export function createHmrTargetSnapshotReader(
   };
 
   return apply(objectFreeze, NativeObject, [
-    { currentBuild, dependencyTargets, liveTargets, responseEnvelopeIsFragment, writeBuild },
+    {
+      componentRefreshSnapshot,
+      currentBuild,
+      dependencyTargets,
+      liveTargets,
+      responseEnvelopeIsFragment,
+      writeBuild,
+    },
   ]);
 }

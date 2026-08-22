@@ -1,0 +1,52 @@
+{
+  "schema": "kovo-performance-publication-policy/v1",
+  "campaignPosture": "fresh-disjoint-campaigns-started-after-this-policy-is-committed",
+  "reportedMetricPosture": "retain-the-exact-complete-analysis-metric-census",
+  "holdoutRegression": {
+    "madMultiplier": 3,
+    "maxRegressionPct": 5,
+    "lowerEnvelope": "max-zero-min-relative-floor-and-cross-run-median-minus-mad",
+    "upperEnvelope": "max-relative-ceiling-and-cross-run-p95-plus-mad"
+  },
+  "publicationRoles": {
+    "competitiveTargets": "follow-on",
+    "correctnessAndIntegrity": "completion",
+    "milestones": "completion",
+    "regressionCensus": "completion"
+  },
+  "families": {
+    "browser": {
+      "dimensions": {
+        "formFactor": ["desktop", "mobile"],
+        "lane": ["default", "matched-l0", "matched-l1"],
+        "route": ["listing", "detail"]
+      },
+      "completionRegressionMetricTemplates": [
+        "{lane}/browser//{formFactor}.coldLoad.bytes.js",
+        "{lane}/browser//{formFactor}.coldLoad.bytes.total",
+        "{lane}/browser//{formFactor}.coldLoad.fcpMs",
+        "{lane}/browser//{formFactor}.coldLoad.lcpMs",
+        "{lane}/browser//{formFactor}.navigation.navToPaintMs",
+        "{lane}/browser//{formFactor}.navigation.sessionBytes.throughDestinationPaint.total",
+        "{lane}/browser//lighthouse.{formFactor}.{route}.fcpMs",
+        "{lane}/browser//lighthouse.{formFactor}.{route}.lcpMs",
+        "{lane}/browser//bfcache.restored"
+      ]
+    },
+    "server": {
+      "dimensions": {
+        "concurrency": [1, 8, 32],
+        "mode": ["hit", "304", "dynamic"],
+        "route": ["listing", "detail"]
+      },
+      "completionRegressionMetricTemplates": [
+        "matched-runtime/server/{mode}-{route}-identity-c{concurrency}/p50Ms",
+        "matched-runtime/server/{mode}-{route}-identity-c{concurrency}/p95Ms",
+        "matched-runtime/server/{mode}-{route}-identity-c{concurrency}/p99Ms",
+        "matched-runtime/server/{mode}-{route}-identity-c{concurrency}/peakRssBytes",
+        "matched-runtime/server/{mode}-{route}-identity-c{concurrency}/requestsPerSecond",
+        "matched-runtime/server/{mode}-{route}-identity-c{concurrency}/serverCpuPercent"
+      ]
+    }
+  }
+}

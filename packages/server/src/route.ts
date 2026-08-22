@@ -1473,11 +1473,13 @@ type RouteAuthorizationInternalResult<
     };
 
 class RouteBoundaryRenderError extends Error {
-  constructor(
-    readonly thrown: unknown,
-    readonly boundary: ResolvedRouteBoundary | undefined,
-  ) {
+  readonly thrown: unknown;
+  readonly boundary: ResolvedRouteBoundary | undefined;
+
+  constructor(thrown: unknown, boundary: ResolvedRouteBoundary | undefined) {
     super('Route boundary render error');
+    this.thrown = thrown;
+    this.boundary = boundary;
   }
 }
 

@@ -1,0 +1,4058 @@
+#!/usr/bin/env node
+import { createHash } from 'node:crypto';
+import { execFile, spawn } from 'node:child_process';
+import { lookup } from 'node:dns/promises';
+import { readFileSync } from 'node:fs';
+import {
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  readdir,
+  readlink,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
+import { get as httpGet } from 'node:http';
+import { get as httpsGet } from 'node:https';
+import { createServer, isIP } from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { chromium } from 'playwright';
+
+import { collectPerformanceProvenance } from '../../scripts/lib/perf-provenance.mjs';
+import { devReadyProfilerCaptureFailure } from '../../scripts/lib/perf-dev-ready-failure.mjs';
+import {
+  materializePackedKovoCommand,
+  normalizedPackedKovoCommand,
+  verifyPackedKovoProductFixture,
+} from '../../scripts/lib/perf-packed-kovo-product.mjs';
+import { performanceExecutionIdentity } from '../../scripts/lib/perf-execution.mjs';
+import { performanceHostFingerprint } from '../../scripts/lib/perf-host.mjs';
+import { validReadyRouteProbe } from '../../scripts/lib/perf-ready-route.mjs';
+import { processTreeRssBytes } from '../../scripts/lib/process-tree-rss.mjs';
+import {
+  inspectDevPortAllocation,
+  validateDevPortAllocationEvidence,
+} from '../harness/dev-port-allocation.mjs';
+import {
+  DEV_EDIT_PROFILE_CLASSIFIER,
+  DEV_EDIT_PROFILE_SCHEMA,
+} from '../../scripts/perf-dev-edit-profile.mjs';
+import {
+  createDevProcessMarker,
+  markedDevProcessEnvironment,
+  signalMarkedDevProcesses,
+} from './dev-process-marker.mjs';
+import {
+  CORPUS_SCHEMA,
+  DEV_PORT_ALLOCATION_POSTURE,
+  EDIT_REFRESH_SURFACES,
+  EDIT_SAVE_POSTURE,
+  EDIT_STATE_POSTURE,
+} from './generate.mjs';
+
+export const DEV_LOOP_REPORT_SCHEMA = 'kovo-dev-loop-report/v1';
+export const DEV_PROFILED_PROCESS_INVOCATION_SCHEMA = 'kovo-profiled-process-invocation/v1';
+export const DEV_SESSION_HANDOFF_SCHEMA = 'kovo-dev-session-handoff/v2';
+export const DEV_SOCKET_OWNER_EVIDENCE_SCHEMA = 'kovo-dev-socket-owner-evidence/v1';
+export const FRESH_READY_FAILURE_STAGES = Object.freeze([
+  'none',
+  'browser-context',
+  'browser-page',
+  'telemetry',
+  'ready-wait',
+  'evidence-capture',
+  'evidence-capture-rss',
+  'evidence-capture-profiler',
+  'cleanup-profiler-abort',
+  'cleanup-browser-context',
+  'cleanup-lifecycle',
+  'unknown',
+]);
+
+const EDIT_CLASSES = Object.freeze(['leaf', 'entry', 'data']);
+const ALL_EDIT_CLASSES = Object.freeze([...EDIT_CLASSES, 'syntaxError', 'recovery']);
+const GENERATED_OUTPUT_NAMES = new Set(['.kovo', '.next', 'dist']);
+const IGNORED_CORPUS_NAMES = new Set([
+  '.kovo-benchmark-corpus-owner.json',
+  'manifest.json',
+  'node_modules',
+]);
+const MAX_LOG_BYTES = 1024 * 1024;
+const READY_TIMEOUT_MS = 120_000;
+const EDIT_TIMEOUT_MS = 60_000;
+const RSS_SAMPLE_INTERVAL_MS = 50;
+const DEV_PROCESS_GRACEFUL_STOP_TIMEOUT_MS = 3_000;
+const DEV_PROCESS_FORCE_STOP_TIMEOUT_MS = 2_000;
+const DEV_PORT_RELEASE_TIMEOUT_MS = 5_000;
+const DEV_PORT_STABILITY_WINDOW_MS = 500;
+const DEV_LIFECYCLE_POLL_INTERVAL_MS = 50;
+const DEV_SOCKET_EVIDENCE_MAX_BYTES = 1024 * 1024;
+const DEV_SOCKET_EVIDENCE_MAX_FDS = 65_536;
+const DEV_SOCKET_EVIDENCE_MAX_PROCESSES = 4_096;
+const DEV_SOCKET_EVIDENCE_MAX_RECORDS = 256;
+const FRESH_READY_FAILURE_STAGE_SET = new Set(FRESH_READY_FAILURE_STAGES);
+const FRESH_READY_STAGED_FAILURES = new WeakMap();
+export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v4';
+let atomicCorpusSourceWrite = 0;
+const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const PERFORMANCE_POSTURE_FILES = Object.freeze([
+  'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
+  'scripts/pack-security.files.json',
+  'security/framework-public-runtime-export-posture.json',
+]);
+
+async function collectAuthenticatedSource() {
+  const source = collectPerformanceProvenance({
+    lockFiles: [
+      'pnpm-lock.yaml',
+      'benchmarks/nextjs/pnpm-lock.yaml',
+      'benchmarks/harness/pnpm-lock.yaml',
+    ],
+    repoRoot,
+  });
+  return {
+    ...source,
+    posture: Object.fromEntries(
+      await Promise.all(
+        PERFORMANCE_POSTURE_FILES.map(async (relativePath) => {
+          const absolutePath = path.join(repoRoot, relativePath);
+          return [relativePath, sha256(await readFile(absolutePath))];
+        }),
+      ),
+    ),
+  };
+}
+
+/**
+ * Measure exactly one generated entrant. `benchmarks/compare.mjs` owns alternating K,N,N,K
+ * serialization; keeping this adapter single-entrant prevents an accidental concurrent process
+ * tree from contaminating either timing or RSS evidence.
+ */
+export async function runDevLoopBenchmark(options, dependencies = {}) {
+  const normalized = normalizeDevLoopOptions(options);
+  const manifestEvidence = await loadCorpusManifest(normalized.manifestPath);
+  const { appRoot, manifest, manifestDigest, manifestPath } = manifestEvidence;
+  if (isWithin(appRoot, normalized.outPath)) {
+    throw new TypeError('--out must be outside the generated corpus root.');
+  }
+  if (
+    normalized.diagnosticProfile !== null &&
+    (isWithin(appRoot, normalized.diagnosticProfile.profileDir) ||
+      isWithin(repoRoot, normalized.diagnosticProfile.profileDir))
+  ) {
+    throw new TypeError('--profile-dir must be outside both the corpus and source worktree.');
+  }
+  if (
+    normalized.diagnosticProfile !== null &&
+    typeof dependencies.createDiagnosticProfiler !== 'function'
+  ) {
+    throw new TypeError('A diagnostic profiler factory is required for a profiled dev-loop run.');
+  }
+  await verifyCorpusSources(manifestEvidence);
+
+  const browserType = dependencies.browserType ?? chromium;
+  const spawnProcess = dependencies.spawnProcess ?? spawn;
+  const handoffDependencies = dependencies.handoffDependencies ?? {};
+  const startedAt = new Date().toISOString();
+  const source = await collectAuthenticatedSource();
+  let packedProduct = null;
+  if (normalized.packedProduct !== null) {
+    if (manifest.framework !== 'kovo') {
+      throw new TypeError('packed Kovo product evidence cannot be attached to a Next.js corpus');
+    }
+    packedProduct = verifyPackedKovoProductFixture(
+      normalized.packedProduct.descriptorPath,
+      normalized.packedProduct.digest,
+      source,
+    );
+  }
+  const execution = performanceExecutionIdentity({ startedAt });
+  const sessionPorts = Array.from(
+    { length: normalized.readyIterations + 1 },
+    (_, index) => normalized.port + index,
+  );
+  const command = materializeEntrantCommand(
+    manifest.dev.command,
+    appRoot,
+    sessionPorts[0],
+    packedProduct,
+  );
+  const versions = await collectEntrantVersions(appRoot, manifest.framework, command);
+  const report = createReportSkeleton({
+    command,
+    inspectorPort: normalized.diagnosticProfile?.inspectorPort ?? null,
+    execution,
+    iterations: normalized.iterations,
+    manifest,
+    manifestDigest,
+    manifestPath,
+    packedProduct,
+    readyIterations: normalized.readyIterations,
+    readyTimeoutMs: normalized.readyTimeoutMs,
+    source,
+    startedAt,
+    versions,
+    warmups: normalized.warmups,
+  });
+  const expectedInspectorPorts =
+    normalized.diagnosticProfile === null ? [] : [normalized.diagnosticProfile.inspectorPort];
+  const rawPortAllocation = await (dependencies.inspectPortAllocation ?? inspectDevPortAllocation)(
+    {
+      basePort: normalized.port,
+      inspectorPorts: expectedInspectorPorts,
+      ports: sessionPorts,
+    },
+    dependencies.portAllocationDependencies ?? {},
+  );
+  let portAllocationValidated = false;
+  try {
+    report.integrity.portAllocation = validateDevPortAllocationEvidence(rawPortAllocation, {
+      basePort: normalized.port,
+      inspectorPorts: expectedInspectorPorts,
+      ports: sessionPorts,
+    });
+    portAllocationValidated = true;
+  } catch (error) {
+    report.integrity.portAllocation = rawPortAllocation;
+    report.integrity.errors.push(
+      `dev port allocation evidence failed cross-field validation: ${errorMessage(error)}`,
+    );
+  }
+  report.integrity.corpus.beforeVerified = true;
+  for (const finding of sourceStabilityFindings(source)) report.integrity.errors.push(finding);
+  const originalSources = await readOriginalSources(manifestEvidence);
+  let browser;
+  let priorProcessMarker = null;
+  let priorSession = null;
+  let sessionSeriesAborted = false;
+
+  try {
+    if (!portAllocationValidated || !report.integrity.portAllocation.complete) {
+      throw new Error(
+        `dev port allocation preflight refused timing: ${report.integrity.portAllocation.errors.join('; ')}`,
+      );
+    }
+    browser = await browserType.launch({ headless: true });
+    report.environment.browser = { name: 'chromium', version: browser.version() };
+    for (let iteration = 0; iteration < report.integrity.readyIterations; iteration += 1) {
+      await cleanGeneratedOutputs(appRoot, manifest.build.outputs);
+      const targetSession = `ready[${String(iteration)}]`;
+      const sessionCommand = materializeEntrantCommand(
+        manifest.dev.command,
+        appRoot,
+        sessionPorts[iteration],
+        packedProduct,
+      );
+      const launch = await launchDevSessionAfterHandoff(
+        {
+          appRoot,
+          command: sessionCommand,
+          priorProcessMarker,
+          priorSession,
+          spawnProcess,
+          targetSession,
+        },
+        handoffDependencies,
+      );
+      report.integrity.handoffs.push(launch.handoff);
+      if (launch.session === null) {
+        report.integrity.errors.push(launch.handoff.error);
+        sessionSeriesAborted = true;
+        break;
+      }
+      const observation = await measureFreshReady({
+        appRoot,
+        browser,
+        command: sessionCommand,
+        iteration,
+        manifest,
+        readyTimeoutMs: normalized.readyTimeoutMs,
+        session: launch.session,
+        started: launch.started,
+      });
+      report.readySamples.push(observation);
+      accumulateObservationIntegrity(report.integrity, observation, `ready[${iteration}]`);
+      accumulateBrowserIntegrity(report.integrity, observation.browser, `ready[${iteration}]`);
+      if (!freshReadySeriesCanContinue(observation)) {
+        sessionSeriesAborted = true;
+        report.integrity.errors.push(
+          `ready[${String(iteration)}]: later fresh starts skipped after incomplete teardown`,
+        );
+        break;
+      }
+      priorProcessMarker = launch.session.processMarker;
+      priorSession = targetSession;
+    }
+
+    if (!sessionSeriesAborted) {
+      await cleanGeneratedOutputs(appRoot, manifest.build.outputs);
+      const editCommand = materializeEntrantCommand(
+        manifest.dev.command,
+        appRoot,
+        sessionPorts[normalized.readyIterations],
+        packedProduct,
+      );
+      const launch = await launchDevSessionAfterHandoff(
+        {
+          appRoot,
+          command: editCommand,
+          inspectorPort: normalized.diagnosticProfile?.inspectorPort ?? null,
+          priorProcessMarker,
+          priorSession,
+          spawnProcess,
+          targetSession: 'edit-session',
+        },
+        handoffDependencies,
+      );
+      report.integrity.handoffs.push(launch.handoff);
+      if (launch.session === null) {
+        report.integrity.errors.push(launch.handoff.error);
+        sessionSeriesAborted = true;
+      } else {
+        const editResult = await measureEditSession({
+          appRoot,
+          browser,
+          command: editCommand,
+          createDiagnosticProfiler: dependencies.createDiagnosticProfiler,
+          diagnosticProfile: normalized.diagnosticProfile,
+          iterations: normalized.iterations,
+          manifest,
+          originalSources,
+          readyTimeoutMs: normalized.readyTimeoutMs,
+          session: launch.session,
+          started: launch.started,
+          warmups: normalized.warmups,
+        });
+        report.samples = editResult.samples;
+        report.editSession = editResult.session;
+        report.profile = profileEditToPaint(editResult.samples, editResult.diagnosticProfile);
+        accumulateBrowserIntegrity(report.integrity, editResult.session.browser, 'edit-session');
+        if (editResult.session.error !== null) {
+          report.integrity.errors.push(`edit session: ${editResult.session.error}`);
+        }
+        if (editResult.session.rssSamples < 1 || editResult.session.peakRssBytes <= 0) {
+          report.integrity.errors.push('edit session did not produce process-tree RSS evidence');
+        }
+        for (const observation of editResult.observations) {
+          accumulateObservationIntegrity(
+            report.integrity,
+            observation,
+            `edit.${observation.editClass}[${observation.iteration}]`,
+          );
+        }
+      }
+    }
+  } catch (error) {
+    report.integrity.errors.push(errorMessage(error));
+  } finally {
+    await browser?.close().catch((error) => {
+      report.integrity.errors.push(`browser close: ${errorMessage(error)}`);
+    });
+    await restoreOriginalSources(appRoot, originalSources).catch((error) => {
+      report.integrity.errors.push(`source restoration: ${errorMessage(error)}`);
+    });
+    await verifyCorpusSources(manifestEvidence)
+      .then(() => {
+        report.integrity.corpus.afterVerified = true;
+      })
+      .catch((error) => {
+        report.integrity.errors.push(`post-run corpus integrity: ${errorMessage(error)}`);
+      });
+    try {
+      report.sourceAfter = await collectAuthenticatedSource();
+      report.integrity.source.after = report.sourceAfter;
+      const sourceFindings = sourceStabilityFindings(source, report.sourceAfter);
+      report.integrity.source.stable = sourceFindings.length === 0 && !source.dirty;
+      report.integrity.errors.push(...sourceFindings);
+    } catch (error) {
+      report.integrity.errors.push(`post-run source provenance: ${errorMessage(error)}`);
+    }
+    if (packedProduct !== null) {
+      try {
+        verifyPackedKovoProductFixture(
+          normalized.packedProduct.descriptorPath,
+          normalized.packedProduct.digest,
+          report.sourceAfter ?? source,
+        );
+        report.integrity.productArtifact.afterVerified = true;
+      } catch (error) {
+        report.integrity.errors.push(`post-run packed product integrity: ${errorMessage(error)}`);
+      }
+    }
+  }
+
+  const countFindings = exactSampleCountFindings(report);
+  const profileFindings = diagnosticProfileFindings(report, normalized.diagnosticProfile !== null);
+  report.integrity.errors.push(...countFindings, ...profileFindings);
+  report.integrity.complete = devLoopIntegrityComplete(report.integrity, {
+    countFindings,
+    profileFindings,
+  });
+  report.summary = summarizeReport(report);
+  report.environment.loadAverageAfter = os.loadavg();
+  report.host = performanceHostFingerprint({
+    browserVersions:
+      report.environment.browser === null
+        ? []
+        : [`${report.environment.browser.name}@${report.environment.browser.version}`],
+  });
+  report.hostSamples = [
+    { label: 'before', loadAverage: report.environment.loadAverageBefore },
+    { label: 'after', loadAverage: report.environment.loadAverageAfter },
+  ];
+  report.finishedAt = new Date().toISOString();
+  report.verdict.status = devLoopVerdictStatus(
+    report.integrity.complete,
+    normalized.diagnosticProfile !== null,
+  );
+  return report;
+}
+
+export function devLoopIntegrityComplete(
+  integrity,
+  { countFindings = [], profileFindings = [] } = {},
+) {
+  return (
+    integrity?.errors?.length === 0 &&
+    integrity?.misses === 0 &&
+    integrity?.browser?.unexpectedErrorCount === 0 &&
+    integrity?.browser?.requestFailedCount === 0 &&
+    integrity?.corpus?.beforeVerified === true &&
+    integrity?.corpus?.afterVerified === true &&
+    (integrity?.productArtifact?.required !== true ||
+      (integrity.productArtifact.beforeVerified === true &&
+        integrity.productArtifact.afterVerified === true)) &&
+    integrity?.source?.stable === true &&
+    countFindings.length === 0 &&
+    profileFindings.length === 0
+  );
+}
+
+export function devLoopVerdictStatus(integrityComplete, diagnosticProfileRequested) {
+  return integrityComplete
+    ? diagnosticProfileRequested
+      ? 'diagnostic-only'
+      : 'measured'
+    : 'unproven';
+}
+
+export function normalizedFreshReadyFailureStage(stage) {
+  return FRESH_READY_FAILURE_STAGE_SET.has(stage) ? stage : 'unknown';
+}
+
+export async function measureFreshReady(
+  {
+    appRoot,
+    browser,
+    command,
+    iteration,
+    manifest,
+    readyTimeoutMs,
+    session: suppliedSession,
+    spawnProcess,
+    started: suppliedStarted,
+  },
+  dependencies = {},
+) {
+  const now = dependencies.now ?? (() => performance.now());
+  const readyDiagnostic = dependencies.readyDiagnostic ?? null;
+  const createRssSampler = dependencies.createRssSampler ?? createProcessTreeRssSampler;
+  const createSession = dependencies.startDevSession ?? startDevSession;
+  const waitForReady = dependencies.waitForReadyPage ?? waitForReadyPage;
+  // The deadline begins immediately before spawn. A caller that already ran the handoff fence
+  // supplies that timestamp and session so the fence remains outside the timing sample without
+  // moving the measurement boundary later.
+  const started = suppliedStarted ?? now();
+  const session = suppliedSession ?? createSession({ appRoot, command, spawnProcess });
+  const rss = createRssSampler(session.pid);
+  let rssStopPromise = null;
+  const stopRss = () => {
+    rssStopPromise ??= rss.stop();
+    return rssStopPromise;
+  };
+  let context;
+  let browserEvidence = emptyBrowserEvidence();
+  let observation;
+  let readinessProbe = null;
+  let telemetry;
+  let activeFailureStage = 'browser-context';
+  try {
+    context = await browser.newContext();
+    activeFailureStage = 'browser-page';
+    const page = await context.newPage();
+    activeFailureStage = 'telemetry';
+    telemetry = collectPageTelemetry(page, command.origin, {
+      framework: manifest.framework,
+      intentionalSyntaxErrorFile: manifest.dev.edits.syntaxError.file,
+    });
+    activeFailureStage = 'ready-wait';
+    const paint = await waitForReady({
+      deadlineMs: started + readyTimeoutMs,
+      origin: command.origin,
+      page,
+      ready: manifest.dev.ready,
+      timeoutMs: readyTimeoutMs,
+      session,
+    });
+    const durationMs = now() - started;
+    readinessProbe = paint.readinessProbe;
+    activeFailureStage = 'telemetry';
+    telemetry.markReady();
+    browserEvidence = telemetry.snapshot();
+    activeFailureStage = 'evidence-capture-rss';
+    const rssEvidencePromise = stagedFreshReadyEvidencePromise(
+      'evidence-capture-rss',
+      stopRss(),
+    );
+    activeFailureStage = 'evidence-capture-profiler';
+    const diagnosticEvidencePromise = stagedFreshReadyEvidencePromise(
+      'evidence-capture-profiler',
+      readyDiagnostic === null ? null : readyDiagnostic.captureAtReady(),
+    );
+    activeFailureStage = 'evidence-capture';
+    const [rssEvidence, diagnosticEvidence] = await Promise.all([
+      rssEvidencePromise,
+      diagnosticEvidencePromise,
+    ]);
+    const hasRss = rssEvidence.sampleCount > 0 && rssEvidence.peakRssBytes > 0;
+    observation = {
+      browser: browserEvidence,
+      durationMs,
+      error: hasRss ? null : 'fresh ready did not produce process-tree RSS evidence',
+      failureStage: hasRss ? 'none' : 'evidence-capture-rss',
+      iteration,
+      paintFenceMs: paint.paintFenceMs,
+      peakRssBytes: rssEvidence.peakRssBytes,
+      profilerFailureSubstage: 'none',
+      readinessProbe,
+      rssSamples: rssEvidence.sampleCount,
+      success: hasRss,
+      ...(diagnosticEvidence === null ? {} : { readyDiagnostic: diagnosticEvidence }),
+    };
+  } catch (error) {
+    const failure = freshReadyFailure(error, activeFailureStage);
+    const profilerFailure =
+      failure.stage === 'evidence-capture-profiler'
+        ? devReadyProfilerCaptureFailure(failure.cause)
+        : { cause: failure.cause, substage: 'none' };
+    const stoppedRss = await stoppedFreshReadyRss(stopRss);
+    const rssEvidence = stoppedRss.evidence;
+    browserEvidence = telemetry?.snapshot() ?? browserEvidence;
+    observation = {
+      browser: browserEvidence,
+      durationMs: null,
+      error: [
+        freshReadyErrorMessage(profilerFailure.cause),
+        stoppedRss.error !== null && stoppedRss.error !== profilerFailure.cause
+          ? `process-tree RSS stop: ${freshReadyErrorMessage(stoppedRss.error)}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join('; '),
+      failureStage: failure.stage,
+      iteration,
+      paintFenceMs: null,
+      peakRssBytes: rssEvidence.peakRssBytes,
+      profilerFailureSubstage: profilerFailure.substage,
+      readinessProbe,
+      rssSamples: rssEvidence.sampleCount,
+      success: false,
+    };
+  } finally {
+    const diagnosticAbortError = await readyDiagnosticAbortError(readyDiagnostic);
+    if (diagnosticAbortError !== null) {
+      observation ??= {
+        browser: browserEvidence,
+        durationMs: null,
+        error: 'fresh ready did not produce an observation',
+        failureStage: 'unknown',
+        iteration,
+        paintFenceMs: null,
+        peakRssBytes: 0,
+        profilerFailureSubstage: 'unknown',
+        readinessProbe,
+        rssSamples: 0,
+        success: false,
+      };
+      observation.error = [observation.error, diagnosticAbortError].filter(Boolean).join('; ');
+      observation.success = false;
+      claimFreshReadyFailureStage(observation, 'cleanup-profiler-abort');
+    }
+    const contextCloseError = await browserContextCloseError(context);
+    const lifecycle = await session.stop();
+    browserEvidence = telemetry?.snapshot() ?? browserEvidence;
+    observation ??= {
+      browser: browserEvidence,
+      durationMs: null,
+      error: 'fresh ready did not produce an observation',
+      failureStage: 'unknown',
+      iteration,
+      paintFenceMs: null,
+      peakRssBytes: 0,
+      profilerFailureSubstage: 'unknown',
+      readinessProbe,
+      rssSamples: 0,
+      success: false,
+    };
+    observation.browser = browserEvidence;
+    observation.browserContextClosed = contextCloseError === null;
+    if (contextCloseError !== null) {
+      observation.error = [observation.error, contextCloseError].filter(Boolean).join('; ');
+      observation.success = false;
+      claimFreshReadyFailureStage(observation, 'cleanup-browser-context');
+    }
+    if (browserEvidence.requestFailedCount > 0 || browserEvidence.unexpectedErrorCount > 0) {
+      observation.error = [
+        observation.error,
+        `browser telemetry recorded ${String(browserEvidence.requestFailedCount)} request failures and ${String(browserEvidence.unexpectedErrorCount)} unexpected errors`,
+      ]
+        .filter(Boolean)
+        .join('; ');
+      observation.success = false;
+      claimFreshReadyFailureStage(observation, 'telemetry');
+    }
+    observation.lifecycle = lifecycle;
+    if (!lifecycle.complete) {
+      observation.error = [observation.error, lifecycle.error].filter(Boolean).join('; ');
+      observation.success = false;
+      claimFreshReadyFailureStage(observation, 'cleanup-lifecycle');
+    }
+  }
+  return observation;
+}
+
+function stagedFreshReadyEvidencePromise(stage, evidencePromise) {
+  return Promise.resolve(evidencePromise).catch((cause) => {
+    const stagedFailure = Object.freeze({});
+    FRESH_READY_STAGED_FAILURES.set(
+      stagedFailure,
+      Object.freeze({
+        cause,
+        stage: normalizedFreshReadyFailureStage(stage),
+      }),
+    );
+    throw stagedFailure;
+  });
+}
+
+function freshReadyFailure(error, fallbackStage) {
+  if (error !== null && (typeof error === 'object' || typeof error === 'function')) {
+    const stagedFailure = FRESH_READY_STAGED_FAILURES.get(error);
+    if (stagedFailure !== undefined) return stagedFailure;
+  }
+  return {
+    cause: error,
+    stage: normalizedFreshReadyFailureStage(fallbackStage),
+  };
+}
+
+function freshReadyErrorMessage(error) {
+  try {
+    return errorMessage(error);
+  } catch {
+    return 'unreadable fresh-ready failure';
+  }
+}
+
+function claimFreshReadyFailureStage(observation, stage) {
+  if (observation.failureStage === 'none') {
+    observation.failureStage = normalizedFreshReadyFailureStage(stage);
+  }
+}
+
+async function stoppedFreshReadyRss(stopRss) {
+  try {
+    return { error: null, evidence: await stopRss() };
+  } catch (error) {
+    return {
+      error,
+      evidence: { peakRssBytes: 0, sampleCount: 0 },
+    };
+  }
+}
+
+async function readyDiagnosticAbortError(readyDiagnostic) {
+  if (readyDiagnostic === null) return null;
+  if (
+    typeof readyDiagnostic?.captureAtReady !== 'function' ||
+    typeof readyDiagnostic.abort !== 'function'
+  ) {
+    return 'fresh-ready diagnostic has an invalid lifecycle';
+  }
+  try {
+    await readyDiagnostic.abort();
+    return null;
+  } catch (error) {
+    return `fresh-ready diagnostic abort: ${freshReadyErrorMessage(error)}`;
+  }
+}
+
+export function freshReadySeriesCanContinue(observation) {
+  return observation?.browserContextClosed === true && observation?.lifecycle?.complete === true;
+}
+
+async function measureEditSession({
+  appRoot,
+  browser,
+  command,
+  createDiagnosticProfiler,
+  diagnosticProfile,
+  iterations,
+  manifest,
+  originalSources,
+  readyTimeoutMs,
+  session,
+  started,
+  warmups,
+}) {
+  const rss = createProcessTreeRssSampler(session.pid);
+  let context;
+  let fatalError = null;
+  let profiler;
+  let profilerSummary = null;
+  let readinessProbe = null;
+  let lifecycle = null;
+  let contextCloseFailure = null;
+  let telemetry;
+  let rssEvidence = { peakRssBytes: 0, sampleCount: 0 };
+  const samples = Array.from({ length: iterations }, (_, iteration) => ({ iteration }));
+  const observations = [];
+  try {
+    context = await browser.newContext();
+    const page = await context.newPage();
+    telemetry = collectPageTelemetry(page, command.origin, {
+      framework: manifest.framework,
+      intentionalSyntaxErrorFile: manifest.dev.edits.syntaxError.file,
+    });
+    const readyObservation = await waitForReadyPage({
+      deadlineMs: started + readyTimeoutMs,
+      origin: command.origin,
+      page,
+      ready: manifest.dev.ready,
+      timeoutMs: readyTimeoutMs,
+      session,
+    });
+    readinessProbe = readyObservation.readinessProbe;
+    telemetry.markReady();
+    await establishState(page, manifest.dev.state);
+    if (diagnosticProfile !== null) {
+      profiler = await createDiagnosticProfiler({
+        appRoot,
+        expectedPid: session.pid,
+        framework: manifest.framework,
+        inspectorPort: diagnosticProfile.inspectorPort,
+        modules: manifest.modules,
+        processMarker: session.processMarker,
+        profileDir: diagnosticProfile.profileDir,
+        repoRoot,
+      });
+    }
+
+    for (const editClass of EDIT_CLASSES) {
+      const classObservations = await measureRevisionEditClass({
+        appRoot,
+        contract: manifest.dev.edits[editClass],
+        editClass,
+        iterations,
+        page,
+        profiler,
+        session,
+        state: manifest.dev.state,
+        telemetry,
+        warmups,
+      });
+      observations.push(...classObservations.all);
+      for (const observation of classObservations.measured) {
+        assignEditSample(samples[observation.iteration], observation);
+      }
+    }
+
+    const syntaxObservations = await measureSyntaxAndRecovery({
+      appRoot,
+      iterations,
+      leafSource: originalSources.get(manifest.dev.edits.syntaxError.file),
+      page,
+      profiler,
+      recovery: manifest.dev.edits.recovery,
+      session,
+      state: manifest.dev.state,
+      syntaxError: manifest.dev.edits.syntaxError,
+      telemetry,
+      warmups,
+    });
+    observations.push(...syntaxObservations.all);
+    for (const observation of syntaxObservations.measured) {
+      assignEditSample(samples[observation.iteration], observation);
+    }
+  } catch (error) {
+    fatalError = errorMessage(error);
+  } finally {
+    if (profiler !== undefined) {
+      try {
+        profilerSummary = profiler.summary();
+        await profiler.close();
+      } catch (error) {
+        fatalError = [fatalError, `diagnostic profiler: ${errorMessage(error)}`]
+          .filter(Boolean)
+          .join('; ');
+      }
+    }
+    contextCloseFailure = await browserContextCloseError(context);
+    if (contextCloseFailure !== null) {
+      fatalError = [fatalError, contextCloseFailure].filter(Boolean).join('; ');
+    }
+    lifecycle = await session.stop();
+    if (!lifecycle.complete) {
+      fatalError = [fatalError, lifecycle.error].filter(Boolean).join('; ');
+    }
+    rssEvidence = await rss.stop();
+  }
+  return {
+    diagnosticProfile: profilerSummary,
+    observations,
+    samples,
+    session: {
+      browser: telemetry?.snapshot() ?? emptyBrowserEvidence(),
+      browserContextClosed: contextCloseFailure === null,
+      error: fatalError,
+      lifecycle,
+      logTail: session.logTail(),
+      peakRssBytes: rssEvidence.peakRssBytes,
+      pid: session.pid,
+      processMarkerSha256: sha256(session.processMarker),
+      readinessProbe,
+      rssSamples: rssEvidence.sampleCount,
+    },
+  };
+}
+
+async function browserContextCloseError(context) {
+  if (context === undefined) return null;
+  try {
+    await context.close();
+    return null;
+  } catch (error) {
+    return `browser context close: ${freshReadyErrorMessage(error)}`;
+  }
+}
+
+async function measureRevisionEditClass({
+  appRoot,
+  contract,
+  editClass,
+  iterations,
+  page,
+  profiler,
+  session,
+  state,
+  telemetry,
+  warmups,
+}) {
+  const filePath = safeCorpusPath(appRoot, contract.file);
+  const original = await readFile(filePath, 'utf8');
+  let currentLiteral = contract.search;
+  const all = [];
+  const measured = [];
+  try {
+    for (let index = 0; index < warmups + iterations; index += 1) {
+      await establishState(page, state);
+      const revision = `${editClass}-${index % 2 === 0 ? 'a' : 'b'}-${String(index)}`;
+      const nextLiteral = fillRevision(contract.replacementTemplate, revision);
+      const source = replaceExactlyOnce(
+        await readFile(filePath, 'utf8'),
+        currentLiteral,
+        nextLiteral,
+      );
+      const observation = await applyVisibleEdit({
+        editClass,
+        evidence: contract.evidence,
+        filePath,
+        iteration: index - warmups,
+        page,
+        profiler: index >= warmups ? profiler : undefined,
+        revision,
+        session,
+        source,
+        state,
+        telemetry,
+      });
+      currentLiteral = nextLiteral;
+      all.push(observation);
+      if (index >= warmups) measured.push(observation);
+    }
+  } finally {
+    telemetry.setPhase(`${editClass}-restore`);
+    try {
+      await atomicReplaceCorpusSource(filePath, original);
+      await waitForEvidence(page, contract.evidence, 'r0', EDIT_TIMEOUT_MS);
+      if (!(await stateMatches(page, state))) {
+        throw new Error(`${editClass} baseline restoration lost browser state`);
+      }
+    } finally {
+      telemetry.setPhase('idle');
+    }
+  }
+  return { all, measured };
+}
+
+export async function measureSyntaxAndRecovery(
+  {
+    appRoot,
+    iterations,
+    leafSource,
+    page,
+    profiler,
+    recovery,
+    session,
+    state,
+    syntaxError,
+    telemetry,
+    warmups,
+  },
+  dependencies = {},
+) {
+  if (typeof leafSource !== 'string')
+    throw new TypeError('Syntax-error source evidence is absent.');
+  const filePath = safeCorpusPath(appRoot, syntaxError.file);
+  const brokenSource = replaceExactlyOnce(leafSource, syntaxError.search, syntaxError.replacement);
+  const observeSyntaxError = dependencies.applySyntaxError ?? applySyntaxError;
+  const observeRecovery = dependencies.applyRecovery ?? applyRecovery;
+  const replaceSource = dependencies.replaceSource ?? atomicReplaceCorpusSource;
+  const all = [];
+  const measured = [];
+  for (let index = 0; index < warmups + iterations; index += 1) {
+    await establishState(page, state);
+    let syntax = await observeSyntaxError({
+      filePath,
+      iteration: index - warmups,
+      page,
+      profiler: index >= warmups ? profiler : undefined,
+      session,
+      source: brokenSource,
+      state,
+      telemetry,
+    });
+    if (!syntax.success) {
+      // A failed syntax observation may have replaced the source successfully but missed the
+      // corresponding fresh overlay. Restore exact authenticated bytes atomically, then abort:
+      // accepting the still-mounted overlay in a later iteration would turn one miss into a row
+      // of false syntax successes and byte-identical recovery writes that emit no useful event.
+      try {
+        await replaceSource(filePath, leafSource);
+      } catch (error) {
+        syntax = appendObservationError(syntax, `source restoration: ${errorMessage(error)}`);
+      } finally {
+        // applySyntaxError intentionally keeps this classification live for the paired recovery.
+        // A terminal syntax miss skips that recovery, so reset both controls even when restoring
+        // source bytes fails; otherwise later browser evidence could be misclassified as expected.
+        telemetry.setIntentionalSyntaxError(false);
+        telemetry.setPhase('idle');
+      }
+      all.push(syntax);
+      if (index >= warmups) measured.push(syntax);
+      break;
+    }
+    all.push(syntax);
+    if (index >= warmups) measured.push(syntax);
+    let recovered = await observeRecovery({
+      evidence: recovery.evidence,
+      filePath,
+      iteration: index - warmups,
+      page,
+      profiler: index >= warmups ? profiler : undefined,
+      session,
+      source: leafSource,
+      state,
+      telemetry,
+    });
+    if (!recovered.success) {
+      // Recovery failures are terminal for this session. Replacing the last-good bytes again is
+      // intentional: rename gives the watcher a fresh atomic event even when the failed recovery
+      // had already written byte-identical content, while the report remains fail-closed.
+      try {
+        await replaceSource(filePath, leafSource);
+      } catch (error) {
+        recovered = appendObservationError(recovered, `source restoration: ${errorMessage(error)}`);
+      }
+      all.push(recovered);
+      if (index >= warmups) measured.push(recovered);
+      break;
+    }
+    all.push(recovered);
+    if (index >= warmups) measured.push(recovered);
+  }
+  return { all, measured };
+}
+
+async function applyVisibleEdit({
+  editClass,
+  evidence,
+  filePath,
+  iteration,
+  page,
+  profiler,
+  revision,
+  session,
+  source,
+  state,
+  telemetry,
+}) {
+  telemetry.setPhase(editClass);
+  const logIndex = session.logCount();
+  let writeMs = null;
+  try {
+    await profiler?.startWindow({ editClass, iteration });
+    const started = performance.now();
+    await atomicReplaceCorpusSource(filePath, source);
+    writeMs = performance.now() - started;
+    const paint = await waitForEvidence(page, evidence, revision, EDIT_TIMEOUT_MS);
+    const durationMs = performance.now() - started;
+    const diagnosticProfile = await profiler?.stopWindow({ editClass, iteration });
+    const stateSurvived = await stateMatches(page, state);
+    return {
+      diagnosticProfile,
+      durationMs,
+      editClass,
+      error: null,
+      iteration,
+      paintFenceMs: paint.paintFenceMs,
+      serverGenerationMs: session.generationDurationSince(logIndex),
+      stateSurvived,
+      success: stateSurvived,
+      writeMs,
+    };
+  } catch (error) {
+    await profiler?.abortWindow().catch(() => undefined);
+    return failedEditObservation({ editClass, error, iteration, writeMs });
+  } finally {
+    telemetry.setPhase('idle');
+  }
+}
+
+async function applySyntaxError({
+  filePath,
+  iteration,
+  page,
+  profiler,
+  session,
+  source,
+  state,
+  telemetry,
+}) {
+  telemetry.setPhase('syntaxError');
+  telemetry.setIntentionalSyntaxError(true);
+  const logIndex = session.logCount();
+  let writeMs = null;
+  try {
+    await assertBrowserErrorOverlayAbsent(page);
+    await profiler?.startWindow({ editClass: 'syntaxError', iteration });
+    const started = performance.now();
+    await atomicReplaceCorpusSource(filePath, source);
+    writeMs = performance.now() - started;
+    const signal = await waitForBrowserErrorOverlay(page, EDIT_TIMEOUT_MS);
+    const paintFenceMs = await waitForPaint(page);
+    const durationMs = performance.now() - started;
+    const diagnosticProfile = await profiler?.stopWindow({
+      editClass: 'syntaxError',
+      iteration,
+    });
+    const stateSurvived = await stateMatches(page, state);
+    return {
+      diagnosticProfile,
+      diagnosticSignal: signal,
+      durationMs,
+      editClass: 'syntaxError',
+      error: null,
+      iteration,
+      paintFenceMs,
+      serverGenerationMs: session.generationDurationSince(logIndex),
+      stateSurvived,
+      success: stateSurvived,
+      writeMs,
+    };
+  } catch (error) {
+    await profiler?.abortWindow().catch(() => undefined);
+    return failedEditObservation({ editClass: 'syntaxError', error, iteration, writeMs });
+  }
+}
+
+async function applyRecovery({
+  evidence,
+  filePath,
+  iteration,
+  page,
+  profiler,
+  session,
+  source,
+  state,
+  telemetry,
+}) {
+  telemetry.setPhase('recovery');
+  const logIndex = session.logCount();
+  let writeMs = null;
+  try {
+    await profiler?.startWindow({ editClass: 'recovery', iteration });
+    const started = performance.now();
+    await atomicReplaceCorpusSource(filePath, source);
+    writeMs = performance.now() - started;
+    await waitForOverlayToClear(page, EDIT_TIMEOUT_MS);
+    const paint = await waitForEvidence(page, evidence, 'r0', EDIT_TIMEOUT_MS);
+    const durationMs = performance.now() - started;
+    const diagnosticProfile = await profiler?.stopWindow({ editClass: 'recovery', iteration });
+    const stateSurvived = await stateMatches(page, state);
+    return {
+      diagnosticProfile,
+      durationMs,
+      editClass: 'recovery',
+      error: null,
+      iteration,
+      paintFenceMs: paint.paintFenceMs,
+      serverGenerationMs: session.generationDurationSince(logIndex),
+      stateSurvived,
+      success: stateSurvived,
+      writeMs,
+    };
+  } catch (error) {
+    await profiler?.abortWindow().catch(() => undefined);
+    return failedEditObservation({ editClass: 'recovery', error, iteration, writeMs });
+  } finally {
+    telemetry.setIntentionalSyntaxError(false);
+    telemetry.setPhase('idle');
+  }
+}
+
+function failedEditObservation({ editClass, error, iteration, writeMs }) {
+  return {
+    durationMs: null,
+    editClass,
+    error: errorMessage(error),
+    iteration,
+    paintFenceMs: null,
+    serverGenerationMs: null,
+    stateSurvived: false,
+    success: false,
+    writeMs,
+  };
+}
+
+function appendObservationError(observation, error) {
+  return {
+    ...observation,
+    error: [observation.error, error].filter(Boolean).join('; '),
+    success: false,
+  };
+}
+
+function assignEditSample(sample, observation) {
+  const prefix = observation.editClass;
+  sample[`${prefix}Ms`] = observation.durationMs;
+  sample[`${prefix}PaintFenceMs`] = observation.paintFenceMs;
+  sample[`${prefix}ServerGenerationMs`] = observation.serverGenerationMs;
+  sample[`${prefix}StateSurvived`] = observation.stateSurvived;
+  sample[`${prefix}WriteMs`] = observation.writeMs;
+  if (observation.diagnosticProfile !== undefined) {
+    sample[`${prefix}DiagnosticProfile`] = observation.diagnosticProfile;
+  }
+  if (observation.diagnosticSignal !== undefined) {
+    sample.syntaxErrorDiagnosticSignal = observation.diagnosticSignal;
+  }
+}
+
+export async function waitForReadyPage(
+  { deadlineMs, origin, page, ready, session, timeoutMs },
+  dependencies = {},
+) {
+  const now = dependencies.now ?? (() => performance.now());
+  const paintFence = dependencies.waitForPaint ?? waitForPaint;
+  const pause = dependencies.delay ?? delay;
+  const requestReadyRoute = dependencies.requestReadyRoute ?? requestReadyRouteResponse;
+  const deadline = Number.isFinite(deadlineMs) ? deadlineMs : now() + timeoutMs;
+  const readinessProbe = await waitForReadyRouteResponse({
+    deadline,
+    now,
+    origin,
+    pause,
+    path: ready.path,
+    requestReadyRoute,
+    session,
+  });
+  let lastError = 'server did not answer';
+  while (now() < deadline) {
+    if (session.exited()) {
+      throw new Error(`dev process exited before ready: ${session.logTail()}`);
+    }
+    try {
+      const navigationTimeoutMs = remainingTimeoutMs(deadline, now);
+      const response = await page.goto(new URL(ready.path, origin).href, {
+        timeout: Math.min(2_000, navigationTimeoutMs),
+        waitUntil: 'domcontentloaded',
+      });
+      assertBeforeDeadline(deadline, now, 'browser navigation');
+      if (response !== null && response.status() >= 400) {
+        lastError = `HTTP ${String(response.status())}`;
+      } else {
+        const locator = page.locator(ready.selector).first();
+        const actual = await locator.getAttribute(ready.attribute, {
+          timeout: remainingTimeoutMs(deadline, now),
+        });
+        assertBeforeDeadline(deadline, now, 'ready selector');
+        if (actual === ready.expected) {
+          const paintFenceMs = await paintFence(page, remainingTimeoutMs(deadline, now));
+          assertBeforeDeadline(deadline, now, 'two-frame paint fence');
+          return { paintFenceMs, readinessProbe };
+        }
+        lastError = `missing ready evidence ${ready.selector}`;
+      }
+    } catch (error) {
+      lastError = errorMessage(error);
+    }
+    if (now() < deadline) await pause(Math.min(25, Math.max(0, deadline - now())));
+  }
+  throw new Error(`dev ready timed out: ${lastError}; log tail: ${session.logTail()}`);
+}
+
+function remainingTimeoutMs(deadline, now) {
+  const remainingMs = Math.ceil(deadline - now());
+  if (remainingMs <= 0) throw new Error('dev ready shared deadline expired');
+  return remainingMs;
+}
+
+function assertBeforeDeadline(deadline, now, stage) {
+  if (now() >= deadline) throw new Error(`dev ready shared deadline expired during ${stage}`);
+}
+
+async function waitForReadyRouteResponse({
+  deadline,
+  now,
+  origin,
+  path: routePath,
+  pause,
+  requestReadyRoute,
+  session,
+}) {
+  const url = new URL(routePath, origin);
+  let attempts = 0;
+  let lastError = 'server did not answer';
+  let transientFailures = 0;
+  while (now() < deadline) {
+    if (session.exited()) {
+      throw new Error(`dev process exited before ready: ${session.logTail()}`);
+    }
+    attempts += 1;
+    try {
+      const remainingMs = Math.max(1, Math.ceil(deadline - now()));
+      const response = await requestReadyRoute(url, Math.min(2_000, remainingMs));
+      const status = response?.status;
+      if (Number.isSafeInteger(status) && status >= 200 && status < 300) {
+        return {
+          attempts,
+          path: `${url.pathname}${url.search}`,
+          status,
+          transientFailures,
+        };
+      }
+      lastError = `HTTP ${String(status)}`;
+    } catch (error) {
+      lastError = errorMessage(error);
+    }
+    transientFailures += 1;
+    if (now() < deadline) await pause(Math.min(25, Math.max(0, deadline - now())));
+  }
+  throw new Error(`dev ready route probe timed out: ${lastError}; log tail: ${session.logTail()}`);
+}
+
+function requestReadyRouteResponse(url, timeoutMs) {
+  const get = url.protocol === 'https:' ? httpsGet : httpGet;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer;
+    const settle = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      callback(value);
+    };
+    let request;
+    try {
+      request = get(url, { headers: { connection: 'close' } }, (response) => {
+        const status = response.statusCode;
+        response.once('end', () => settle(resolve, { status }));
+        response.once('aborted', () =>
+          settle(reject, new Error('dev ready route probe response aborted')),
+        );
+        response.once('error', (error) => settle(reject, error));
+        response.resume();
+      });
+    } catch (error) {
+      settle(reject, error);
+      return;
+    }
+    request.once('error', (error) => settle(reject, error));
+    timer = setTimeout(() => {
+      const error = new Error('dev ready route probe request timed out');
+      settle(reject, error);
+      request.destroy(error);
+    }, timeoutMs);
+  });
+}
+
+async function waitForEvidence(page, evidence, revision, timeoutMs) {
+  const expected = evidence.expectedTemplate.includes('{revision}')
+    ? fillRevision(evidence.expectedTemplate, revision)
+    : evidence.expectedTemplate;
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    try {
+      const locator = page.locator(evidence.selector).first();
+      const actual =
+        typeof evidence.attribute === 'string'
+          ? await locator.getAttribute(evidence.attribute)
+          : await locator.textContent();
+      if (actual?.trim() === expected) {
+        return { paintFenceMs: await waitForPaint(page) };
+      }
+    } catch {
+      // Navigation can replace the execution context while an edit is landing.
+    }
+    await delay(10);
+  }
+  throw new Error(`browser did not paint ${evidence.selector}=${expected}`);
+}
+
+async function waitForBrowserErrorOverlay(page, timeoutMs) {
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    try {
+      const signal = await browserErrorOverlaySignal(page);
+      if (signal !== null) return signal;
+    } catch {
+      // The overlay may be mounting across a document update.
+    }
+    await delay(10);
+  }
+  throw new Error('syntax error did not produce a browser-visible error overlay');
+}
+
+/**
+ * Fence each syntax sample against a prior overlay. A non-null signal here is not evidence for the
+ * upcoming write and therefore cannot be admitted as fresh edit-to-paint telemetry.
+ */
+export async function assertBrowserErrorOverlayAbsent(page) {
+  const signal = await browserErrorOverlaySignal(page);
+  if (signal !== null) {
+    throw new Error(`syntax error measurement found a stale browser error overlay: ${signal}`);
+  }
+}
+
+async function waitForOverlayToClear(page, timeoutMs) {
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    try {
+      if ((await browserErrorOverlaySignal(page)) === null) return;
+    } catch {
+      // Navigation can transiently destroy the old overlay execution context.
+    }
+    await delay(10);
+  }
+  throw new Error('browser error overlay did not clear after source recovery');
+}
+
+async function browserErrorOverlaySignal(page) {
+  return page.evaluate(() => {
+    const visibleText = (root) => {
+      const text = root?.textContent ?? '';
+      return String(text).trim();
+    };
+    for (const selector of ['vite-error-overlay', '[data-nextjs-dialog-overlay]']) {
+      for (const element of document.querySelectorAll(selector)) {
+        const text = visibleText(element);
+        if (text.length > 0) return `${selector}:${text.slice(0, 160)}`;
+        const shadowText = visibleText(element.shadowRoot);
+        if (shadowText.length > 0) return `${selector}:${shadowText.slice(0, 160)}`;
+      }
+    }
+    // Next.js mounts nextjs-portal permanently for its devtools badge and injects extensive CSS
+    // into that shadow root even when no error exists. Only an actual dialog overlay inside the
+    // shadow tree is diagnostic evidence; the portal or badge itself is never sufficient.
+    for (const portal of document.querySelectorAll('nextjs-portal')) {
+      const shadowRoot = portal.shadowRoot;
+      if (shadowRoot === null) continue;
+      for (const selector of ['[data-nextjs-dialog-overlay]', '[data-nextjs-dialog-root]']) {
+        for (const element of shadowRoot.querySelectorAll(selector)) {
+          const text = visibleText(element);
+          if (text.length > 0) return `${selector}:${text.slice(0, 160)}`;
+        }
+      }
+    }
+    return null;
+  });
+}
+
+export async function waitForPaint(page, timeoutMs = EDIT_TIMEOUT_MS) {
+  const started = performance.now();
+  // The fence must not annotate React-owned markup. In Next.js dev, DOMContentLoaded can precede
+  // root hydration; writing a temporary <html> attribute here makes the benchmark itself produce
+  // a hydration mismatch. A promise returned by waitForFunction keeps the same bounded two-frame
+  // fence without changing the document being measured.
+  await page.waitForFunction(
+    () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)));
+      }),
+    undefined,
+    { polling: 'raf', timeout: Math.max(1, Math.ceil(timeoutMs)) },
+  );
+  return performance.now() - started;
+}
+
+export async function establishState(page, state, timeoutMs = EDIT_TIMEOUT_MS) {
+  if (await stateMatches(page, state)) return;
+  const locator = page.locator(state.selector).first();
+  const value = (await locator[state.property]())?.trim();
+  if (value !== 'Count 0' || state.setup.action !== 'click') {
+    throw new Error(`could not establish benchmark state from ${String(value)}`);
+  }
+  await locator.click();
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    if (await stateMatches(page, state)) return;
+    // Kovo's inline bootstrap deliberately defers the full client runtime import. The first
+    // authored click is captured synchronously and replayed after that import, so readiness must
+    // await the one click's browser-visible result without issuing a second, state-changing click.
+    await delay(10);
+  }
+  throw new Error('benchmark state setup did not become browser-visible');
+}
+
+async function stateMatches(page, state) {
+  try {
+    const value = await page.locator(state.selector).first()[state.property]();
+    return value?.trim() === state.value;
+  } catch {
+    return false;
+  }
+}
+
+export function collectPageTelemetry(page, expectedOrigin, options = {}) {
+  let intentionalSyntaxError = false;
+  let phase = 'ready';
+  const framework = options.framework ?? null;
+  const intentionalSyntaxErrorFile = options.intentionalSyntaxErrorFile ?? null;
+  const evidence = emptyBrowserEvidence();
+  const classify = (issue) => {
+    const classification = incidentalBrowserIssue(issue, expectedOrigin)
+      ? 'browser-incidental'
+      : intentionalSyntaxError &&
+          intentionalSyntaxCompilerConsole(issue, framework, phase, intentionalSyntaxErrorFile)
+        ? 'intentional-syntax-error'
+        : null;
+    const record = {
+      ...issue,
+      ...(classification === null ? {} : { classification }),
+      phase,
+    };
+    if (classification === null) evidence.unexpectedErrorCount += 1;
+    else evidence.expectedErrorCount += 1;
+    pushBoundedRecord(
+      classification === null ? evidence.unexpectedErrors : evidence.expectedErrors,
+      record,
+    );
+  };
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      classify({ kind: 'console', message: String(message.text()).slice(0, 1_024) });
+    }
+  });
+  page.on('pageerror', (error) => {
+    classify({ kind: 'pageerror', message: errorMessage(error).slice(0, 1_024) });
+  });
+  page.on('requestfailed', (request) => {
+    evidence.requestFailedCount += 1;
+    classify({
+      kind: 'requestfailed',
+      message: String(request.failure()?.errorText ?? 'unknown request failure').slice(0, 1_024),
+      method: request.method(),
+      resourceType: request.resourceType(),
+      url: sanitizeBrowserUrl(request.url(), expectedOrigin),
+    });
+  });
+  page.on('response', (response) => {
+    evidence.responseCount += 1;
+    const status = response.status();
+    const key = String(status);
+    evidence.responseStatusCounts[key] = (evidence.responseStatusCounts[key] ?? 0) + 1;
+    if (status >= 400) {
+      classify({
+        kind: 'response',
+        message: `HTTP ${key}`,
+        method: response.request().method(),
+        resourceType: response.request().resourceType(),
+        status,
+        url: sanitizeBrowserUrl(response.url(), expectedOrigin),
+      });
+    }
+  });
+  return {
+    markReady() {
+      phase = 'idle';
+    },
+    setIntentionalSyntaxError(value) {
+      intentionalSyntaxError = value === true;
+    },
+    setPhase(value) {
+      phase = String(value);
+    },
+    snapshot() {
+      return structuredClone(evidence);
+    },
+  };
+}
+
+function intentionalSyntaxCompilerConsole(issue, framework, phase, sourceFile) {
+  if (
+    issue.kind !== 'console' ||
+    framework !== 'nextjs' ||
+    !['syntaxError', 'recovery'].includes(phase) ||
+    typeof sourceFile !== 'string' ||
+    sourceFile.length === 0
+  ) {
+    return false;
+  }
+  const normalizedFile = sourceFile.replace(/\\/gu, '/');
+  const normalizedMessage = String(issue.message).replace(/\\/gu, '/');
+  return (
+    normalizedMessage.includes(normalizedFile) &&
+    /\b(?:failed to compile|failed to parse source code|module parse failed|parsing ecmascript source code failed)\b/iu.test(
+      normalizedMessage,
+    )
+  );
+}
+
+function incidentalBrowserIssue(issue, expectedOrigin) {
+  if (issue.kind !== 'response' || issue.status !== 404 || issue.resourceType !== 'other') {
+    return false;
+  }
+  try {
+    const url = new URL(issue.url, expectedOrigin);
+    return url.origin === expectedOrigin && url.pathname === '/favicon.ico';
+  } catch {
+    return false;
+  }
+}
+
+function emptyBrowserEvidence() {
+  return {
+    expectedErrorCount: 0,
+    expectedErrors: [],
+    requestFailedCount: 0,
+    responseCount: 0,
+    responseStatusCounts: {},
+    unexpectedErrorCount: 0,
+    unexpectedErrors: [],
+  };
+}
+
+function emptyBrowserIntegrity() {
+  return { ...emptyBrowserEvidence(), sessions: 0 };
+}
+
+function accumulateBrowserIntegrity(integrity, evidence, scope) {
+  integrity.browser.sessions += 1;
+  integrity.browser.expectedErrorCount += evidence.expectedErrorCount;
+  integrity.browser.requestFailedCount += evidence.requestFailedCount;
+  integrity.browser.responseCount += evidence.responseCount;
+  integrity.browser.unexpectedErrorCount += evidence.unexpectedErrorCount;
+  for (const [status, count] of Object.entries(evidence.responseStatusCounts)) {
+    integrity.browser.responseStatusCounts[status] =
+      (integrity.browser.responseStatusCounts[status] ?? 0) + count;
+  }
+  for (const issue of evidence.expectedErrors) {
+    pushBoundedRecord(integrity.browser.expectedErrors, { ...issue, scope });
+  }
+  for (const issue of evidence.unexpectedErrors) {
+    const scoped = { ...issue, scope };
+    pushBoundedRecord(integrity.browser.unexpectedErrors, scoped);
+    integrity.errors.push(`${scope}: unexpected browser ${issue.kind}: ${issue.message}`);
+  }
+}
+
+function sanitizeBrowserUrl(value, expectedOrigin) {
+  try {
+    const url = new URL(value);
+    return url.origin === expectedOrigin ? `${url.pathname}${url.search}` : url.href;
+  } catch {
+    return String(value).slice(0, 2_048);
+  }
+}
+
+/**
+ * Recheck the exact dual-stack origin immediately before a dev-process spawn. This is a handoff
+ * fence, not a cleanup mechanism: a listener seen here may be unrelated to the benchmark, so the
+ * only safe action is to retain bounded evidence and refuse to spawn.
+ */
+export async function launchDevSessionAfterHandoff(options, dependencies = {}) {
+  const now = dependencies.now ?? (() => performance.now());
+  const handoff = await inspectDevSessionHandoff(options, dependencies);
+  if (!handoff.complete) return { handoff, session: null, started: null };
+  const started = now();
+  const startSession = dependencies.startSession ?? startDevSession;
+  const session = startSession({
+    appRoot: options.appRoot,
+    command: options.command,
+    inspectorPort: options.inspectorPort ?? null,
+    inspectorPauseOnStart: options.inspectorPauseOnStart ?? false,
+    spawnProcess: options.spawnProcess ?? spawn,
+  });
+  return { handoff, session, started };
+}
+
+export async function inspectDevSessionHandoff(options, dependencies = {}) {
+  const origin = new URL(requiredString(options?.command?.origin, 'dev origin')).origin;
+  const attribution = validateHandoffAttribution({
+    from: options.priorSession ?? null,
+    priorMarkerSha256:
+      options.priorProcessMarker === null || options.priorProcessMarker === undefined
+        ? null
+        : sha256(validateProcessMarker(options.priorProcessMarker)),
+    to: options.targetSession,
+  });
+  const inspectorOrigin =
+    options.inspectorPort === null || options.inspectorPort === undefined
+      ? null
+      : `http://localhost:${String(
+          boundedInteger(options.inspectorPort, 1_024, 65_535, 'Inspector handoff port'),
+        )}`;
+  if (inspectorOrigin !== null && new URL(origin).port === new URL(inspectorOrigin).port) {
+    throw new TypeError('Inspector handoff port must differ from the dev origin port');
+  }
+  const [primary, inspector] = await Promise.all([
+    inspectPreSpawnPortFence(
+      { label: 'dev origin', origin, priorProcessMarker: options.priorProcessMarker ?? null },
+      dependencies,
+    ),
+    inspectorOrigin === null
+      ? null
+      : inspectPreSpawnPortFence(
+          {
+            label: 'Inspector',
+            origin: inspectorOrigin,
+            priorProcessMarker: options.priorProcessMarker ?? null,
+          },
+          dependencies,
+        ),
+  ]);
+  const complete = primary.complete && (inspector === null || inspector.complete);
+  const reasons = [primary, inspector]
+    .filter((fence) => fence !== null && !fence.complete)
+    .map((fence) => fence.error);
+  const evidence = {
+    attribution,
+    available: primary.available,
+    check: primary.check,
+    complete,
+    error: complete
+      ? null
+      : boundedEvidenceMessage(
+          `dev pre-spawn handoff ${attribution.from ?? 'initial'} -> ${attribution.to} refused: ${reasons.join('; ')}; no process was spawned`,
+        ),
+    inspector,
+    origin,
+    schema: DEV_SESSION_HANDOFF_SCHEMA,
+    socketEvidence: primary.socketEvidence,
+  };
+  return validateDevSessionHandoffEvidence(evidence);
+}
+
+export function validateDevSessionHandoffEvidence(value) {
+  if (value === null || typeof value !== 'object' || value.schema !== DEV_SESSION_HANDOFF_SCHEMA) {
+    throw new TypeError('dev pre-spawn handoff evidence has an unsupported schema');
+  }
+  const attribution = validateHandoffAttribution(value.attribution);
+  const primary = validatePreSpawnPortFence({
+    available: value.available,
+    check: value.check,
+    complete: value.available,
+    error: value.available ? null : 'primary handoff unavailable',
+    origin: value.origin,
+    socketEvidence: value.socketEvidence,
+  });
+  const inspector =
+    value.inspector === null ? null : validatePreSpawnPortFence(value.inspector, 'Inspector');
+  if (
+    inspector !== null &&
+    (new URL(inspector.origin).protocol !== 'http:' ||
+      new URL(inspector.origin).hostname !== 'localhost' ||
+      new URL(inspector.origin).port === new URL(primary.origin).port)
+  ) {
+    throw new TypeError('Inspector handoff origin is not the distinct exact loopback allocation');
+  }
+  const complete = primary.complete && (inspector === null || inspector.complete);
+  if (typeof value.complete !== 'boolean' || value.complete !== complete) {
+    throw new TypeError('dev pre-spawn handoff completion disagrees with its port fences');
+  }
+  if (
+    (value.complete && value.error !== null) ||
+    (!value.complete && !boundedEvidenceString(value.error))
+  ) {
+    throw new TypeError('dev pre-spawn handoff error posture is malformed');
+  }
+  return {
+    attribution,
+    available: primary.available,
+    check: primary.check,
+    complete: value.complete,
+    error: value.error,
+    inspector,
+    origin: primary.origin,
+    schema: DEV_SESSION_HANDOFF_SCHEMA,
+    socketEvidence: primary.socketEvidence,
+  };
+}
+
+async function inspectPreSpawnPortFence(options, dependencies) {
+  const origin = new URL(requiredString(options.origin, 'pre-spawn port-fence origin')).origin;
+  const now = dependencies.now ?? (() => performance.now());
+  const wallNow = dependencies.wallNow ?? (() => new Date().toISOString());
+  const portAvailability = dependencies.portAvailability ?? probeOriginPortAvailability;
+  const collectSocketEvidence =
+    dependencies.collectSocketEvidence ?? collectLinuxSocketOwnerEvidence;
+  const started = now();
+  const checkedAt = validateIsoTimestamp(wallNow(), 'dev handoff check timestamp');
+  let addresses = [];
+  let available = false;
+  let probeError = null;
+  try {
+    const observation = validatePortAvailabilityObservation(await portAvailability(origin));
+    addresses = observation.addresses;
+    available = observation.available;
+  } catch (error) {
+    probeError = boundedEvidenceMessage(errorMessage(error));
+  }
+  const durationMs = Math.max(0, now() - started);
+  const busyAddresses = addresses.filter(
+    (address) => address.supported && address.available === false,
+  );
+  let socketEvidence = null;
+  let socketEvidenceError = null;
+  if (busyAddresses.length > 0) {
+    try {
+      socketEvidence = validateSocketOwnerEvidence(
+        await collectSocketEvidence(
+          {
+            busyAddresses,
+            origin,
+            priorProcessMarker: options.priorProcessMarker,
+          },
+          dependencies.socketEvidenceDependencies ?? {},
+        ),
+      );
+    } catch (error) {
+      socketEvidenceError = boundedEvidenceMessage(errorMessage(error));
+    }
+  }
+  const unavailableReason =
+    probeError !== null
+      ? `port probe failed: ${probeError}`
+      : busyAddresses.length > 0
+        ? `busy ${busyAddresses.map((address) => `${address.address}/${String(address.family)}`).join(', ')}`
+        : 'no supported address was proven available';
+  const diagnosticSuffix =
+    socketEvidenceError === null
+      ? ''
+      : `; socket evidence failed validation: ${socketEvidenceError}`;
+  return validatePreSpawnPortFence(
+    {
+      available,
+      check: { addresses, checkedAt, durationMs, probeError, sequence: 1 },
+      complete: available && probeError === null,
+      error:
+        available && probeError === null
+          ? null
+          : boundedEvidenceMessage(`${options.label} ${unavailableReason}${diagnosticSuffix}`),
+      origin,
+      socketEvidence,
+    },
+    options.label,
+  );
+}
+
+function validatePreSpawnPortFence(value, label = 'dev origin') {
+  const origin = new URL(requiredString(value.origin, `${label} handoff origin`)).origin;
+  if (origin !== value.origin) throw new TypeError(`${label} handoff origin must be canonical`);
+  const check = value.check;
+  if (
+    check === null ||
+    typeof check !== 'object' ||
+    check.sequence !== 1 ||
+    !finiteNonNegative(check.durationMs) ||
+    !(check.probeError === null || boundedEvidenceString(check.probeError)) ||
+    !Array.isArray(check.addresses)
+  ) {
+    throw new TypeError(`${label} pre-spawn handoff check evidence is malformed`);
+  }
+  validateIsoTimestamp(check.checkedAt, `${label} handoff check timestamp`);
+  let observation;
+  if (check.probeError === null) {
+    observation = validatePortAvailabilityObservation({
+      addresses: check.addresses,
+      available: value.available,
+    });
+  } else {
+    if (check.addresses.length !== 0 || value.available !== false) {
+      throw new TypeError(`failed ${label} handoff probe cannot claim address availability`);
+    }
+    observation = { addresses: [], available: false };
+  }
+  if (typeof value.complete !== 'boolean' || value.complete !== observation.available) {
+    throw new TypeError(`${label} handoff completion disagrees with its address evidence`);
+  }
+  if (
+    (value.complete && value.error !== null) ||
+    (!value.complete && !boundedEvidenceString(value.error))
+  ) {
+    throw new TypeError(`${label} handoff error posture is malformed`);
+  }
+  const socketEvidence =
+    value.socketEvidence === null ? null : validateSocketOwnerEvidence(value.socketEvidence);
+  if (
+    socketEvidence !== null &&
+    !sameAddressIdentities(
+      socketEvidence.busyAddresses,
+      observation.addresses.filter((address) => address.supported && !address.available),
+    )
+  ) {
+    throw new TypeError(`socket-owner evidence does not match the busy ${label} addresses`);
+  }
+  return {
+    available: observation.available,
+    check: {
+      addresses: observation.addresses,
+      checkedAt: check.checkedAt,
+      durationMs: check.durationMs,
+      probeError: check.probeError,
+      sequence: 1,
+    },
+    complete: value.complete,
+    error: value.error,
+    origin,
+    socketEvidence,
+  };
+}
+
+/** Collect bounded Linux kernel socket state and correlate its inode with safe process identity. */
+export async function collectLinuxSocketOwnerEvidence(options, dependencies = {}) {
+  const platform = dependencies.platform ?? process.platform;
+  const origin = new URL(requiredString(options.origin, 'socket evidence origin')).origin;
+  const port = Number(new URL(origin).port || (new URL(origin).protocol === 'https:' ? 443 : 80));
+  const busyAddresses = options.busyAddresses.map((address) => ({
+    address: address.address,
+    errorCode: address.errorCode,
+    family: address.family,
+  }));
+  if (platform !== 'linux') {
+    return validateSocketOwnerEvidence({
+      busyAddresses,
+      census: { fdLinksInspected: 0, processesInspected: 0, socketRecords: 0 },
+      complete: false,
+      limitations: [`socket owner census is unavailable on ${boundedEvidenceMessage(platform)}`],
+      origin,
+      platform,
+      schema: DEV_SOCKET_OWNER_EVIDENCE_SCHEMA,
+      sockets: [],
+    });
+  }
+
+  const readBounded = dependencies.readBoundedFile ?? readBoundedFile;
+  const listDirectory = dependencies.listDirectory ?? ((target) => readdir(target));
+  const readLink = dependencies.readLink ?? readlink;
+  const limitations = new Set();
+  const sockets = [];
+  for (const [family, target] of [
+    [4, '/proc/net/tcp'],
+    [6, '/proc/net/tcp6'],
+  ]) {
+    let snapshot;
+    try {
+      snapshot = await readBounded(target, DEV_SOCKET_EVIDENCE_MAX_BYTES);
+      if (snapshot.truncated) limitations.add(`${target} exceeded the bounded evidence read`);
+    } catch (error) {
+      limitations.add(
+        `${target} could not be read: ${boundedEvidenceMessage(errorMessage(error))}`,
+      );
+      continue;
+    }
+    try {
+      sockets.push(...parseLinuxSocketTable(snapshot.bytes.toString('utf8'), family, port));
+    } catch (error) {
+      limitations.add(
+        `${target} could not be parsed: ${boundedEvidenceMessage(errorMessage(error))}`,
+      );
+    }
+  }
+  sockets.sort(compareSocketEvidence);
+  if (sockets.length > DEV_SOCKET_EVIDENCE_MAX_RECORDS) {
+    sockets.length = DEV_SOCKET_EVIDENCE_MAX_RECORDS;
+    limitations.add('matching kernel socket records exceeded the evidence bound');
+  }
+  if (sockets.length === 0) {
+    limitations.add('no matching kernel socket row remained after the busy bind check');
+  }
+
+  const relevantInodes = new Set(
+    sockets.map((socket) => socket.inode).filter((inode) => inode !== '0'),
+  );
+  const owners = new Map([...relevantInodes].map((inode) => [inode, []]));
+  let fdLinksInspected = 0;
+  let processesInspected = 0;
+  if (relevantInodes.size > 0) {
+    let processNames = [];
+    try {
+      processNames = (await listDirectory('/proc'))
+        .filter((entry) => /^\d+$/u.test(entry))
+        .sort((left, right) => Number(left) - Number(right));
+    } catch (error) {
+      limitations.add(
+        `process census could not be listed: ${boundedEvidenceMessage(errorMessage(error))}`,
+      );
+    }
+    if (processNames.length > DEV_SOCKET_EVIDENCE_MAX_PROCESSES) {
+      processNames.length = DEV_SOCKET_EVIDENCE_MAX_PROCESSES;
+      limitations.add('process census exceeded the evidence bound');
+    }
+    for (const processName of processNames) {
+      processesInspected += 1;
+      let descriptorNames;
+      try {
+        descriptorNames = await listDirectory(`/proc/${processName}/fd`);
+      } catch (error) {
+        if (!transientProcError(error)) {
+          limitations.add(`PID ${processName} descriptors were not observable`);
+        }
+        continue;
+      }
+      for (const descriptorName of descriptorNames) {
+        if (fdLinksInspected >= DEV_SOCKET_EVIDENCE_MAX_FDS) {
+          limitations.add('file-descriptor census exceeded the evidence bound');
+          break;
+        }
+        fdLinksInspected += 1;
+        let link;
+        try {
+          link = await readLink(`/proc/${processName}/fd/${descriptorName}`);
+        } catch (error) {
+          if (!transientProcError(error)) {
+            limitations.add(`PID ${processName} descriptor identity was not observable`);
+          }
+          continue;
+        }
+        const match = /^socket:\[(\d+)\]$/u.exec(link);
+        if (match === null || !relevantInodes.has(match[1])) continue;
+        const owner = await readSafeSocketOwner(
+          Number(processName),
+          options.priorProcessMarker ?? null,
+          { limitations, readBounded },
+        );
+        const list = owners.get(match[1]);
+        if (
+          list.length < DEV_SOCKET_EVIDENCE_MAX_RECORDS &&
+          !list.some((candidate) => candidate.pid === owner.pid)
+        ) {
+          list.push(owner);
+        }
+      }
+      if (fdLinksInspected >= DEV_SOCKET_EVIDENCE_MAX_FDS) break;
+    }
+  }
+  for (const socket of sockets) {
+    socket.owners = (owners.get(socket.inode) ?? []).toSorted(
+      (left, right) => left.pid - right.pid,
+    );
+    if (socket.inode !== '0' && socket.owners.length === 0) {
+      limitations.add(
+        `socket inode ${socket.inode} owner was not observable after the kernel/process census race`,
+      );
+    }
+  }
+  const evidence = {
+    busyAddresses,
+    census: { fdLinksInspected, processesInspected, socketRecords: sockets.length },
+    complete: limitations.size === 0,
+    limitations: [...limitations].slice(0, 32),
+    origin,
+    platform,
+    schema: DEV_SOCKET_OWNER_EVIDENCE_SCHEMA,
+    sockets,
+  };
+  return validateSocketOwnerEvidence(evidence);
+}
+
+export function parseLinuxSocketTable(source, family, port) {
+  if (![4, 6].includes(family)) throw new TypeError('Linux socket table family must be 4 or 6');
+  boundedInteger(port, 1, 65_535, 'Linux socket table port');
+  if (typeof source !== 'string') throw new TypeError('Linux socket table must be text');
+  const records = [];
+  for (const line of source.split(/\r?\n/u).slice(1)) {
+    if (line.trim().length === 0) continue;
+    const fields = line.trim().split(/\s+/u);
+    if (fields.length < 10) throw new TypeError('Linux socket table row is truncated');
+    const local = /^([0-9A-Fa-f]+):([0-9A-Fa-f]{4})$/u.exec(fields[1]);
+    if (local === null) throw new TypeError('Linux socket table local address is malformed');
+    if (Number.parseInt(local[2], 16) !== port) continue;
+    const stateCode = fields[3].toUpperCase();
+    const uid = Number(fields[7]);
+    const inode = fields[9];
+    if (
+      !/^[0-9A-F]{2}$/u.test(stateCode) ||
+      !/^\d{1,32}$/u.test(inode) ||
+      !Number.isSafeInteger(uid) ||
+      uid < 0
+    ) {
+      throw new TypeError('Linux socket table identity fields are malformed');
+    }
+    records.push({
+      family,
+      inode,
+      localAddressHex: local[1].toUpperCase(),
+      localPort: port,
+      owners: [],
+      state: linuxSocketState(stateCode),
+      stateCode,
+      uid,
+    });
+  }
+  return records;
+}
+
+export function validateSocketOwnerEvidence(value) {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    value.schema !== DEV_SOCKET_OWNER_EVIDENCE_SCHEMA ||
+    !boundedEvidenceString(value.platform) ||
+    !Array.isArray(value.busyAddresses) ||
+    !Array.isArray(value.limitations) ||
+    !Array.isArray(value.sockets) ||
+    typeof value.complete !== 'boolean'
+  ) {
+    throw new TypeError('dev socket-owner evidence is malformed');
+  }
+  const origin = new URL(requiredString(value.origin, 'socket evidence origin')).origin;
+  const originUrl = new URL(origin);
+  const originPort = Number(originUrl.port || (originUrl.protocol === 'https:' ? 443 : 80));
+  if (
+    origin !== value.origin ||
+    value.busyAddresses.length < 1 ||
+    value.busyAddresses.length > 16
+  ) {
+    throw new TypeError('dev socket-owner origin/address evidence is malformed');
+  }
+  const busyAddresses = value.busyAddresses.map((address) => {
+    if (
+      address === null ||
+      typeof address !== 'object' ||
+      ![4, 6].includes(address.family) ||
+      !boundedEvidenceString(address.address) ||
+      !boundedEvidenceString(address.errorCode)
+    ) {
+      throw new TypeError('dev socket-owner busy address is malformed');
+    }
+    return { address: address.address, errorCode: address.errorCode, family: address.family };
+  });
+  const limitations = value.limitations.map((limitation) => {
+    if (!boundedEvidenceString(limitation)) {
+      throw new TypeError('dev socket-owner limitation is malformed');
+    }
+    return limitation;
+  });
+  if (limitations.length > 32 || value.complete !== (limitations.length === 0)) {
+    throw new TypeError('dev socket-owner completeness disagrees with its limitations');
+  }
+  const census = value.census;
+  if (
+    census === null ||
+    typeof census !== 'object' ||
+    ![census.fdLinksInspected, census.processesInspected, census.socketRecords].every(
+      (number) => Number.isSafeInteger(number) && number >= 0,
+    ) ||
+    census.socketRecords !== value.sockets.length
+  ) {
+    throw new TypeError('dev socket-owner census is malformed');
+  }
+  if (value.sockets.length > DEV_SOCKET_EVIDENCE_MAX_RECORDS) {
+    throw new TypeError('dev socket-owner records exceed their evidence bound');
+  }
+  const sockets = value.sockets.map((socket) => validateSocketRecord(socket));
+  if (sockets.some((socket) => socket.localPort !== originPort)) {
+    throw new TypeError('dev socket-owner record does not match its origin port');
+  }
+  return {
+    busyAddresses,
+    census: { ...census },
+    complete: value.complete,
+    limitations,
+    origin,
+    platform: value.platform,
+    schema: DEV_SOCKET_OWNER_EVIDENCE_SCHEMA,
+    sockets,
+  };
+}
+
+function validateSocketRecord(socket) {
+  if (
+    socket === null ||
+    typeof socket !== 'object' ||
+    ![4, 6].includes(socket.family) ||
+    !/^\d{1,32}$/u.test(socket.inode ?? '') ||
+    !/^[0-9A-F]{8,32}$/u.test(socket.localAddressHex ?? '') ||
+    !Number.isSafeInteger(socket.localPort) ||
+    socket.localPort < 1 ||
+    socket.localPort > 65_535 ||
+    !/^[0-9A-F]{2}$/u.test(socket.stateCode ?? '') ||
+    !boundedEvidenceString(socket.state) ||
+    !(socket.uid === null || (Number.isSafeInteger(socket.uid) && socket.uid >= 0)) ||
+    !Array.isArray(socket.owners) ||
+    socket.owners.length > DEV_SOCKET_EVIDENCE_MAX_RECORDS
+  ) {
+    throw new TypeError('dev kernel socket record is malformed');
+  }
+  return {
+    family: socket.family,
+    inode: socket.inode,
+    localAddressHex: socket.localAddressHex,
+    localPort: socket.localPort,
+    owners: socket.owners.map((owner) => {
+      if (
+        owner === null ||
+        typeof owner !== 'object' ||
+        !Number.isSafeInteger(owner.pid) ||
+        owner.pid <= 0 ||
+        !boundedEvidenceString(owner.command) ||
+        ![true, false, null].includes(owner.priorSessionMarkerMatched)
+      ) {
+        throw new TypeError('dev socket owner identity is malformed');
+      }
+      return {
+        command: owner.command,
+        pid: owner.pid,
+        priorSessionMarkerMatched: owner.priorSessionMarkerMatched,
+      };
+    }),
+    state: socket.state,
+    stateCode: socket.stateCode,
+    uid: socket.uid,
+  };
+}
+
+async function readSafeSocketOwner(pid, priorProcessMarker, { limitations, readBounded }) {
+  let command = '<unavailable>';
+  try {
+    const snapshot = await readBounded(`/proc/${String(pid)}/comm`, 256);
+    if (snapshot.truncated)
+      limitations.add(`PID ${String(pid)} command exceeded its evidence bound`);
+    command = sanitizeProcessCommand(snapshot.bytes.toString('utf8'));
+  } catch (error) {
+    if (!transientProcError(error)) limitations.add(`PID ${String(pid)} command was unavailable`);
+  }
+  let priorSessionMarkerMatched = null;
+  if (priorProcessMarker !== null) {
+    validateProcessMarker(priorProcessMarker);
+    try {
+      const snapshot = await readBounded(`/proc/${String(pid)}/environ`, 256 * 1024);
+      if (snapshot.truncated) {
+        limitations.add(`PID ${String(pid)} environment exceeded the marker-check bound`);
+      } else {
+        priorSessionMarkerMatched = snapshot.bytes
+          .toString('utf8')
+          .split('\0')
+          .includes(`${priorProcessMarker}=1`);
+      }
+    } catch (error) {
+      if (!transientProcError(error)) {
+        limitations.add(`PID ${String(pid)} prior-session marker was not observable`);
+      }
+    }
+  }
+  return { command, pid, priorSessionMarkerMatched };
+}
+
+async function readBoundedFile(target, maximumBytes) {
+  boundedInteger(maximumBytes, 1, DEV_SOCKET_EVIDENCE_MAX_BYTES, 'bounded evidence bytes');
+  const handle = await open(target, 'r');
+  try {
+    const buffer = Buffer.alloc(maximumBytes + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, 0);
+    return {
+      bytes: buffer.subarray(0, Math.min(bytesRead, maximumBytes)),
+      truncated: bytesRead > maximumBytes,
+    };
+  } finally {
+    await handle.close();
+  }
+}
+
+function validateHandoffAttribution(value) {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    !(value.from === null || validSessionLabel(value.from)) ||
+    !validSessionLabel(value.to) ||
+    !(value.priorMarkerSha256 === null || /^sha256:[0-9a-f]{64}$/u.test(value.priorMarkerSha256))
+  ) {
+    throw new TypeError('dev handoff attribution is malformed');
+  }
+  return {
+    from: value.from,
+    priorMarkerSha256: value.priorMarkerSha256,
+    to: value.to,
+  };
+}
+
+function validSessionLabel(value) {
+  return (
+    value === 'edit-session' || (typeof value === 'string' && /^ready\[\d{1,3}\]$/u.test(value))
+  );
+}
+
+function validateProcessMarker(value) {
+  if (typeof value !== 'string' || !/^KOVO_PERF_DEV_SESSION_[A-Z0-9_]+$/u.test(value)) {
+    throw new TypeError('prior dev-process marker is malformed');
+  }
+  return value;
+}
+
+function validateIsoTimestamp(value, label) {
+  if (
+    typeof value !== 'string' ||
+    value.length > 64 ||
+    !Number.isFinite(Date.parse(value)) ||
+    new Date(value).toISOString() !== value
+  ) {
+    throw new TypeError(`${label} is malformed`);
+  }
+  return value;
+}
+
+function boundedEvidenceString(value) {
+  return (
+    typeof value === 'string' && value.length > 0 && value.length <= 256 && !/[\r\n\0]/u.test(value)
+  );
+}
+
+function boundedEvidenceMessage(value) {
+  return (
+    String(value)
+      .replace(/[\r\n\0]+/gu, ' ')
+      .slice(0, 256) || '<empty>'
+  );
+}
+
+function sanitizeProcessCommand(value) {
+  return boundedEvidenceMessage(
+    String(value)
+      .trim()
+      .replace(/[^\p{L}\p{N}._:@+ -]/gu, '?'),
+  ).slice(0, 128);
+}
+
+function transientProcError(error) {
+  // A disappearing process or descriptor is an unavoidable census race. Permission failures are
+  // materially different: they mean owner identity was not observable and must remain explicit.
+  return ['ENOENT', 'ESRCH'].includes(error?.code);
+}
+
+function sameAddressIdentities(left, right) {
+  const identity = (address) =>
+    `${String(address.family)}:${address.address}:${String(address.errorCode)}`;
+  return JSON.stringify(left.map(identity).sort()) === JSON.stringify(right.map(identity).sort());
+}
+
+function compareSocketEvidence(left, right) {
+  return (
+    left.family - right.family ||
+    left.localAddressHex.localeCompare(right.localAddressHex) ||
+    left.inode.localeCompare(right.inode)
+  );
+}
+
+function linuxSocketState(code) {
+  return (
+    {
+      '01': 'ESTABLISHED',
+      '02': 'SYN_SENT',
+      '03': 'SYN_RECV',
+      '04': 'FIN_WAIT1',
+      '05': 'FIN_WAIT2',
+      '06': 'TIME_WAIT',
+      '07': 'CLOSE',
+      '08': 'CLOSE_WAIT',
+      '09': 'LAST_ACK',
+      '0A': 'LISTEN',
+      '0B': 'CLOSING',
+      '0C': 'NEW_SYN_RECV',
+    }[code] ?? `UNKNOWN_${code}`
+  );
+}
+
+function startDevSession({
+  appRoot,
+  command,
+  inspectorPauseOnStart = false,
+  inspectorPort = null,
+  spawnProcess,
+}) {
+  const invocation = profiledDevInvocation(command, inspectorPort, {
+    pauseOnStart: inspectorPauseOnStart,
+  });
+  const inspectorInvocation =
+    inspectorPort === null
+      ? null
+      : Object.freeze({
+          argv: Object.freeze([...invocation.argv]),
+          executable: invocation.executable,
+          pauseOnStart: inspectorPauseOnStart,
+          port: inspectorPort,
+          schema: DEV_PROFILED_PROCESS_INVOCATION_SCHEMA,
+        });
+  const processMarker = createDevProcessMarker();
+  const environment = markedDevProcessEnvironment(
+    {
+      ...process.env,
+      ...command.env,
+      ...invocation.env,
+      FORCE_COLOR: '0',
+      NEXT_TELEMETRY_DISABLED: '1',
+      NO_COLOR: '1',
+    },
+    processMarker,
+  );
+  delete environment.NODE_OPTIONS;
+  delete environment.NODE_PATH;
+  const child = spawnProcess(invocation.executable, invocation.argv, {
+    cwd: command.cwd,
+    detached: process.platform !== 'win32',
+    env: environment,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (!Number.isSafeInteger(child.pid) || child.pid <= 0) {
+    throw new Error(`dev process for ${appRoot} did not expose a PID`);
+  }
+  let exited = false;
+  let stopPromise;
+  let tail = '';
+  const events = [];
+  let pending = '';
+  const onChunk = (chunk) => {
+    const text = String(chunk);
+    tail = `${tail}${text}`.slice(-MAX_LOG_BYTES);
+    pending += text;
+    const lines = pending.split(/\r?\n/u);
+    pending = lines.pop() ?? '';
+    for (const line of lines) events.push({ at: performance.now(), line });
+  };
+  child.stdout?.on('data', onChunk);
+  child.stderr?.on('data', onChunk);
+  child.once('error', (error) => {
+    exited = true;
+    onChunk(`\nspawn error: ${errorMessage(error)}\n`);
+  });
+  child.once('exit', () => {
+    exited = true;
+  });
+  return {
+    generationDurationSince(index) {
+      for (const event of events.slice(index)) {
+        const kovo = /\[kovo dev\] edit #\d+ (?:active|failed) after (\d+)ms/u.exec(event.line);
+        if (kovo) return Number(kovo[1]);
+        const next = /(?:compiled|ready) in\s+(\d+(?:\.\d+)?)\s*(ms|s)/iu.exec(event.line);
+        if (next) return Number(next[1]) * (next[2].toLowerCase() === 's' ? 1_000 : 1);
+      }
+      return null;
+    },
+    exited: () => exited,
+    logCount: () => events.length,
+    logTail: () => tail.slice(-8_192),
+    inspectorInvocation,
+    pid: child.pid,
+    processMarker,
+    async stop() {
+      stopPromise ??= stopDevProcessTree({
+        marker: processMarker,
+        origin: command.origin,
+        pid: child.pid,
+      }).catch((error) => failedDevSessionStop(command.origin, child.pid, error));
+      return stopPromise;
+    },
+  };
+}
+
+/**
+ * Stop the detached dev process group and any inherited-marker descendants, then sample every
+ * address behind the exact strict origin across a bounded stability window. A launcher exit is
+ * insufficient: its descendants may still own or late-rebind the listening socket.
+ */
+export async function stopDevProcessTree({ marker, origin, pid }, dependencies = {}) {
+  boundedInteger(pid, 1, Number.MAX_SAFE_INTEGER, 'dev process PID');
+  if (typeof marker !== 'string' || !marker.startsWith('KOVO_PERF_DEV_SESSION_')) {
+    throw new TypeError('dev process teardown requires its inherited process marker');
+  }
+  const canonicalOrigin = new URL(requiredString(origin, 'dev origin')).origin;
+  const now = dependencies.now ?? (() => performance.now());
+  const pause = dependencies.delay ?? delay;
+  const terminate = dependencies.terminateProcessGroup ?? terminateProcessGroup;
+  const processGroupAlive = dependencies.processGroupAlive ?? isProcessGroupAlive;
+  const portAvailability = dependencies.portAvailability ?? probeOriginPortAvailability;
+  const collectSocketEvidence =
+    dependencies.collectSocketEvidence ?? collectLinuxSocketOwnerEvidence;
+  const signalMarkedProcesses = dependencies.signalMarkedProcesses ?? signalMarkedDevProcesses;
+  const gracefulTimeoutMs = dependencies.gracefulTimeoutMs ?? DEV_PROCESS_GRACEFUL_STOP_TIMEOUT_MS;
+  const forceTimeoutMs = dependencies.forceTimeoutMs ?? DEV_PROCESS_FORCE_STOP_TIMEOUT_MS;
+  const portTimeoutMs = dependencies.portTimeoutMs ?? DEV_PORT_RELEASE_TIMEOUT_MS;
+  const portStabilityWindowMs = dependencies.portStabilityWindowMs ?? DEV_PORT_STABILITY_WINDOW_MS;
+  const pollIntervalMs = dependencies.pollIntervalMs ?? DEV_LIFECYCLE_POLL_INTERVAL_MS;
+  for (const [value, label] of [
+    [gracefulTimeoutMs, 'graceful stop timeout'],
+    [forceTimeoutMs, 'forced stop timeout'],
+    [portTimeoutMs, 'port release timeout'],
+    [portStabilityWindowMs, 'port stability window'],
+    [pollIntervalMs, 'lifecycle poll interval'],
+  ]) {
+    boundedInteger(value, 1, 60_000, label);
+  }
+
+  const errors = [];
+  const signals = [];
+  let group = { checks: 0, satisfied: false, waitedMs: 0 };
+  try {
+    terminate(pid, 'SIGTERM');
+    signals.push('SIGTERM');
+    group = await waitForLifecycleCondition({
+      check: async () => !(await processGroupAlive(pid)),
+      consecutiveSuccesses: 1,
+      now,
+      pause,
+      pollIntervalMs,
+      timeoutMs: gracefulTimeoutMs,
+    });
+    if (!group.satisfied) {
+      terminate(pid, 'SIGKILL');
+      signals.push('SIGKILL');
+      const forced = await waitForLifecycleCondition({
+        check: async () => !(await processGroupAlive(pid)),
+        consecutiveSuccesses: 1,
+        now,
+        pause,
+        pollIntervalMs,
+        timeoutMs: forceTimeoutMs,
+      });
+      group = {
+        checks: group.checks + forced.checks,
+        satisfied: forced.satisfied,
+        waitedMs: group.waitedMs + forced.waitedMs,
+      };
+    }
+    if (!group.satisfied) {
+      errors.push(
+        `dev process group ${String(pid)} remained alive after SIGTERM and SIGKILL (${String(group.waitedMs)}ms)`,
+      );
+    }
+  } catch (error) {
+    errors.push(`dev process group ${String(pid)} teardown failed: ${errorMessage(error)}`);
+  }
+
+  let ownedProcesses = {
+    checks: 0,
+    maxSurvivors: 0,
+    quiescent: false,
+    signalAttempts: 0,
+    waitedMs: 0,
+  };
+  try {
+    const graceful = await waitForMarkedDevProcessQuiescence({
+      marker,
+      now,
+      pause,
+      pollIntervalMs,
+      signal: 'SIGTERM',
+      signalMarkedProcesses,
+      timeoutMs: gracefulTimeoutMs,
+    });
+    ownedProcesses = mergeMarkedDevProcessEvidence(ownedProcesses, graceful);
+    if (!ownedProcesses.quiescent) {
+      const forced = await waitForMarkedDevProcessQuiescence({
+        marker,
+        now,
+        pause,
+        pollIntervalMs,
+        signal: 'SIGKILL',
+        signalMarkedProcesses,
+        timeoutMs: forceTimeoutMs,
+      });
+      ownedProcesses = mergeMarkedDevProcessEvidence(ownedProcesses, forced);
+    }
+    if (!ownedProcesses.quiescent) {
+      errors.push(
+        `dev inherited-marker process tree remained alive after SIGTERM and SIGKILL (${String(ownedProcesses.waitedMs)}ms)`,
+      );
+    }
+  } catch (error) {
+    errors.push(`dev inherited-marker process-tree census failed: ${errorMessage(error)}`);
+  }
+
+  let port = emptyPortStabilityEvidence(portStabilityWindowMs);
+  let socketEvidence = null;
+  try {
+    port = await waitForStablePortAvailability({
+      now,
+      origin: canonicalOrigin,
+      pause,
+      pollIntervalMs,
+      probe: portAvailability,
+      stabilityWindowMs: portStabilityWindowMs,
+      timeoutMs: portTimeoutMs,
+    });
+    if (!port.satisfied) {
+      errors.push(
+        `dev origin ${canonicalOrigin} did not remain available across all resolved addresses for ${String(portStabilityWindowMs)}ms after teardown (${String(port.waitedMs)}ms)`,
+      );
+    }
+  } catch (error) {
+    errors.push(`dev origin ${canonicalOrigin} release probe failed: ${errorMessage(error)}`);
+  }
+
+  if (!port.satisfied) {
+    const busyAddresses = port.addresses
+      .filter((address) => address.supported && address.lastAvailable === false)
+      .map((address) => ({
+        address: address.address,
+        errorCode: address.lastErrorCode ?? 'UNKNOWN_BUSY',
+        family: address.family,
+      }));
+    if (busyAddresses.length > 0) {
+      try {
+        socketEvidence = validateSocketOwnerEvidence(
+          await collectSocketEvidence(
+            { busyAddresses, origin: canonicalOrigin, priorProcessMarker: marker },
+            dependencies.socketEvidenceDependencies ?? {},
+          ),
+        );
+      } catch (error) {
+        errors.push(`dev origin socket-owner evidence failed: ${errorMessage(error)}`);
+      }
+    }
+  }
+
+  return {
+    complete: errors.length === 0,
+    error: errors.length === 0 ? null : errors.join('; '),
+    origin: canonicalOrigin,
+    pid,
+    ownedProcesses,
+    port: {
+      addresses: port.addresses,
+      available: port.satisfied,
+      busyChecks: port.busyChecks,
+      checks: port.checks,
+      rebinds: port.rebinds,
+      requiredStableMs: port.requiredStableMs,
+      stableMs: port.stableMs,
+      waitedMs: port.waitedMs,
+    },
+    processGroup: {
+      checks: group.checks,
+      quiescent: group.satisfied,
+      waitedMs: group.waitedMs,
+    },
+    schema: DEV_SESSION_STOP_SCHEMA,
+    signals,
+    socketEvidence,
+  };
+}
+
+async function waitForStablePortAvailability({
+  now,
+  origin,
+  pause,
+  pollIntervalMs,
+  probe,
+  stabilityWindowMs,
+  timeoutMs,
+}) {
+  const started = now();
+  const addresses = new Map();
+  let busyChecks = 0;
+  let checks = 0;
+  let rebinds = 0;
+  let stableStartedAt = null;
+  let stableMs = 0;
+  while (true) {
+    checks += 1;
+    const observation = validatePortAvailabilityObservation(await probe(origin));
+    for (const address of observation.addresses) {
+      const key = `${String(address.family)}:${address.address}`;
+      const aggregate = addresses.get(key) ?? {
+        address: address.address,
+        availableChecks: 0,
+        busyChecks: 0,
+        checks: 0,
+        family: address.family,
+        lastAvailable: address.available,
+        lastErrorCode: null,
+        supported: address.supported,
+        unsupportedChecks: 0,
+      };
+      aggregate.checks += 1;
+      aggregate.lastAvailable = address.available;
+      aggregate.lastErrorCode = address.errorCode;
+      aggregate.supported ||= address.supported;
+      if (!address.supported) aggregate.unsupportedChecks += 1;
+      else if (address.available) aggregate.availableChecks += 1;
+      else aggregate.busyChecks += 1;
+      addresses.set(key, aggregate);
+    }
+
+    const checkedAt = now();
+    const waitedMs = Math.max(0, Math.round(checkedAt - started));
+    if (observation.available) {
+      stableStartedAt ??= checkedAt;
+      stableMs = Math.max(0, Math.round(checkedAt - stableStartedAt));
+      if (stableMs >= stabilityWindowMs) {
+        return {
+          addresses: [...addresses.values()],
+          busyChecks,
+          checks,
+          rebinds,
+          requiredStableMs: stabilityWindowMs,
+          satisfied: true,
+          stableMs,
+          waitedMs,
+        };
+      }
+    } else {
+      busyChecks += 1;
+      if (stableStartedAt !== null) rebinds += 1;
+      stableStartedAt = null;
+      stableMs = 0;
+    }
+    if (waitedMs >= timeoutMs) {
+      return {
+        addresses: [...addresses.values()],
+        busyChecks,
+        checks,
+        rebinds,
+        requiredStableMs: stabilityWindowMs,
+        satisfied: false,
+        stableMs,
+        waitedMs,
+      };
+    }
+    await pause(Math.min(pollIntervalMs, timeoutMs - waitedMs));
+  }
+}
+
+function emptyPortStabilityEvidence(requiredStableMs) {
+  return {
+    addresses: [],
+    busyChecks: 0,
+    checks: 0,
+    rebinds: 0,
+    requiredStableMs,
+    satisfied: false,
+    stableMs: 0,
+    waitedMs: 0,
+  };
+}
+
+function validatePortAvailabilityObservation(value) {
+  if (value === null || typeof value !== 'object' || !Array.isArray(value.addresses)) {
+    throw new TypeError('port availability probe must return per-address evidence');
+  }
+  if (value.addresses.length < 1) {
+    throw new TypeError('port availability probe did not inspect an address');
+  }
+  const addresses = value.addresses.map((address) => {
+    if (
+      address === null ||
+      typeof address !== 'object' ||
+      ![4, 6].includes(address.family) ||
+      typeof address.address !== 'string' ||
+      address.address.length === 0 ||
+      typeof address.available !== 'boolean' ||
+      typeof address.supported !== 'boolean' ||
+      !(address.errorCode === null || typeof address.errorCode === 'string')
+    ) {
+      throw new TypeError('port availability probe returned malformed address evidence');
+    }
+    return {
+      address: address.address,
+      available: address.available,
+      errorCode: address.errorCode,
+      family: address.family,
+      supported: address.supported,
+    };
+  });
+  const supported = addresses.filter((address) => address.supported);
+  const available = supported.length > 0 && supported.every((address) => address.available);
+  if (value.available !== available) {
+    throw new TypeError('port availability probe summary disagrees with per-address evidence');
+  }
+  return { addresses, available };
+}
+
+async function waitForLifecycleCondition({
+  check,
+  consecutiveSuccesses,
+  now,
+  pause,
+  pollIntervalMs,
+  timeoutMs,
+}) {
+  const started = now();
+  let checks = 0;
+  let successes = 0;
+  while (true) {
+    checks += 1;
+    successes = (await check()) ? successes + 1 : 0;
+    const waitedMs = Math.max(0, Math.round(now() - started));
+    if (successes >= consecutiveSuccesses) {
+      return { checks, satisfied: true, waitedMs };
+    }
+    if (waitedMs >= timeoutMs) return { checks, satisfied: false, waitedMs };
+    await pause(Math.min(pollIntervalMs, timeoutMs - waitedMs));
+  }
+}
+
+function failedDevSessionStop(origin, pid, error) {
+  const message = `dev lifecycle verification failed: ${errorMessage(error)}`;
+  return {
+    complete: false,
+    error: message,
+    origin,
+    pid,
+    ownedProcesses: {
+      checks: 0,
+      maxSurvivors: 0,
+      quiescent: false,
+      signalAttempts: 0,
+      waitedMs: 0,
+    },
+    port: {
+      addresses: [],
+      available: false,
+      busyChecks: 0,
+      checks: 0,
+      rebinds: 0,
+      requiredStableMs: DEV_PORT_STABILITY_WINDOW_MS,
+      stableMs: 0,
+      waitedMs: 0,
+    },
+    processGroup: { checks: 0, quiescent: false, waitedMs: 0 },
+    schema: DEV_SESSION_STOP_SCHEMA,
+    signals: [],
+    socketEvidence: null,
+  };
+}
+
+async function waitForMarkedDevProcessQuiescence({
+  marker,
+  now,
+  pause,
+  pollIntervalMs,
+  signal,
+  signalMarkedProcesses,
+  timeoutMs,
+}) {
+  let maxSurvivors = 0;
+  let signalAttempts = 0;
+  const result = await waitForLifecycleCondition({
+    check: async () => {
+      const observation = await signalMarkedProcesses(marker, signal);
+      if (!Array.isArray(observation?.observed) || !Array.isArray(observation?.signaled)) {
+        throw new TypeError('dev inherited-marker census returned invalid evidence');
+      }
+      maxSurvivors = Math.max(maxSurvivors, observation.observed.length);
+      signalAttempts += observation.signaled.length;
+      return observation.observed.length === 0;
+    },
+    consecutiveSuccesses: 2,
+    now,
+    pause,
+    pollIntervalMs,
+    timeoutMs,
+  });
+  return { ...result, maxSurvivors, signalAttempts };
+}
+
+function mergeMarkedDevProcessEvidence(previous, current) {
+  return {
+    checks: previous.checks + current.checks,
+    maxSurvivors: Math.max(previous.maxSurvivors, current.maxSurvivors),
+    quiescent: current.satisfied,
+    signalAttempts: previous.signalAttempts + current.signalAttempts,
+    waitedMs: previous.waitedMs + current.waitedMs,
+  };
+}
+
+export function profiledDevInvocation(command, inspectorPort, options = {}) {
+  if (inspectorPort === null) {
+    if (options.pauseOnStart === true) {
+      throw new TypeError('paused dev profiling requires an Inspector port');
+    }
+    return { argv: command.argv.slice(1), executable: command.argv[0] };
+  }
+  boundedInteger(inspectorPort, 1_024, 65_535, 'inspector port');
+  const inspectFlag = `${options.pauseOnStart === true ? '--inspect-brk' : '--inspect'}=127.0.0.1:${String(inspectorPort)}`;
+  if (command.packedProduct !== undefined) {
+    const entrypoint = command.packedProduct.cliEntry;
+    if (
+      command.argv[0] !== process.execPath ||
+      command.argv[1] !== entrypoint ||
+      path.extname(entrypoint) !== '.mjs' ||
+      path.basename(entrypoint) !== 'bin.mjs'
+    ) {
+      throw new TypeError('profiled packed Kovo command confused its authenticated dist entry');
+    }
+    return {
+      argv: [inspectFlag, entrypoint, ...command.argv.slice(2)],
+      executable: process.execPath,
+    };
+  }
+  const entrypoint = resolveProfiledKovoEntrypoint(command);
+  return {
+    argv: [
+      inspectFlag,
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      entrypoint,
+      ...command.argv.slice(1),
+    ],
+    executable: process.execPath,
+  };
+}
+
+export function resolveProfiledKovoEntrypoint(command) {
+  const executable = path.resolve(command.cwd, requiredString(command.argv?.[0], 'dev executable'));
+  const binDirectory = path.dirname(executable);
+  if (path.basename(binDirectory) !== '.bin') {
+    throw new TypeError('profiled Kovo executable must come from a node_modules/.bin directory');
+  }
+  const dependencyRoot = path.dirname(binDirectory);
+  const packageRoot = path.join(dependencyRoot, '@kovojs', 'cli');
+  const packageJsonPath = path.join(packageRoot, 'package.json');
+  let packageJson;
+  try {
+    packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  } catch (error) {
+    throw new TypeError(`profiled Kovo package metadata is unavailable: ${errorMessage(error)}`);
+  }
+  const bin = typeof packageJson.bin === 'string' ? packageJson.bin : packageJson.bin?.kovo;
+  const relative = requiredString(bin, '@kovojs/cli kovo bin').replace(/^\.\//u, '');
+  assertSafeRelativePath(relative, '@kovojs/cli kovo bin');
+  const entrypoint = path.resolve(packageRoot, relative);
+  if (!isWithin(packageRoot, entrypoint)) {
+    throw new TypeError('profiled Kovo entrypoint escaped its package root');
+  }
+  return entrypoint;
+}
+
+function createProcessTreeRssSampler(rootPid) {
+  let active = true;
+  let inFlight = Promise.resolve();
+  let peakRssBytes = 0;
+  let sampleCount = 0;
+  const sample = async () => {
+    const output = await psSnapshot();
+    const value = processTreeRssBytes(output, rootPid);
+    if (value <= 0) return;
+    peakRssBytes = Math.max(peakRssBytes, value);
+    sampleCount += 1;
+  };
+  const schedule = () => {
+    if (!active) return;
+    inFlight = inFlight.then(sample).catch(() => undefined);
+  };
+  schedule();
+  const timer = setInterval(schedule, RSS_SAMPLE_INTERVAL_MS);
+  return {
+    async stop() {
+      if (active) {
+        clearInterval(timer);
+        schedule();
+        active = false;
+      }
+      await inFlight;
+      return { peakRssBytes, sampleCount };
+    },
+  };
+}
+
+function psSnapshot() {
+  return new Promise((resolve, reject) => {
+    execFile(
+      'ps',
+      ['-axo', 'pid=,ppid=,rss='],
+      { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 },
+      (error, stdout) => (error ? reject(error) : resolve(stdout)),
+    );
+  });
+}
+
+function terminateProcessGroup(pid, signal) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return;
+  try {
+    process.kill(process.platform === 'win32' ? pid : -pid, signal);
+  } catch (error) {
+    if (error?.code !== 'ESRCH') throw error;
+  }
+}
+
+function isProcessGroupAlive(pid) {
+  try {
+    process.kill(process.platform === 'win32' ? pid : -pid, 0);
+    return true;
+  } catch (error) {
+    if (error?.code === 'ESRCH') return false;
+    if (error?.code === 'EPERM') return true;
+    throw error;
+  }
+}
+
+export async function probeOriginPortAvailability(origin) {
+  const url = new URL(origin);
+  const port = Number(url.port || (url.protocol === 'https:' ? 443 : 80));
+  const targets = await resolveOriginBindTargets(url.hostname);
+  const probes = targets.map((target) => probeAddressPort(target, port));
+  const observations = await Promise.all(probes);
+  const closeResults = await Promise.allSettled(
+    observations.map(({ server }) => (server.listening ? closeListeningServer(server) : undefined)),
+  );
+  const closeFailure = closeResults.find((result) => result.status === 'rejected');
+  if (closeFailure?.status === 'rejected') throw closeFailure.reason;
+  const unexpected = observations.find((observation) => observation.error !== null);
+  if (unexpected !== undefined) throw unexpected.error;
+  const addresses = observations.map(
+    ({ server: _server, error: _error, ...observation }) => observation,
+  );
+  const supported = addresses.filter((address) => address.supported);
+  return {
+    addresses,
+    available: supported.length > 0 && supported.every((address) => address.available),
+  };
+}
+
+async function resolveOriginBindTargets(hostnameValue) {
+  const hostname = hostnameValue.replace(/^\[|\]$/gu, '');
+  if (hostname.toLowerCase() === 'localhost') {
+    return [
+      { address: '127.0.0.1', family: 4 },
+      { address: '::1', family: 6 },
+    ];
+  }
+  const family = isIP(hostname);
+  if (family !== 0) return [{ address: hostname, family }];
+  const resolved = await lookup(hostname, { all: true, verbatim: true });
+  const unique = new Map();
+  for (const address of resolved) {
+    if (![4, 6].includes(address.family)) continue;
+    unique.set(`${String(address.family)}:${address.address}`, address);
+  }
+  if (unique.size === 0) throw new Error(`dev origin host ${hostname} resolved no IP addresses`);
+  return [...unique.values()];
+}
+
+function probeAddressPort({ address, family }, port) {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.unref();
+    server.once('error', (error) => {
+      const errorCode = typeof error?.code === 'string' ? error.code : null;
+      if (errorCode === 'EADDRINUSE') {
+        resolve({
+          address,
+          available: false,
+          error: null,
+          errorCode,
+          family,
+          server,
+          supported: true,
+        });
+      } else if (family === 6 && ['EADDRNOTAVAIL', 'EAFNOSUPPORT'].includes(errorCode)) {
+        resolve({
+          address,
+          available: true,
+          error: null,
+          errorCode,
+          family,
+          server,
+          supported: false,
+        });
+      } else {
+        resolve({ address, available: false, error, errorCode, family, server, supported: true });
+      }
+    });
+    server.listen({ exclusive: true, host: address, ipv6Only: family === 6, port }, () => {
+      resolve({
+        address,
+        available: true,
+        error: null,
+        errorCode: null,
+        family,
+        server,
+        supported: true,
+      });
+    });
+  });
+}
+
+function closeListeningServer(server) {
+  return new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+}
+
+export async function loadCorpusManifest(manifestPathValue) {
+  const manifestPath = path.resolve(manifestPathValue);
+  const manifestBytes = await readFile(manifestPath);
+  const manifest = JSON.parse(manifestBytes.toString('utf8'));
+  if (manifest?.schema !== CORPUS_SCHEMA)
+    throw new TypeError('Unsupported corpus manifest schema.');
+  if (!['kovo', 'nextjs'].includes(manifest.framework)) {
+    throw new TypeError('Corpus manifest framework must be kovo or nextjs.');
+  }
+  if (![24, 216].includes(manifest.modules) || manifest.routes !== 4) {
+    throw new TypeError('Corpus manifest has an unsupported workload shape.');
+  }
+  if (!/^[0-9a-f]{64}$/u.test(manifest.shapeDigest)) {
+    throw new TypeError('Corpus manifest shapeDigest is invalid.');
+  }
+  if (sha256(JSON.stringify(manifest.workload)).slice('sha256:'.length) !== manifest.shapeDigest) {
+    throw new TypeError('Corpus manifest shapeDigest does not authenticate workload.');
+  }
+  if (!/^sha256:[0-9a-f]{64}$/u.test(manifest.sourceDigest)) {
+    throw new TypeError('Corpus manifest sourceDigest is invalid.');
+  }
+  validateSourceFiles(manifest.sourceFiles);
+  if (sha256(JSON.stringify(manifest.sourceFiles)) !== manifest.sourceDigest) {
+    throw new TypeError('Corpus manifest sourceDigest does not authenticate sourceFiles.');
+  }
+  validateDevContract(manifest.dev);
+  validateEditStatePosture(manifest);
+  validateBuildOutputContract(manifest.build?.outputs);
+  if (manifest.workload?.buildOutputContract !== 'required-nonempty-and-cleanup-absent/v1') {
+    throw new TypeError('Corpus workload does not authenticate the build output contract.');
+  }
+  const appRoot = path.dirname(manifestPath);
+  await assertGeneratedCorpusOwner(appRoot, manifest);
+  return {
+    appRoot,
+    manifest,
+    manifestDigest: sha256(manifestBytes),
+    manifestPath,
+  };
+}
+
+async function assertGeneratedCorpusOwner(appRoot, manifest) {
+  const ownerPath = path.join(appRoot, '.kovo-benchmark-corpus-owner.json');
+  const owner = JSON.parse(await readFile(ownerPath, 'utf8'));
+  if (
+    owner?.schema !== 'kovo-benchmark-corpus-owner/v1' ||
+    path.resolve(owner.appRoot ?? '') !== appRoot ||
+    owner.framework !== manifest.framework ||
+    owner.modules !== manifest.modules
+  ) {
+    throw new TypeError('Corpus ownership sentinel does not authenticate this app root.');
+  }
+}
+
+export async function verifyCorpusSources({ appRoot, manifest }) {
+  const expectedPaths = new Set();
+  const actualEvidence = [];
+  for (const entry of manifest.sourceFiles) {
+    expectedPaths.add(entry.file);
+    const filePath = safeCorpusPath(appRoot, entry.file);
+    const stat = await lstat(filePath);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new TypeError(`Corpus source ${entry.file} is not a regular file.`);
+    }
+    const bytes = await readFile(filePath);
+    const observed = { bytes: bytes.byteLength, file: entry.file, sha256: sha256(bytes) };
+    if (JSON.stringify(observed) !== JSON.stringify(entry)) {
+      throw new TypeError(`Corpus source integrity mismatch for ${entry.file}.`);
+    }
+    actualEvidence.push(observed);
+  }
+  const unexpected = (await listCorpusSourcePaths(appRoot)).filter(
+    (file) => !expectedPaths.has(file),
+  );
+  if (unexpected.length > 0) {
+    throw new TypeError(`Corpus contains unmanifested source files: ${unexpected.join(', ')}.`);
+  }
+  if (sha256(JSON.stringify(actualEvidence)) !== manifest.sourceDigest) {
+    throw new TypeError('Corpus sourceDigest does not match current source bytes.');
+  }
+}
+
+async function listCorpusSourcePaths(root, relative = '') {
+  const entries = await readdir(path.join(root, relative), { withFileTypes: true });
+  const result = [];
+  for (const entry of entries) {
+    if (relative === '' && IGNORED_CORPUS_NAMES.has(entry.name)) continue;
+    if (relative === '' && GENERATED_OUTPUT_NAMES.has(entry.name)) continue;
+    if (relative === '' && entry.name.startsWith('.kovo-build-stage-')) continue;
+    const child = relative === '' ? entry.name : `${relative}/${entry.name}`;
+    if (entry.isDirectory()) result.push(...(await listCorpusSourcePaths(root, child)));
+    else if (entry.isFile()) result.push(child);
+    else if (entry.isSymbolicLink()) {
+      throw new TypeError(`Unexpected corpus symlink ${child}.`);
+    }
+  }
+  return result.sort();
+}
+
+function validateSourceFiles(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new TypeError('Corpus manifest sourceFiles are absent.');
+  }
+  let prior = '';
+  for (const entry of value) {
+    const keys = Object.keys(entry ?? {}).sort();
+    if (JSON.stringify(keys) !== JSON.stringify(['bytes', 'file', 'sha256'])) {
+      throw new TypeError('Corpus manifest sourceFiles entry has an unexpected shape.');
+    }
+    assertSafeRelativePath(entry.file, 'source file');
+    if (entry.file <= prior)
+      throw new TypeError('Corpus manifest sourceFiles must be unique/sorted.');
+    if (!Number.isSafeInteger(entry.bytes) || entry.bytes < 0) {
+      throw new TypeError(`Corpus source byte count is invalid for ${entry.file}.`);
+    }
+    if (!/^sha256:[0-9a-f]{64}$/u.test(entry.sha256)) {
+      throw new TypeError(`Corpus source digest is invalid for ${entry.file}.`);
+    }
+    prior = entry.file;
+  }
+}
+
+function validateDevContract(dev) {
+  if (!Array.isArray(dev?.command?.argv) || dev.command.argv.length === 0) {
+    throw new TypeError('Corpus dev command is absent.');
+  }
+  if (
+    dev.command.cwd !== '.' ||
+    Object.values(dev.command.env ?? {}).some((v) => typeof v !== 'string')
+  ) {
+    throw new TypeError('Corpus dev command working directory or environment is invalid.');
+  }
+  if (!dev.command.argv.includes('localhost') || dev.command.argv.includes('127.0.0.1')) {
+    throw new TypeError('Corpus dev command must bind localhost exactly.');
+  }
+  if (dev.command.argv.filter((part) => part === '{port}').length !== 1) {
+    throw new TypeError('Corpus dev command must contain exactly one {port} token.');
+  }
+  for (const editClass of ALL_EDIT_CLASSES) {
+    if (!dev.edits?.[editClass]) throw new TypeError(`Corpus dev edit ${editClass} is absent.`);
+  }
+  if (
+    dev.ready?.path !== '/' ||
+    typeof dev.state?.selector !== 'string' ||
+    dev.state.property !== 'textContent' ||
+    dev.state.setup?.action !== 'click'
+  ) {
+    throw new TypeError('Corpus browser readiness/state contract is invalid.');
+  }
+}
+
+function validateEditStatePosture(manifest) {
+  if (manifest.workload?.devPortAllocationPosture !== DEV_PORT_ALLOCATION_POSTURE) {
+    throw new TypeError('Corpus workload does not authenticate unique per-session dev ports.');
+  }
+  if (manifest.workload?.editSavePosture !== EDIT_SAVE_POSTURE) {
+    throw new TypeError('Corpus workload does not authenticate the atomic edit/save posture.');
+  }
+  if (manifest.workload?.editStatePosture !== EDIT_STATE_POSTURE) {
+    throw new TypeError('Corpus workload does not authenticate the edit/state posture.');
+  }
+  if (
+    JSON.stringify(manifest.workload?.editRefreshSurfaces) !== JSON.stringify(EDIT_REFRESH_SURFACES)
+  ) {
+    throw new TypeError('Corpus workload does not authenticate all edit refresh surfaces.');
+  }
+  for (const [editClass, surface] of Object.entries(EDIT_REFRESH_SURFACES)) {
+    const edit = manifest.dev?.edits?.[editClass];
+    if (edit?.file !== surface.file || edit?.evidence?.selector !== surface.selector) {
+      throw new TypeError(`Corpus dev edit ${editClass} drifts from its refresh surface.`);
+    }
+  }
+}
+
+function validateBuildOutputContract(outputs) {
+  const keys = Object.keys(outputs ?? {}).sort();
+  if (JSON.stringify(keys) !== JSON.stringify(['absent', 'requiredNonempty'])) {
+    throw new TypeError('Corpus manifest build outputs have an unexpected shape.');
+  }
+  if (!Array.isArray(outputs.requiredNonempty) || outputs.requiredNonempty.length === 0) {
+    throw new TypeError('Corpus manifest required build outputs are absent.');
+  }
+  if (!Array.isArray(outputs.absent)) {
+    throw new TypeError('Corpus manifest absent build outputs are missing.');
+  }
+  const values = [...outputs.requiredNonempty, ...outputs.absent];
+  const unique = new Set();
+  for (const output of values) {
+    if (typeof output !== 'string' || output.length === 0 || unique.has(output)) {
+      throw new TypeError('Corpus manifest build outputs must be unique non-empty strings.');
+    }
+    assertSafeRelativePath(output.replace(/\*$/u, 'sentinel'), 'build output');
+    if (output.includes('*') && !output.endsWith('*')) {
+      throw new TypeError('Corpus manifest build output permits only a trailing wildcard.');
+    }
+    unique.add(output);
+  }
+}
+
+function materializeCommand(contract, appRoot, port) {
+  const argv = contract.argv.map((part) => (part === '{port}' ? String(port) : part));
+  if (argv.some((part) => typeof part !== 'string' || part.length === 0)) {
+    throw new TypeError('Corpus dev command contains an invalid argv value.');
+  }
+  return {
+    argv,
+    cwd: safeCorpusPath(appRoot, contract.cwd),
+    env: { ...contract.env },
+    origin: `http://localhost:${String(port)}`,
+  };
+}
+
+export function materializeEntrantCommand(contract, appRoot, port, packedProduct) {
+  const declared = materializeCommand(contract, appRoot, port);
+  return packedProduct === null
+    ? declared
+    : materializePackedKovoCommand(declared, packedProduct, appRoot);
+}
+
+export async function cleanGeneratedOutputs(appRoot, outputs) {
+  for (const output of [...outputs.requiredNonempty, ...outputs.absent]) {
+    assertSafeRelativePath(output.replace(/\*$/u, 'sentinel'), 'build output');
+    if (output.endsWith('*')) {
+      const prefix = output.slice(0, -1);
+      for (const entry of await readdir(appRoot)) {
+        if (entry.startsWith(prefix))
+          await rm(safeCorpusPath(appRoot, entry), { force: true, recursive: true });
+      }
+    } else {
+      await rm(safeCorpusPath(appRoot, output), { force: true, recursive: true });
+    }
+  }
+}
+
+async function readOriginalSources({ appRoot, manifest }) {
+  return new Map(
+    await Promise.all(
+      manifest.sourceFiles.map(async ({ file }) => [
+        file,
+        await readFile(safeCorpusPath(appRoot, file), 'utf8'),
+      ]),
+    ),
+  );
+}
+
+async function restoreOriginalSources(appRoot, sources) {
+  await Promise.all(
+    [...sources].map(([file, source]) =>
+      atomicReplaceCorpusSource(safeCorpusPath(appRoot, file), source),
+    ),
+  );
+}
+
+/**
+ * Publish one complete authored-source revision with the manifest-authenticated POSIX sibling-temp
+ * write/rename posture. Writing directly to the watched target exposes a truncate/partial-write
+ * window to Vite; a single partial parse can retain the diagnostic overlay while the completed
+ * bytes produce no second watch event. The performance workflow is pinned to Ubuntu; macOS uses
+ * the same same-filesystem rename guarantee, while this adapter makes no Windows atomicity claim.
+ */
+export async function atomicReplaceCorpusSource(filePath, source, dependencies = {}) {
+  if (typeof filePath !== 'string' || filePath.length === 0) {
+    throw new TypeError('Atomic corpus source replacement requires a file path.');
+  }
+  if (typeof source !== 'string') {
+    throw new TypeError('Atomic corpus source replacement requires string source.');
+  }
+  atomicCorpusSourceWrite += 1;
+  const temporaryPath = path.join(
+    path.dirname(filePath),
+    `.kovo-perf-save-${String(process.pid)}-${String(atomicCorpusSourceWrite)}.tmp`,
+  );
+  const writeTemporary = dependencies.writeFile ?? writeFile;
+  const replace = dependencies.rename ?? rename;
+  const removeTemporary = dependencies.rm ?? rm;
+  try {
+    await writeTemporary(temporaryPath, source, { encoding: 'utf8', flag: 'wx' });
+    await replace(temporaryPath, filePath);
+  } finally {
+    await removeTemporary(temporaryPath, { force: true });
+  }
+}
+
+function createReportSkeleton({
+  command,
+  execution,
+  inspectorPort,
+  iterations,
+  manifest,
+  manifestDigest,
+  manifestPath,
+  packedProduct,
+  readyIterations,
+  readyTimeoutMs,
+  source,
+  startedAt,
+  versions,
+  warmups,
+}) {
+  const cpu = os.cpus()[0];
+  return {
+    command: normalizedPackedKovoCommand(command, path.dirname(manifestPath)),
+    corpus: {
+      editRefreshSurfaces: manifest.workload.editRefreshSurfaces,
+      editSavePosture: manifest.workload.editSavePosture,
+      editStatePosture: manifest.workload.editStatePosture,
+      devPortAllocationPosture: manifest.workload.devPortAllocationPosture,
+      manifestDigest,
+      manifestPath,
+      modules: manifest.modules,
+      routes: manifest.routes,
+      shapeDigest: manifest.shapeDigest,
+      sourceDigest: manifest.sourceDigest,
+    },
+    editSession: null,
+    execution,
+    environment: {
+      arch: process.arch,
+      browser: null,
+      cpu: cpu ? { count: os.cpus().length, model: cpu.model, speedMhz: cpu.speed } : null,
+      loadAverageAfter: null,
+      loadAverageBefore: os.loadavg(),
+      node: process.version,
+      platform: process.platform,
+      release: os.release(),
+      totalMemoryBytes: os.totalmem(),
+      versions,
+    },
+    finishedAt: null,
+    framework: manifest.framework,
+    host: null,
+    hostSamples: [],
+    integrity: {
+      command: {
+        ...normalizedPackedKovoCommand(command, path.dirname(manifestPath)),
+        origin: command.origin,
+      },
+      complete: false,
+      browser: emptyBrowserIntegrity(),
+      corpus: { afterVerified: false, beforeVerified: false },
+      editCounts: Object.fromEntries(ALL_EDIT_CLASSES.map((editClass) => [editClass, 0])),
+      errors: [],
+      handoffs: [],
+      iterations,
+      inspectorPort,
+      misses: 0,
+      productArtifact: {
+        afterVerified: packedProduct === null,
+        beforeVerified: packedProduct !== null,
+        required: packedProduct !== null,
+      },
+      readyIterations,
+      readyTimeoutMs,
+      source: { after: null, before: source, stable: false },
+      warmups,
+    },
+    profile: null,
+    productArtifact: packedProduct?.identity ?? null,
+    readySamples: [],
+    samples: [],
+    schema: DEV_LOOP_REPORT_SCHEMA,
+    source,
+    sourceAfter: null,
+    startedAt,
+    summary: null,
+    verdict: { status: 'unproven' },
+  };
+}
+
+/**
+ * Read versions from the dependency root that owns the authenticated dev executable.
+ *
+ * Default corpora live below `benchmarks/{kovo,nextjs}/.corpora`, so their command deliberately
+ * reaches the entrant's ancestor `node_modules`. Custom output roots instead receive an app-local
+ * `node_modules` link. Do not silently pretend every corpus has the latter topology: that made the
+ * real default corpus fail before a dev process could start in CI.
+ */
+export async function collectEntrantVersions(appRoot, framework, command, dependencies = {}) {
+  const packages =
+    framework === 'kovo' ? ['@kovojs/cli', 'vite-plus'] : ['next', 'react', 'react-dom'];
+  const dependencyRoot = await dependencyRootForDevCommand(
+    appRoot,
+    framework,
+    command,
+    dependencies,
+  );
+  const result = {};
+  for (const packageName of packages) {
+    const packageJsonPath = path.resolve(dependencyRoot, packageName, 'package.json');
+    if (!isWithin(dependencyRoot, packageJsonPath)) {
+      throw new TypeError(`Dependency package ${packageName} escaped the authenticated root.`);
+    }
+    const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
+    if (typeof packageJson.version !== 'string' || packageJson.version.length === 0) {
+      throw new TypeError(`Could not resolve ${packageName} version for the dev corpus.`);
+    }
+    result[packageName] = packageJson.version;
+  }
+  return result;
+}
+
+export async function dependencyRootForDevCommand(appRoot, framework, command, dependencies = {}) {
+  if (command.packedProduct !== undefined) {
+    if (framework !== 'kovo') {
+      throw new TypeError('packed Kovo command cannot own a non-Kovo corpus');
+    }
+    const dependencyRoot = path.resolve(command.packedProduct.dependencyRoot);
+    const consumerDependencyRoot = path.resolve(command.packedProduct.consumerDependencyRoot);
+    const appDependencyRoot = path.join(appRoot, 'node_modules');
+    const resolveRealpath = dependencies.realpath ?? realpath;
+    const realConsumerDependencyRoot = await resolveRealpath(consumerDependencyRoot);
+    const realDependencyRoot = await resolveRealpath(dependencyRoot);
+    const realCliEntry = await resolveRealpath(command.packedProduct.cliEntry);
+    const expectedDependencyRoot = path.dirname(
+      path.dirname(path.dirname(path.dirname(realCliEntry))),
+    );
+    if (
+      command.argv[0] !== process.execPath ||
+      command.argv[1] !== command.packedProduct.cliEntry ||
+      path.resolve(consumerDependencyRoot, '@kovojs/cli/dist/bin.mjs') !==
+        path.resolve(command.packedProduct.cliEntry) ||
+      (await resolveRealpath(appDependencyRoot)) !== realConsumerDependencyRoot ||
+      realDependencyRoot !== (await resolveRealpath(expectedDependencyRoot)) ||
+      !isWithin(realConsumerDependencyRoot, realDependencyRoot)
+    ) {
+      throw new TypeError(
+        'packed Kovo command does not resolve from its authenticated app binding',
+      );
+    }
+    return dependencyRoot;
+  }
+  const expectedExecutable = framework === 'kovo' ? 'kovo' : 'next';
+  const executable = path.resolve(command.cwd, command.argv[0]);
+  const binRoot = path.dirname(executable);
+  const dependencyRoot = path.dirname(binRoot);
+  if (
+    path.basename(executable) !== expectedExecutable ||
+    path.basename(binRoot) !== '.bin' ||
+    path.basename(dependencyRoot) !== 'node_modules'
+  ) {
+    throw new TypeError(
+      `Corpus ${framework} dev command does not use its expected node_modules/.bin/${expectedExecutable} executable.`,
+    );
+  }
+
+  const entrantRoot = path.join(repoRoot, 'benchmarks', framework === 'kovo' ? 'kovo' : 'nextjs');
+  const expectedDependencyRoot = path.join(entrantRoot, 'node_modules');
+  const allowedRoots = [path.join(appRoot, 'node_modules'), expectedDependencyRoot];
+  if (!allowedRoots.includes(dependencyRoot)) {
+    throw new TypeError('Corpus dev command dependency root is not app-local or entrant-local.');
+  }
+  const resolveRealpath = dependencies.realpath ?? realpath;
+  if ((await resolveRealpath(dependencyRoot)) !== (await resolveRealpath(expectedDependencyRoot))) {
+    throw new TypeError(
+      'Corpus dev command dependency root does not resolve to the entrant install.',
+    );
+  }
+  return dependencyRoot;
+}
+
+export function sourceStabilityFindings(before, after) {
+  const findings = [];
+  if (after === undefined) {
+    if (before?.dirty !== false) findings.push('pre-run source provenance is dirty');
+    return findings;
+  }
+  if (after?.dirty !== false) findings.push('post-run source provenance is dirty');
+  if (before?.commit !== after?.commit) findings.push('source commit changed during measurement');
+  if (JSON.stringify(before?.locks) !== JSON.stringify(after?.locks)) {
+    findings.push('dependency lock digests changed during measurement');
+  }
+  if (JSON.stringify(before?.posture) !== JSON.stringify(after?.posture)) {
+    findings.push('framework security posture digests changed during measurement');
+  }
+  if (JSON.stringify(before?.dirtyPaths) !== JSON.stringify(after?.dirtyPaths)) {
+    findings.push('source dirty paths changed during measurement');
+  }
+  return findings;
+}
+
+export function exactSampleCountFindings(report) {
+  const findings = [];
+  const counts = Object.fromEntries(ALL_EDIT_CLASSES.map((editClass) => [editClass, 0]));
+  const expectedHandoffTargets = [
+    ...Array.from(
+      { length: report.integrity.readyIterations },
+      (_, iteration) => `ready[${String(iteration)}]`,
+    ),
+    'edit-session',
+  ];
+  const allocation = report.integrity.portAllocation;
+  let expectedBasePort = Number.NaN;
+  try {
+    expectedBasePort = Number(new URL(report.integrity.command.origin).port);
+  } catch {
+    // The allocation validator below owns the single fail-closed finding for this cross-field bind.
+  }
+  const expectedPorts = Array.from(
+    { length: expectedHandoffTargets.length },
+    (_, index) => expectedBasePort + index,
+  );
+  const expectedInspectorPorts =
+    report.integrity.inspectorPort === null ? [] : [report.integrity.inspectorPort];
+  try {
+    validateDevPortAllocationEvidence(allocation, {
+      basePort: expectedBasePort,
+      inspectorPorts: expectedInspectorPorts,
+      ports: expectedPorts,
+    });
+  } catch {
+    findings.push('per-session dev port allocation is incomplete');
+  }
+  if (report.integrity.handoffs?.length !== expectedHandoffTargets.length) {
+    findings.push(
+      `pre-spawn handoff count ${String(report.integrity.handoffs?.length ?? 0)} did not equal ${String(expectedHandoffTargets.length)}`,
+    );
+  }
+  for (const [index, target] of expectedHandoffTargets.entries()) {
+    const raw = report.integrity.handoffs?.[index];
+    try {
+      const handoff = validateDevSessionHandoffEvidence(raw);
+      const expectedFrom = index === 0 ? null : expectedHandoffTargets[index - 1];
+      if (
+        handoff.complete !== true ||
+        Number(new URL(handoff.origin).port) !== expectedPorts[index] ||
+        handoff.attribution.from !== expectedFrom ||
+        handoff.attribution.to !== target ||
+        (index === 0
+          ? handoff.attribution.priorMarkerSha256 !== null
+          : handoff.attribution.priorMarkerSha256 === null) ||
+        (target === 'edit-session' && expectedInspectorPorts.length === 1
+          ? handoff.inspector?.complete !== true ||
+            Number(new URL(handoff.inspector.origin).port) !== expectedInspectorPorts[0]
+          : handoff.inspector !== null)
+      ) {
+        findings.push(`pre-spawn handoff ${target} is incomplete or misattributed`);
+      }
+    } catch {
+      findings.push(`pre-spawn handoff ${target} is malformed`);
+    }
+  }
+  if (report.readySamples.length !== report.integrity.readyIterations) {
+    findings.push(
+      `ready sample count ${String(report.readySamples.length)} did not equal ${String(report.integrity.readyIterations)}`,
+    );
+  }
+  for (let index = 0; index < report.readySamples.length; index += 1) {
+    const sample = report.readySamples[index];
+    if (
+      sample?.iteration !== index ||
+      sample.success !== true ||
+      !finiteNonNegative(sample.durationMs) ||
+      !finitePositive(sample.peakRssBytes) ||
+      sample.browserContextClosed !== true ||
+      !validReadyRouteProbe(sample.readinessProbe) ||
+      sample.lifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
+      sample.lifecycle.complete !== true ||
+      sample.lifecycle.socketEvidence !== null ||
+      originPortOrNull(sample.lifecycle?.origin) !== expectedPorts[index]
+    ) {
+      findings.push(`ready sample ${String(index)} is incomplete`);
+    }
+  }
+  if (
+    report.editSession?.lifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
+    report.editSession.lifecycle.complete !== true ||
+    report.editSession.lifecycle.socketEvidence !== null ||
+    report.editSession.browserContextClosed !== true ||
+    !validReadyRouteProbe(report.editSession.readinessProbe) ||
+    originPortOrNull(report.editSession.lifecycle.origin) !== expectedPorts.at(-1)
+  ) {
+    findings.push('edit session readiness or lifecycle is incomplete');
+  }
+  if (report.samples.length !== report.integrity.iterations) {
+    findings.push(
+      `edit sample count ${String(report.samples.length)} did not equal ${String(report.integrity.iterations)}`,
+    );
+  }
+  for (let index = 0; index < report.samples.length; index += 1) {
+    const sample = report.samples[index];
+    if (sample?.iteration !== index)
+      findings.push(`edit sample ${String(index)} has wrong identity`);
+    for (const editClass of ALL_EDIT_CLASSES) {
+      if (finiteNonNegative(sample?.[`${editClass}Ms`])) counts[editClass] += 1;
+      else findings.push(`edit sample ${String(index)} is missing ${editClass} timing`);
+      if (sample?.[`${editClass}StateSurvived`] !== true) {
+        findings.push(`edit sample ${String(index)} lost state during ${editClass}`);
+      }
+    }
+    if (
+      typeof sample?.syntaxErrorDiagnosticSignal !== 'string' ||
+      sample.syntaxErrorDiagnosticSignal.length === 0
+    ) {
+      findings.push(`edit sample ${String(index)} lacks syntax-error diagnostic evidence`);
+    }
+  }
+  report.integrity.editCounts = counts;
+  for (const editClass of ALL_EDIT_CLASSES) {
+    if (counts[editClass] !== report.integrity.iterations) {
+      findings.push(
+        `${editClass} sample count ${String(counts[editClass])} did not equal ${String(report.integrity.iterations)}`,
+      );
+    }
+  }
+  return findings;
+}
+
+export function diagnosticProfileFindings(report, expected) {
+  const findings = [];
+  const diagnostic = report?.profile?.diagnostic;
+  if (!expected) {
+    if (diagnostic !== null && diagnostic !== undefined) {
+      findings.push('unrequested diagnostic profile evidence is present');
+    }
+    return findings;
+  }
+  const expectedWindows = (report?.integrity?.iterations ?? 0) * ALL_EDIT_CLASSES.length;
+  if (diagnostic?.schema !== DEV_EDIT_PROFILE_SCHEMA) {
+    findings.push('diagnostic edit profile schema is missing');
+  }
+  if (diagnostic?.classifier !== DEV_EDIT_PROFILE_CLASSIFIER) {
+    findings.push('diagnostic edit profile classifier is stale or missing');
+  }
+  if (
+    diagnostic?.diagnosticOnly?.profilerPerturbsDurations !== true ||
+    diagnostic?.diagnosticOnly?.publishTimingClaims !== false
+  ) {
+    findings.push('diagnostic edit profile does not refuse timing claims');
+  }
+  if (
+    !Number.isSafeInteger(diagnostic?.workload?.inspectorProcess?.pid) ||
+    diagnostic.workload.inspectorProcess.pid !== report?.editSession?.pid ||
+    !/^sha256:[0-9a-f]{64}$/u.test(
+      diagnostic?.workload?.inspectorProcess?.processMarkerSha256 ?? '',
+    ) ||
+    diagnostic.workload.inspectorProcess.processMarkerSha256 !==
+      report?.editSession?.processMarkerSha256
+  ) {
+    findings.push('diagnostic Inspector target is not bound to the edit-session process');
+  }
+  if (
+    diagnostic?.windowCount !== expectedWindows ||
+    diagnostic?.windows?.length !== expectedWindows
+  ) {
+    findings.push(`diagnostic edit profile window count did not equal ${String(expectedWindows)}`);
+  }
+  if (
+    JSON.stringify(diagnostic?.profileArtifacts) !==
+    JSON.stringify(
+      (diagnostic?.windows ?? []).map(({ artifact, editClass, iteration }) => ({
+        artifact,
+        editClass,
+        iteration,
+      })),
+    )
+  ) {
+    findings.push('diagnostic raw profile artifact census differs from exact windows');
+  }
+  const identities = new Set();
+  for (const observation of diagnostic?.windows ?? []) {
+    const identity = `${String(observation?.editClass)}:${String(observation?.iteration)}`;
+    if (
+      !ALL_EDIT_CLASSES.includes(observation?.editClass) ||
+      !Number.isSafeInteger(observation?.iteration) ||
+      observation.iteration < 0 ||
+      observation.iteration >= (report?.integrity?.iterations ?? 0)
+    ) {
+      findings.push(`invalid diagnostic window identity ${identity}`);
+    }
+    if (identities.has(identity)) findings.push(`duplicate diagnostic window ${identity}`);
+    identities.add(identity);
+    for (const artifact of [observation?.artifact?.cpu, observation?.artifact?.heap]) {
+      if (
+        typeof artifact?.file !== 'string' ||
+        !Number.isSafeInteger(artifact?.bytes) ||
+        artifact.bytes <= 0 ||
+        !/^sha256:[0-9a-f]{64}$/u.test(artifact?.sha256 ?? '')
+      ) {
+        findings.push(`diagnostic window ${identity} has invalid raw profile evidence`);
+      }
+    }
+  }
+  for (let iteration = 0; iteration < (report?.integrity?.iterations ?? 0); iteration += 1) {
+    for (const editClass of ALL_EDIT_CLASSES) {
+      const identity = `${editClass}:${String(iteration)}`;
+      if (!identities.has(identity)) findings.push(`missing diagnostic window ${identity}`);
+    }
+  }
+  return [...new Set(findings)];
+}
+
+function accumulateObservationIntegrity(integrity, observation, label) {
+  if (observation.success) return;
+  integrity.misses += 1;
+  integrity.errors.push(`${label}: ${observation.error ?? 'browser state did not survive'}`);
+}
+
+function summarizeReport(report) {
+  const edit = {};
+  for (const editClass of ALL_EDIT_CLASSES) {
+    edit[editClass] = summarizeNumbers(report.samples.map((sample) => sample[`${editClass}Ms`]));
+  }
+  return {
+    edit,
+    editPeakRssBytes: report.editSession?.peakRssBytes ?? null,
+    ready: summarizeNumbers(report.readySamples.map((sample) => sample.durationMs)),
+    readyPeakRssBytes: summarizeNumbers(report.readySamples.map((sample) => sample.peakRssBytes)),
+  };
+}
+
+export function summarizeNumbers(values) {
+  const numbers = values.filter((value) => typeof value === 'number' && Number.isFinite(value));
+  if (numbers.length === 0) return { mad: null, median: null, p95: null, samples: 0 };
+  const median = percentile(numbers, 50);
+  return {
+    mad: percentile(
+      numbers.map((value) => Math.abs(value - median)),
+      50,
+    ),
+    median,
+    p95: percentile(numbers, 95),
+    samples: numbers.length,
+  };
+}
+
+/** Rank the directly observed, overlapping edit-to-paint spans; no unobserved phase is invented. */
+export function profileEditToPaint(samples, diagnosticProfile = null) {
+  const spans = [];
+  for (const editClass of ALL_EDIT_CLASSES) {
+    for (const [id, suffix] of [
+      ['edit-to-paint', 'Ms'],
+      ['server-generation', 'ServerGenerationMs'],
+      ['paint-fence', 'PaintFenceMs'],
+      ['source-write', 'WriteMs'],
+    ]) {
+      const summary = summarizeNumbers(samples.map((sample) => sample[`${editClass}${suffix}`]));
+      if (summary.median !== null) spans.push({ editClass, id, ...summary });
+    }
+  }
+  spans.sort((left, right) => right.median - left.median);
+  return {
+    diagnostic: diagnosticProfile,
+    note: 'Observed spans overlap. Server-generation is parsed from framework-owned diagnostics; missing phases remain unattributed.',
+    topFive: spans.slice(0, 5),
+  };
+}
+
+function percentile(values, percentage) {
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.min(sorted.length - 1, Math.ceil((percentage / 100) * sorted.length) - 1)];
+}
+
+export function normalizeDevLoopOptions(options) {
+  if (!options || typeof options !== 'object')
+    throw new TypeError('Benchmark options are required.');
+  const hasFlatDiagnosticOptions =
+    options.profileDir !== undefined || options.inspectorPort !== undefined;
+  const hasNormalizedDiagnosticOptions = options.diagnosticProfile !== undefined;
+  if (hasFlatDiagnosticOptions && hasNormalizedDiagnosticOptions) {
+    throw new TypeError('Diagnostic profile options must use one representation.');
+  }
+  const diagnosticOptions = hasNormalizedDiagnosticOptions
+    ? options.diagnosticProfile
+    : hasFlatDiagnosticOptions
+      ? { inspectorPort: options.inspectorPort, profileDir: options.profileDir }
+      : null;
+  if (
+    diagnosticOptions !== null &&
+    (typeof diagnosticOptions !== 'object' || Array.isArray(diagnosticOptions))
+  ) {
+    throw new TypeError('diagnostic profile options must be an object or null.');
+  }
+  const hasFlatPackedProduct =
+    options.packedProductDescriptor !== undefined || options.packedProductDigest !== undefined;
+  const hasNormalizedPackedProduct = options.packedProduct !== undefined;
+  if (hasFlatPackedProduct && hasNormalizedPackedProduct) {
+    throw new TypeError('Packed product options must use one representation.');
+  }
+  const packedProductOptions = hasNormalizedPackedProduct
+    ? options.packedProduct
+    : hasFlatPackedProduct
+      ? {
+          descriptorPath: options.packedProductDescriptor,
+          digest: options.packedProductDigest,
+        }
+      : null;
+  if (
+    packedProductOptions !== null &&
+    (typeof packedProductOptions !== 'object' || Array.isArray(packedProductOptions))
+  ) {
+    throw new TypeError('packed product options must be an object or null.');
+  }
+  const normalized = {
+    diagnosticProfile:
+      diagnosticOptions === null
+        ? null
+        : {
+            inspectorPort: boundedInteger(
+              diagnosticOptions.inspectorPort,
+              1_024,
+              65_535,
+              'inspector port',
+            ),
+            profileDir: path.resolve(
+              requiredString(diagnosticOptions.profileDir, 'profile directory'),
+            ),
+          },
+    iterations: boundedInteger(options.iterations, 1, 100, 'iterations'),
+    manifestPath: path.resolve(requiredString(options.manifestPath, 'manifest')),
+    outPath: path.resolve(requiredString(options.outPath, 'out')),
+    packedProduct:
+      packedProductOptions === null
+        ? null
+        : {
+            descriptorPath: path.resolve(
+              requiredString(packedProductOptions.descriptorPath, 'packed product descriptor'),
+            ),
+            digest: requiredString(packedProductOptions.digest, 'packed product digest'),
+          },
+    port: boundedInteger(options.port, 1_024, 65_535, 'port'),
+    readyIterations: boundedInteger(options.readyIterations, 1, 100, 'ready iterations'),
+    readyTimeoutMs: boundedInteger(
+      options.readyTimeoutMs ?? READY_TIMEOUT_MS,
+      1_000,
+      1_800_000,
+      'ready timeout',
+    ),
+    warmups: boundedInteger(options.warmups, 0, 10, 'warmups'),
+  };
+  if (normalized.port + normalized.readyIterations > 65_535) {
+    throw new TypeError('port range cannot allocate one exact port per dev session.');
+  }
+  if (
+    normalized.diagnosticProfile !== null &&
+    normalized.diagnosticProfile.inspectorPort >= normalized.port &&
+    normalized.diagnosticProfile.inspectorPort <= normalized.port + normalized.readyIterations
+  ) {
+    throw new TypeError('inspector port must differ from every per-session dev server port.');
+  }
+  return normalized;
+}
+
+export function parseDevLoopArgs(argv) {
+  const values = {};
+  for (let index = 0; index < argv.length; index += 2) {
+    const key = argv[index];
+    const value = argv[index + 1];
+    if (
+      ![
+        '--iterations',
+        '--manifest',
+        '--out',
+        '--packed-product',
+        '--packed-product-digest',
+        '--port',
+        '--profile-dir',
+        '--inspector-port',
+        '--ready-iterations',
+        '--ready-timeout-ms',
+        '--warmups',
+      ].includes(key) ||
+      value === undefined
+    ) {
+      throw new TypeError(`Unknown or incomplete dev-loop option ${String(key)}.`);
+    }
+    if (Object.hasOwn(values, key)) throw new TypeError(`Duplicate dev-loop option ${key}.`);
+    values[key] = value;
+  }
+  return normalizeDevLoopOptions({
+    iterations: Number(values['--iterations']),
+    inspectorPort:
+      values['--inspector-port'] === undefined ? undefined : Number(values['--inspector-port']),
+    manifestPath: values['--manifest'],
+    outPath: values['--out'],
+    packedProductDescriptor: values['--packed-product'],
+    packedProductDigest: values['--packed-product-digest'],
+    port: Number(values['--port']),
+    profileDir: values['--profile-dir'],
+    readyIterations: Number(values['--ready-iterations']),
+    readyTimeoutMs:
+      values['--ready-timeout-ms'] === undefined ? undefined : Number(values['--ready-timeout-ms']),
+    warmups: Number(values['--warmups']),
+  });
+}
+
+async function writeReport(outPath, report) {
+  await mkdir(path.dirname(outPath), { recursive: true });
+  const temporary = `${outPath}.tmp-${String(process.pid)}`;
+  await writeFile(temporary, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx' });
+  await rename(temporary, outPath);
+}
+
+function failureReport(error, options) {
+  return {
+    corpus: { manifestPath: options?.manifestPath ?? null, modules: null, shapeDigest: null },
+    framework: null,
+    integrity: {
+      browser: emptyBrowserIntegrity(),
+      command: null,
+      complete: false,
+      corpus: { afterVerified: false, beforeVerified: false },
+      editCounts: Object.fromEntries(ALL_EDIT_CLASSES.map((editClass) => [editClass, 0])),
+      errors: [errorMessage(error)],
+      handoffs: [],
+      iterations: options?.iterations ?? null,
+      misses: 1,
+      portAllocation: null,
+      productArtifact: {
+        afterVerified: false,
+        beforeVerified: false,
+        required: options?.packedProduct != null,
+      },
+      readyIterations: options?.readyIterations ?? null,
+      source: null,
+      warmups: options?.warmups ?? null,
+    },
+    readySamples: [],
+    productArtifact: null,
+    samples: [],
+    schema: DEV_LOOP_REPORT_SCHEMA,
+    source: null,
+    sourceAfter: null,
+    verdict: { status: 'unproven' },
+  };
+}
+
+function fillRevision(template, revision) {
+  if (typeof template !== 'string' || !template.includes('{revision}')) {
+    throw new TypeError('Edit replacement/evidence template must contain {revision}.');
+  }
+  return template.replaceAll('{revision}', revision);
+}
+
+function replaceExactlyOnce(source, search, replacement) {
+  const first = source.indexOf(search);
+  if (first === -1 || source.indexOf(search, first + search.length) !== -1) {
+    throw new Error(`Edit sentinel must occur exactly once: ${search}`);
+  }
+  return `${source.slice(0, first)}${replacement}${source.slice(first + search.length)}`;
+}
+
+function safeCorpusPath(root, relative) {
+  if (relative === '.') return root;
+  assertSafeRelativePath(relative, 'corpus path');
+  const resolved = path.resolve(root, relative);
+  if (!isWithin(root, resolved)) throw new TypeError(`Corpus path escaped root: ${relative}.`);
+  return resolved;
+}
+
+function assertSafeRelativePath(value, label) {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    path.isAbsolute(value) ||
+    value.includes('\\') ||
+    value.split('/').some((part) => part === '' || part === '.' || part === '..')
+  ) {
+    throw new TypeError(`${label} must be a normalized relative path.`);
+  }
+}
+
+function isWithin(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return (
+    relative === '' ||
+    (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative))
+  );
+}
+
+function sha256(value) {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`;
+}
+
+function boundedInteger(value, minimum, maximum, label) {
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new TypeError(`${label} must be an integer from ${minimum} through ${maximum}.`);
+  }
+  return value;
+}
+
+function originPortOrNull(value) {
+  try {
+    const port = Number(new URL(value).port);
+    return Number.isSafeInteger(port) && port > 0 ? port : null;
+  } catch {
+    return null;
+  }
+}
+
+function finiteNonNegative(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function finitePositive(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function requiredString(value, label) {
+  if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${label} is required.`);
+  return value;
+}
+
+function pushBoundedRecord(values, value) {
+  if (values.length < 200) values.push(value);
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  let options;
+  let report;
+  try {
+    options = parseDevLoopArgs(process.argv.slice(2));
+    let createDiagnosticProfiler;
+    if (options.diagnosticProfile !== null) {
+      ({ createDevEditProfiler: createDiagnosticProfiler } =
+        await import('../../scripts/perf-dev-edit-profile.mjs'));
+    }
+    report = await runDevLoopBenchmark(options, { createDiagnosticProfiler });
+  } catch (error) {
+    report = failureReport(error, options);
+  }
+  const outPath =
+    options?.outPath ??
+    (() => {
+      const index = process.argv.indexOf('--out');
+      return index === -1 || !process.argv[index + 1]
+        ? null
+        : path.resolve(process.argv[index + 1]);
+    })();
+  if (outPath !== null) await writeReport(outPath, report);
+  else process.stderr.write(`${JSON.stringify(report)}\n`);
+  if (!report.integrity.complete) process.exitCode = 1;
+}

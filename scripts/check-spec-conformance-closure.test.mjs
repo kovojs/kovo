@@ -85,7 +85,7 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
       errorCodes: 72,
       findings: [],
       ok: true,
-      sites: 204,
+      sites: 205,
     });
   }, 600_000);
 
@@ -324,7 +324,7 @@ function unreviewedDiagnostic(code, severity) {
         ),
     );
     const result = evaluate({ productionFiles });
-    expect(result.sites).toBe(204);
+    expect(result.sites).toBe(205);
     expect(result.findings.join('\n')).toContain(
       'production diagnostic emission site manifest drifted',
     );
@@ -343,7 +343,7 @@ function unreviewedDiagnostic(code, severity) {
         text.replace(exact, replacement),
       );
       const result = evaluate({ productionFiles });
-      expect(result.sites).toBe(204);
+      expect(result.sites).toBe(205);
       expect(result.findings.join('\n')).toContain(
         'production diagnostic emission site manifest drifted',
       );
@@ -370,7 +370,7 @@ function unreviewedDiagnostic(code, severity) {
         ),
     );
     const result = evaluate({ productionFiles });
-    expect(result.sites).toBe(204);
+    expect(result.sites).toBe(205);
     expect(result.findings.join('\n')).toContain(
       'reviewed validator registry and dispatch summary drifted',
     );
@@ -1444,6 +1444,16 @@ function conformanceBypass(value: unknown): DiagnosticDocumentDiagnostic {
   it('C13 mutations: runtime loader authority census rejects changed and stale owners', () => {
     const changed = replaceProductionFile('packages/cli/src/add-catalog.ts', (text) => `${text}\n`);
     expect(evaluate({ productionFiles: changed }).findings.join('\n')).toContain(
+      'runtime module loader authority requires an exact full-file capability summary',
+    );
+
+    const widenedDevWatch = replaceProductionFile('packages/cli/src/commands/dev.ts', (text) =>
+      text.replace(
+        "const KOVO_DEV_ATOMIC_SAVE_WATCH_IGNORE = '**/.kovo-perf-save-*.tmp';",
+        "const KOVO_DEV_ATOMIC_SAVE_WATCH_IGNORE = '**/*';",
+      ),
+    );
+    expect(evaluate({ productionFiles: widenedDevWatch }).findings.join('\n')).toContain(
       'runtime module loader authority requires an exact full-file capability summary',
     );
 

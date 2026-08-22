@@ -13,7 +13,11 @@ import {
   securityStreamEnqueue,
   securityStreamError,
 } from './response-security-intrinsics.js';
-import { frameworkDocumentResponseBuildToken, markFrameworkDocumentResponse } from './response.js';
+import {
+  frameworkDocumentResponseBuildToken,
+  markFrameworkDocumentResponse,
+  transferFrameworkProvedDocumentCompressionWitness,
+} from './response.js';
 import {
   createWitnessWeakMap,
   createWitnessWeakSet,
@@ -374,6 +378,7 @@ export function wrapRequestDeadlineResponse(
   // framework-assembled documents. Static export consumes this identity witness and still rejects
   // structurally forged reserved headers.
   const buildToken = frameworkDocumentResponseBuildToken(response);
+  transferFrameworkProvedDocumentCompressionWitness(response, wrappedResponse);
   return buildToken === undefined
     ? wrappedResponse
     : markFrameworkDocumentResponse(wrappedResponse, buildToken);

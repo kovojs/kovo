@@ -17,6 +17,7 @@ export { runWithGeneratedLiveTargetRegistry } from '../live-target-registry.js';
 export {
   createKovoAppShellDevDiagnosticLedger,
   createKovoAppShellViteDevIntegration,
+  bindKovoAppShellViteDevLiveTargetAttestationSecret,
   dispatchKovoAppShellViteDevRequest,
   kovoAppShellViteDevPlugin,
   prepareKovoAppShellViteDevGeneration,

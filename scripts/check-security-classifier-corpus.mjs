@@ -17,7 +17,7 @@ import {
 
 export const repoRoot = findRepoRoot();
 
-export const CLASSIFIER_CORPUS_CI_JOB_TIMEOUT_MINUTES = 90;
+export const CLASSIFIER_CORPUS_CI_JOB_TIMEOUT_MINUTES = 120;
 export const CLASSIFIER_CORPUS_GATE_TIMEOUT_MS = 50 * 60_000;
 export const CLASSIFIER_CORPUS_ORDINARY_BATCH_TIMEOUT_MS = 30 * 60_000;
 export const CLASSIFIER_CORPUS_ISOLATED_BATCH_TIMEOUT_MS = 15 * 60_000;
@@ -1239,6 +1239,26 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'RootAppResponseHeaderName',
           'rejectedRootAppResponseHeaders',
           "'X-Accel-Redirect'",
+        ],
+      },
+    ],
+  },
+  {
+    id: 'kv235-source-provenance',
+    marker: '@kovo-security-classifier-corpus kv235-source-provenance',
+    testFiles: ['packages/compiler/src/scan/lexical-scope-declaration-index.test.ts'],
+    verdictAnchors: [
+      {
+        id: 'exact-ast-lexical-scope-index-superset',
+        file: 'packages/compiler/src/scan/lexical-scope-declaration-index.test.ts',
+        snippets: [
+          'exact lexical-scope declaration index',
+          'preserves lexical boundaries, var hoisting, and direct function/class declarations',
+          'indexes parameters, destructuring, catch bindings, imports, and type-only imports exactly',
+          'preserves exact excluded-binding identity, including duplicate declarations',
+          'constructs one index per exact scope instead of walking it once per JSX identifier',
+          'keys reuse by exact AST identity and cannot be redirected by poisoned collection methods',
+          'expect(poisonHits).toBe(0)',
         ],
       },
     ],

@@ -3,6 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { lockCompilerSecurityRealm } from '@kovojs/compiler/internal/security-bootstrap';
 
 import {
+  kovoBuildSourcePhaseCensusLine,
   kovoBuildOneShotIdentity,
   parseBuildArgs,
   produceKovoBuildOneShotAnalysis,
@@ -26,6 +27,7 @@ if (!parsed.ok) {
   if ('exitCode' in outcome) {
     exitCode = writeFormattedCommandResult(outcome, parsed.format, 'build', 'build');
   } else {
+    process.stdout.write(kovoBuildSourcePhaseCensusLine(outcome));
     collectGarbage();
     const identity = kovoBuildOneShotIdentity(parsed.options, outcome, security);
     const wire = encodeKovoBuildOneShotHandoff({

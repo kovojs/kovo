@@ -1,6 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, lstatSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import type { Writable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 
@@ -11,10 +12,14 @@ import {
   KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
   parseKovoBuildOneShotIdentity,
   readKovoBuildOneShotHandoff,
+  type KovoBuildOneShotOutputTransactionInspection,
 } from './build-one-shot-handoff.js';
 import { KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS } from './build-security-deadlines.js';
+import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 
 const kovoBuildOneShotInputCloseTimeoutMs = 30_000;
+const kovoBuildPhaseCensusEnvironmentName = 'KOVO_DEVEX_BUILD_PHASE_CENSUS_SOURCE';
+const kovoBuildWorkerPhaseCensusSchema = 'kovo-build-worker-phase-census/v1';
 const capturedClearTimeout = globalThis.clearTimeout.bind(globalThis);
 const capturedSetTimeout = globalThis.setTimeout.bind(globalThis);
 const capturedProcessKill = process.kill.bind(process);
@@ -56,9 +61,30 @@ async function runKovoIsolatedOneShotInvocationAsync(
     args[0] === 'build' ? parseKovoCommandInvocation('build', args.slice(1)) : undefined;
   if (!build?.ok) return undefined;
 
+  const workerPhases: {
+    readonly durationMs: number;
+    readonly name: 'analyze' | 'client' | 'final' | 'server';
+    readonly status: number;
+  }[] = [];
+  const finishBuild = (status: number, complete: boolean): number => {
+    emitKovoBuildWorkerPhaseCensus(security, workerPhases, complete);
+    return status;
+  };
+  let outputTransaction: KovoBuildOneShotOutputTransactionInspection | undefined;
+  const abortOutputTransaction = (): void => {
+    if (outputTransaction === undefined) return;
+    const transaction = outputTransaction;
+    outputTransaction = undefined;
+    removeAuthenticatedKovoBuildStage(transaction);
+  };
   try {
     const analysis = await runWorker(binPath, 'analyze', args.slice(1), security, undefined, true);
-    if (analysis.status !== 0) return analysis.status;
+    workerPhases.push({
+      durationMs: analysis.durationMs,
+      name: 'analyze',
+      status: analysis.status,
+    });
+    if (analysis.status !== 0) return finishBuild(analysis.status, false);
     if (!Buffer.isBuffer(analysis.control)) {
       throw new TypeError('Kovo build analysis worker omitted its private handoff.');
     }
@@ -72,8 +98,13 @@ async function runKovoIsolatedOneShotInvocationAsync(
         security,
         wire,
         true,
+        outputTransaction === undefined ? undefined : abortOutputTransaction,
       );
-      if (result.status !== 0) return result.status;
+      workerPhases.push({ durationMs: result.durationMs, name: phase, status: result.status });
+      if (result.status !== 0) {
+        abortOutputTransaction();
+        return finishBuild(result.status, false);
+      }
       if (!Buffer.isBuffer(result.control)) {
         throw new TypeError(`Kovo build ${phase} worker omitted its private handoff.`);
       }
@@ -81,18 +112,42 @@ async function runKovoIsolatedOneShotInvocationAsync(
       if (JSON.stringify(nextInspection.identity) !== JSON.stringify(inspection.identity)) {
         throw new TypeError(`Kovo build ${phase} worker changed the invocation identity.`);
       }
+      if (phase === 'client') {
+        outputTransaction = requireExpectedKovoBuildOutputTransaction(
+          nextInspection.outputTransaction,
+          resolve(security.invocationCwd, build.value.options.out),
+        );
+      } else if (
+        outputTransaction === undefined ||
+        JSON.stringify(nextInspection.outputTransaction) !== JSON.stringify(outputTransaction)
+      ) {
+        throw new TypeError('Kovo build server worker changed the output transaction.');
+      }
       wire = result.control;
     }
-    return (
-      await runWorker(
-        binPath,
-        'final',
-        [JSON.stringify(inspection.identity), ...args.slice(1)],
-        security,
-        wire,
-      )
-    ).status;
+    const final = await runWorker(
+      binPath,
+      'final',
+      [JSON.stringify(inspection.identity), ...args.slice(1)],
+      security,
+      wire,
+      false,
+      abortOutputTransaction,
+    );
+    workerPhases.push({ durationMs: final.durationMs, name: 'final', status: final.status });
+    if (final.status !== 0) {
+      abortOutputTransaction();
+      return finishBuild(final.status, false);
+    }
+    if (outputTransaction !== undefined && existsSync(outputTransaction.stagedOutDir)) {
+      abortOutputTransaction();
+      throw new TypeError('Kovo build final worker left an unpromoted output transaction.');
+    }
+    outputTransaction = undefined;
+    return finishBuild(final.status, final.status === 0);
   } catch (error) {
+    abortOutputTransaction();
+    emitKovoBuildWorkerPhaseCensus(security, workerPhases, false);
     process.stderr.write(
       `kovo build isolation failed: ${error instanceof Error ? error.message : String(error)}\n`,
     );
@@ -100,8 +155,38 @@ async function runKovoIsolatedOneShotInvocationAsync(
   }
 }
 
+function emitKovoBuildWorkerPhaseCensus(
+  security: KovoCommandSecurityDisposition,
+  phases: readonly {
+    readonly durationMs: number;
+    readonly name: 'analyze' | 'client' | 'final' | 'server';
+    readonly status: number;
+  }[],
+  complete: boolean,
+): void {
+  const sourcePath = kovoInvocationEnvironmentValue(
+    security.invocationEnv,
+    kovoBuildPhaseCensusEnvironmentName,
+  );
+  if (sourcePath === undefined) return;
+  let totalWorkerMs = 0;
+  for (let index = 0; index < phases.length; index += 1) {
+    totalWorkerMs += phases[index]!.durationMs;
+  }
+  process.stdout.write(
+    `${kovoBuildWorkerPhaseCensusSchema} ${JSON.stringify({
+      complete,
+      phases,
+      schema: kovoBuildWorkerPhaseCensusSchema,
+      sourcePath,
+      totalWorkerMs,
+    })}\n`,
+  );
+}
+
 interface OneShotWorkerResult {
   readonly control?: Buffer | string | null;
+  readonly durationMs: number;
   readonly status: number;
 }
 
@@ -180,6 +265,7 @@ function runWorker(
   security: KovoCommandSecurityDisposition,
   input?: Buffer,
   captureControl = false,
+  abortStaging?: () => void,
 ): Promise<OneShotWorkerResult> {
   const sourceMode = binPath.endsWith('.ts');
   const worker = sourceMode
@@ -210,10 +296,12 @@ function runWorker(
     maxControlBytes: KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
     phase,
     timeoutMs: KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS,
+    ...(abortStaging === undefined ? {} : { abortStaging }),
   });
 }
 
 interface OneShotWorkerProcessOptions {
+  readonly abortStaging?: () => void;
   readonly args: readonly string[];
   readonly captureControl: boolean;
   readonly cwd: string;
@@ -240,6 +328,7 @@ function runBoundedOneShotWorkerProcess(
   const pinnedInput = options.input === undefined ? undefined : Buffer.from(options.input);
   if (pinnedInput !== undefined) inspectKovoBuildOneShotHandoff(pinnedInput);
 
+  const startedAt = performance.now();
   const child = spawn(options.executable, options.args, {
     cwd: options.cwd,
     detached: capturedProcessPlatform !== 'win32',
@@ -253,7 +342,7 @@ function runBoundedOneShotWorkerProcess(
     ],
     windowsHide: true,
   });
-  const removeParentCleanup = installOneShotWorkerParentCleanup(child);
+  const removeParentCleanup = installOneShotWorkerParentCleanup(child, options.abortStaging);
   return new Promise<OneShotWorkerResult>((resolveResult, reject) => {
     let settled = false;
     let terminalError: Error | undefined;
@@ -301,11 +390,13 @@ function runBoundedOneShotWorkerProcess(
       child.stdio[3]?.destroy();
       child.stdio[4]?.destroy();
       if (terminalError !== undefined) {
+        invokeStagingAbort(options.abortStaging);
         reject(terminalError);
         return;
       }
       resolveResult({
         ...(options.captureControl ? { control: Buffer.concat(chunks, total) } : {}),
+        durationMs: performance.now() - startedAt,
         status: status ?? 1,
       });
     });
@@ -331,7 +422,10 @@ function runBoundedOneShotWorkerProcess(
   });
 }
 
-function installOneShotWorkerParentCleanup(child: ChildProcess): () => void {
+function installOneShotWorkerParentCleanup(
+  child: ChildProcess,
+  abortStaging?: () => void,
+): () => void {
   let removed = false;
   let terminated = false;
   const terminateSynchronously = (): void => {
@@ -340,6 +434,7 @@ function installOneShotWorkerParentCleanup(child: ChildProcess): () => void {
     child.stdio[3]?.destroy();
     child.stdio[4]?.destroy();
     terminateOneShotWorkerProcessTreeSynchronously(child);
+    invokeStagingAbort(abortStaging);
   };
   const onExit = (): void => terminateSynchronously();
   const signalHandlers = oneShotParentSignals.map((signal) => {
@@ -427,6 +522,7 @@ export function boundedKovoBuildOneShotWorkerForTesting(
   timeoutMs: number,
   input?: Buffer,
   maxControlBytes = KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
+  abortStaging?: () => void,
 ): Promise<OneShotWorkerResult> {
   return runBoundedOneShotWorkerProcess({
     args,
@@ -438,7 +534,61 @@ export function boundedKovoBuildOneShotWorkerForTesting(
     maxControlBytes,
     phase: 'test',
     timeoutMs,
+    ...(abortStaging === undefined ? {} : { abortStaging }),
   });
+}
+
+function requireExpectedKovoBuildOutputTransaction(
+  transaction: KovoBuildOneShotOutputTransactionInspection | null,
+  expectedFinalOutDir: string,
+): KovoBuildOneShotOutputTransactionInspection {
+  if (
+    transaction === null ||
+    transaction.finalOutDir !== expectedFinalOutDir ||
+    resolve(transaction.finalOutDir) !== transaction.finalOutDir ||
+    resolve(transaction.stagedOutDir) !== transaction.stagedOutDir
+  ) {
+    throw new TypeError('Kovo build client worker returned an unexpected output transaction.');
+  }
+  return transaction;
+}
+
+function removeAuthenticatedKovoBuildStage(
+  transaction: KovoBuildOneShotOutputTransactionInspection,
+): void {
+  try {
+    const status = lstatSync(transaction.stagedOutDir);
+    if (!status.isDirectory() || status.isSymbolicLink()) {
+      throw new TypeError('Kovo build output staging residue is not a directory.');
+    }
+    rmSync(transaction.stagedOutDir, { force: true, recursive: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    process.stderr.write(
+      `kovo build could not remove authenticated staging residue: ${
+        error instanceof Error ? error.message : String(error)
+      }\n`,
+    );
+  }
+}
+
+/** @internal Authenticate one exact cleanup subject for focused crash/timeout tests. */
+export function abortKovoBuildOneShotOutputForTesting(
+  transaction: KovoBuildOneShotOutputTransactionInspection | null,
+  expectedFinalOutDir: string,
+): void {
+  removeAuthenticatedKovoBuildStage(
+    requireExpectedKovoBuildOutputTransaction(transaction, expectedFinalOutDir),
+  );
+}
+
+function invokeStagingAbort(abortStaging: (() => void) | undefined): void {
+  if (abortStaging === undefined) return;
+  try {
+    abortStaging();
+  } catch {
+    // Promotion remains impossible; the caller reports the original worker failure or signal.
+  }
 }
 
 function resolveOneShotWorker(

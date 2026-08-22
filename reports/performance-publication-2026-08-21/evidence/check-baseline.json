@@ -1,0 +1,133 @@
+{
+  "generatedAt": "2026-08-21T21:45:53.443Z",
+  "identity": {
+    "host": "sha256:52d9b97e280b9f0fcd83ba5369a5eb89e75a0d6205fd7df7e8f2960f1efa0457",
+    "locks": {
+      "pnpm-lock.yaml": "sha256:b44051d7c24ac90744743140c794ccee83991dd07d2e15d2e893fcc3d2b6d0a4",
+      "benchmarks/nextjs/pnpm-lock.yaml": "sha256:a9e68be4a032b6e2cc40a5f5392f942d14eae0277b6fc93408446b61d565086b",
+      "benchmarks/harness/pnpm-lock.yaml": "sha256:bfbf3b2e8725c5ef8a844f62c0907a154a1d5f68af4ff6ec26a91658d1227663"
+    },
+    "source": "01b2c759468f41a3fc4739225eb13c8f5aa11406",
+    "workload": "sha256:9fed31834b66d7dedbdcf66056655960dc563c06066997d25e1fcb9b68473d40"
+  },
+  "kind": "check-scaling",
+  "metrics": {
+    "check.appSourceTrust.marginalScalingExponent": {
+      "kovo": {
+        "mad": 0.00410832828937191,
+        "median": 1.0158301868116928,
+        "p95": 1.0220741436894205,
+        "runs": 5
+      }
+    },
+    "check.peakRssBytes": {
+      "kovo": {
+        "mad": 14000128,
+        "median": 3113558016,
+        "p95": 3140702208,
+        "runs": 5
+      }
+    },
+    "check.total.marginalScalingExponent": {
+      "kovo": {
+        "mad": 0.0012053659048643084,
+        "median": 0.6421394492405709,
+        "p95": 0.652720846509972,
+        "runs": 5
+      }
+    }
+  },
+  "policy": {
+    "maxLoadPerCpu": 1,
+    "minRuns": 5,
+    "minSamples": 1,
+    "requireProvider": "github-actions"
+  },
+  "reports": [
+    {
+      "contentDigest": "sha256:4dd32f79e1a1a001734f722634ad56462cbc76c6d120e024e115a328af86176a",
+      "execution": "sha256:03cf52656767a588ace4eebab277dbd6f9b0c064b8d8859571bdb767aa35ead5",
+      "location": "https://github.com/kovojs/kovo/actions/runs/32446817670/artifacts/9434458339",
+      "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446817670"
+    },
+    {
+      "contentDigest": "sha256:83beaf8d264697bf0635ffed924a376f947bf9ad205318d43506b52835cecb8c",
+      "execution": "sha256:1df63433dde2f7d66d76b90ec58f39956b99d96c786e0e6342b73c8cd28cf5af",
+      "location": "https://github.com/kovojs/kovo/actions/runs/32446881033/artifacts/9435331567",
+      "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446881033"
+    },
+    {
+      "contentDigest": "sha256:f663fc7ae7c6db14acf15f2f6cf68c67f74a92c3de230683549f9148cd81bcb0",
+      "execution": "sha256:987ea6bcc89216d29bdc4489706aeb40ffcbac7c89906c39af460147a42ec715",
+      "location": "https://github.com/kovojs/kovo/actions/runs/32446922209/artifacts/9436091517",
+      "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446922209"
+    },
+    {
+      "contentDigest": "sha256:90dce9f9fcd8b95f9ebd38475cdffda78bb5666db3e4064a68766fcd108dbbaf",
+      "execution": "sha256:33270f4c0a211b900855f24265f86e645a825822a9f7ab214720a81a41f11fd3",
+      "location": "https://github.com/kovojs/kovo/actions/runs/32446940258/artifacts/9436601612",
+      "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446940258"
+    },
+    {
+      "contentDigest": "sha256:bfec2ef964c5e72fefd7ef1e0571f8e000b98db9ddfb165d95ad30439fa3321d",
+      "execution": "sha256:550d7cc677cb1537af010f54812b661d9c6038fbe40aeb127d22a6b65e9d7a27",
+      "location": "https://github.com/kovojs/kovo/actions/runs/32446958451/artifacts/9437224137",
+      "runUrl": "https://github.com/kovojs/kovo/actions/runs/32446958451"
+    }
+  ],
+  "schema": "kovo-performance-baseline/v1",
+  "subject": {
+    "host": {
+      "arch": "x64",
+      "browsers": [],
+      "cpu": {
+        "count": 4,
+        "model": "AMD EPYC 9V74 80-Core Processor"
+      },
+      "memoryCapacityClassBytes": 17179869184,
+      "node": "v24.18.0",
+      "platform": "linux",
+      "release": "6.17.0-1022-azure",
+      "runnerImage": "github-actions/ubuntu-24.04 ImageOS=ubuntu24 ImageVersionDigest=sha256:daee8837c48a1f6d9e42a0303242b2433b2761aceff583672f517f05fda8e796",
+      "digest": "sha256:52d9b97e280b9f0fcd83ba5369a5eb89e75a0d6205fd7df7e8f2960f1efa0457",
+      "schema": "kovo-performance-host/v2",
+      "totalMemoryBytes": 16766414848
+    },
+    "locks": {
+      "pnpm-lock.yaml": "sha256:b44051d7c24ac90744743140c794ccee83991dd07d2e15d2e893fcc3d2b6d0a4",
+      "benchmarks/nextjs/pnpm-lock.yaml": "sha256:a9e68be4a032b6e2cc40a5f5392f942d14eae0277b6fc93408446b61d565086b",
+      "benchmarks/harness/pnpm-lock.yaml": "sha256:bfbf3b2e8725c5ef8a844f62c0907a154a1d5f68af4ff6ec26a91658d1227663"
+    },
+    "sourceCommit": "01b2c759468f41a3fc4739225eb13c8f5aa11406",
+    "workloadIdentity": {
+      "complete": true,
+      "digest": "sha256:9fed31834b66d7dedbdcf66056655960dc563c06066997d25e1fcb9b68473d40",
+      "identity": {
+        "adapters": {
+          "perfGate": "kovo-perf-report/v1",
+          "workload": "kovo-realistic-workload/v1"
+        },
+        "cells": [
+          "check-scaling"
+        ],
+        "policies": {
+          "hostLoadCeilingPerCpu": 1,
+          "hostSettleMaxTotalMs": 30000,
+          "hostSettlePollMs": 1000,
+          "ladder": [
+            8,
+            24,
+            72,
+            216
+          ],
+          "samplesPerRung": 1
+        }
+      },
+      "schema": "kovo-performance-workload-identity/v1"
+    }
+  },
+  "verdict": {
+    "reasons": [],
+    "status": "ratified"
+  }
+}

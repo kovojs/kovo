@@ -1,0 +1,57 @@
+{
+  "budget": "sha256:88da281b4f1a792a15d954d5cd46e4fee2b17406b9c07dd2e20d95dc05991697",
+  "candidate": {
+    "execution": "sha256:4e11bfd24cd1e69909ab2404b2b77e45be536974d14b20b431b24565a6ea87dd",
+    "sourceCommit": "01b2c759468f41a3fc4739225eb13c8f5aa11406"
+  },
+  "checks": [
+    {
+      "id": "check.appSourceTrust.marginalScalingExponent.ratified-p95",
+      "kind": "regression",
+      "limit": 1.0731778508738916,
+      "observed": 0.9838026996659869,
+      "status": "pass"
+    },
+    {
+      "id": "check.appSourceTrust.marginalScalingExponent.absolute-target",
+      "kind": "target",
+      "limit": 1.3,
+      "observed": 0.9838026996659869,
+      "status": "pass"
+    },
+    {
+      "id": "check.peakRssBytes.ratified-p95",
+      "kind": "regression",
+      "limit": 3297737318.4,
+      "observed": 3113451520,
+      "status": "pass"
+    },
+    {
+      "id": "check.peakRssBytes.absolute-target",
+      "kind": "target",
+      "limit": 3221225472,
+      "observed": 3113451520,
+      "status": "pass"
+    },
+    {
+      "id": "check.total.marginalScalingExponent.ratified-p95",
+      "kind": "regression",
+      "limit": 0.6853568888354705,
+      "observed": 0.6244530615165624,
+      "status": "pass"
+    },
+    {
+      "id": "check.total.marginalScalingExponent.absolute-target",
+      "kind": "target",
+      "limit": 1,
+      "observed": 0.6244530615165624,
+      "status": "pass"
+    }
+  ],
+  "schema": "kovo-check-performance-evaluation/v1",
+  "verdict": {
+    "failures": [],
+    "reasons": [],
+    "status": "pass"
+  }
+}

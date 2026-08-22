@@ -8,18 +8,78 @@ name: Perf Realistic Tier
 # green. This workflow is the other tier. Its workload's module count is a parameter, and it is
 # ALLOWED TO FAIL LOUDLY: it is not a release gate and it blocks nothing.
 #
-# It is scheduled rather than per-PR because the check-scaling ladder runs `kovo check` at N=216,
-# and because its throughput and edit-loop cells are wall-clock measurements that a shared hosted
-# runner cannot make honestly. Those cells report `unproven` above their load ceiling rather than
-# failing; the byte and scaling-exponent cells are deterministic or ratio-based and are gated
-# unconditionally. Every budget it enforces was calibrated from recorded samples — see the
-# `rationale` on each metric in perf-budgets.json.
+# The deterministic byte gate and a bounded matched-fixture correctness smoke run on every PR.
+# N=216 check/dev/build, browser, and throughput measurements remain scheduled: every job records
+# its exact runner-image/host fingerprint and reports `unproven` above the load ceiling. Raw reports
+# are retained even on failure; no dirty, null, wrong-posture, short, or identity-mismatched run can
+# update a reviewed budget (plans/good-perf.md Phase 4).
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
   schedule:
     - cron: '41 5 * * *'
   workflow_dispatch:
     inputs:
+      measurement_scope:
+        description: Select publishable baseline matrices, candidate decisions, or both
+        required: true
+        default: baselines
+        type: choice
+        options:
+          - baselines
+          - decisions
+          - all
+      baseline_focus:
+        description: Select one baseline family for a retry, or all baseline families
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - check
+          - browser
+          - dev-n24
+          - dev-n216
+          - build-n24
+          - build-n216
+          - server
+      baseline_cpu_model_sha256:
+        description: Optional exact lowercase SHA-256 of Node os.cpus()[0].model
+        required: false
+        type: string
+      decision_focus:
+        description: Select one candidate decision, or all candidate decisions
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - check-watch
+          - loader
+          - dev-generation
+          - build-package-snapshot
+          - compressed-cache
+          - cli-startup
+          - runtime-diagnostics
+          - dev-profile
+          - build-profile
+      check_watch_baseline_sha:
+        description: Exact clean sealed baseline commit; required when decisions run
+        required: false
+        type: string
+      check_watch_candidate_sha:
+        description: Exact clean sealed candidate commit; required when decisions run
+        required: false
+        type: string
+      loader_baseline_sha:
+        description: Exact loader candidate parent; required when decisions run
+        required: false
+        type: string
+      loader_candidate_sha:
+        description: Exact loader production candidate; required when decisions run
+        required: false
+        type: string
       components:
         description: Component count for the byte suite
         required: false
@@ -35,21 +95,74 @@ permissions:
   contents: read
 
 concurrency:
-  group: perf-realistic-${{ github.ref }}
-  cancel-in-progress: true
+  # A manual dispatch or maintainer-applied perf-measure label is an explicitly requested evidence
+  # sample, so independent samples use their run IDs. Schedule and ordinary PR runs retain the ref
+  # key and therefore serialize with an earlier run for that ref instead of adding host contention.
+  group: perf-realistic-${{ (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && startsWith(github.event.label.name, 'perf-measure-'))) && github.run_id || github.ref }}
+  cancel-in-progress: false
 
 env:
+  # pull_request's github.sha is the synthetic merge commit. Measurements instead execute the
+  # immutable feature-head subject while retaining GITHUB_SHA separately as the event identity.
+  KOVO_PERF_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
   NODE_OPTIONS: --experimental-transform-types --disable-warning=ExperimentalWarning
+  PLAYWRIGHT_VERSION: 1.60.0
 
 jobs:
+  correctness-smoke:
+    name: Matched fixture correctness
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-24.04
+    # Equivalent same-action hosted Chromium installs exceeded 60 minutes before this unchanged
+    # 3–4-minute matched proof. Keep the PR smoke bounded with explicit completion headroom.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - uses: ./.github/actions/kovo-setup
+      - name: Install isolated benchmark dependencies
+        run: |
+          vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile
+          vp exec pnpm --dir benchmarks/harness install --ignore-workspace --frozen-lockfile
+      - uses: ./.github/actions/playwright-install
+        with:
+          browsers: chromium
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
+      - name: Prove both emitted matched L0/L1 behaviors
+        run: >-
+          vp exec node benchmarks/compare.mjs
+          --cells browser
+          --lanes matched-l0,matched-l1
+          --iterations 2
+          --warmups 0
+          --skip-lighthouse
+          --bfcache-iterations 2
+          --out-dir "$RUNNER_TEMP/kovo-perf/correctness-smoke"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-correctness-smoke
+          path: ${{ runner.temp }}/kovo-perf/correctness-smoke
+          retention-days: 14
+
   bytes:
     name: Production bytes
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Measure critical-path, navigation and bootstrap bytes
         # Dispatch inputs reach the command through env, never through direct `${{ }}`
@@ -81,13 +194,35 @@ jobs:
 
   check-scaling:
     name: Check scaling
+    if: >-
+      ${{ github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      github.event.label.name == 'perf-measure-baselines') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - name: Admit requested baseline CPU model
+        uses: ./.github/actions/kovo-perf-baseline-cpu-admission
+        env:
+          KOVO_PERF_BASELINE_FAMILY: check
+          KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
       - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       # The gated statistic is the growth exponent between the two largest rungs, which is a ratio
       # taken within a single session, so it survives a contended runner far better than any
       # absolute duration would. Peak RSS is also collected here and has the least headroom of any
@@ -101,6 +236,7 @@ jobs:
           vp exec node scripts/perf-gate.mjs
           --suite check-scaling
           --ladder "$KOVO_PERF_LADDER"
+          --samples 1
           --out "$RUNNER_TEMP/kovo-perf/check-scaling.json"
       - name: Evaluate against perf-budgets.json
         # `shell: bash` runs with `set -eo pipefail`, so a budget failure survives the `| tee` pipe.
@@ -116,4 +252,931 @@ jobs:
           if-no-files-found: warn
           name: kovo-perf-check-scaling
           path: ${{ runner.temp }}/kovo-perf/check-scaling.json
-          retention-days: 14
+          retention-days: 90
+
+  browser-matrix:
+    name: Browser matrix
+    if: >-
+      ${{ github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      github.event.label.name == 'perf-measure-baselines') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        timeout-minutes: 3
+        with:
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        timeout-minutes: 1
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - name: Admit requested baseline CPU model
+        uses: ./.github/actions/kovo-perf-baseline-cpu-admission
+        timeout-minutes: 1
+        env:
+          KOVO_PERF_BASELINE_FAMILY: browser
+          KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      - uses: ./.github/actions/kovo-setup
+        timeout-minutes: 5
+      - name: Bind the report to the runner image
+        timeout-minutes: 1
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Install isolated benchmark dependencies
+        timeout-minutes: 5
+        run: |
+          vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile
+          vp exec pnpm --dir benchmarks/harness install --ignore-workspace --frozen-lockfile
+      - uses: ./.github/actions/playwright-install
+        timeout-minutes: 45
+        with:
+          browsers: chromium
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml', 'benchmarks/harness/pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
+      - name: Collect default and matched browser evidence
+        timeout-minutes: 285
+        run: >-
+          vp exec node benchmarks/compare.mjs
+          --cells browser
+          --iterations 30
+          --warmups 3
+          --lighthouse-runs 5
+          --bfcache-iterations 10
+          --out-dir "$RUNNER_TEMP/kovo-perf/browser"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        timeout-minutes: 3
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-browser-matrix
+          path: ${{ runner.temp }}/kovo-perf/browser
+          retention-days: 90
+
+  dev-matrix:
+    name: N=${{ matrix.corpus }} developer loop
+    if: >-
+      ${{ github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      github.event.label.name == 'perf-measure-baselines') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        corpus: ${{ fromJSON(inputs.baseline_focus == 'dev-n24' && '[24]' || inputs.baseline_focus == 'dev-n216' && '[216]' || '[24,216]') }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - name: Admit requested baseline CPU model
+        uses: ./.github/actions/kovo-perf-baseline-cpu-admission
+        env:
+          KOVO_PERF_BASELINE_FAMILY: dev-n${{ matrix.corpus }}
+          KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Install the isolated Next.js benchmark
+        run: vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile
+      - uses: ./.github/actions/playwright-install
+        with:
+          browsers: chromium
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
+      - name: Generate the matched corpus
+        env:
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: vp exec node benchmarks/corpora/generate.mjs --sizes "$KOVO_PERF_CORPUS_SIZE"
+      - name: Collect ready, edit, diagnostic, recovery and RSS evidence
+        env:
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: >-
+          vp exec node benchmarks/compare.mjs
+          --cells dev
+          --corpus-size "$KOVO_PERF_CORPUS_SIZE"
+          --dev-ready-iterations 15
+          --dev-iterations 30
+          --dev-warmups 3
+          --out-dir "$RUNNER_TEMP/kovo-perf/dev-n$KOVO_PERF_CORPUS_SIZE"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-dev-n${{ matrix.corpus }}
+          path: ${{ runner.temp }}/kovo-perf/dev-n${{ matrix.corpus }}
+          retention-days: 90
+
+  build-matrix:
+    name: N=${{ matrix.corpus }} production builds
+    if: >-
+      ${{ github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      github.event.label.name == 'perf-measure-baselines') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        corpus: ${{ fromJSON(inputs.baseline_focus == 'build-n24' && '[24]' || inputs.baseline_focus == 'build-n216' && '[216]' || '[24,216]') }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - name: Admit requested baseline CPU model
+        uses: ./.github/actions/kovo-perf-baseline-cpu-admission
+        env:
+          KOVO_PERF_BASELINE_FAMILY: build-n${{ matrix.corpus }}
+          KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Install the isolated Next.js benchmark
+        run: vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile
+      - name: Generate the matched corpus
+        env:
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: vp exec node benchmarks/corpora/generate.mjs --sizes "$KOVO_PERF_CORPUS_SIZE"
+      - name: Collect clean, unchanged and one-line-edit build evidence
+        env:
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: >-
+          vp exec node benchmarks/compare.mjs
+          --cells build
+          --corpus-size "$KOVO_PERF_CORPUS_SIZE"
+          --iterations 10
+          --warmups 3
+          --out-dir "$RUNNER_TEMP/kovo-perf/build-n$KOVO_PERF_CORPUS_SIZE"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-build-n${{ matrix.corpus }}
+          path: ${{ runner.temp }}/kovo-perf/build-n${{ matrix.corpus }}
+          retention-days: 90
+
+  server-matrix:
+    name: Matched production throughput
+    if: >-
+      ${{ github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      github.event.label.name == 'perf-measure-baselines') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - name: Admit requested baseline CPU model
+        uses: ./.github/actions/kovo-perf-baseline-cpu-admission
+        env:
+          KOVO_PERF_BASELINE_FAMILY: server
+          KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Install the isolated Next.js benchmark
+        run: vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile
+      - name: Collect the complete alternating server matrix
+        # The 504 fixed measurement windows consume 168 minutes. One 30-second quiet-host settle
+        # budget is shared by the whole suite; it cannot multiply per window. The outer timeout
+        # leaves thirty minutes for artifact upload before the job-level 360-minute cap.
+        run: >-
+          timeout --signal=TERM --kill-after=30s 330m
+          vp exec node benchmarks/compare.mjs
+          --cells server
+          --server-samples 7
+          --server-warmup-ms 5000
+          --server-duration-ms 15000
+          --server-host-settle-max-ms 30000
+          --server-concurrencies 1,8,32
+          --server-routes listing,detail
+          --server-encodings identity,br
+          --server-modes HIT,304,dynamic
+          --out-dir "$RUNNER_TEMP/kovo-perf/server"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-server-matrix
+          path: ${{ runner.temp }}/kovo-perf/server
+          retention-days: 90
+
+  check-watch-decision:
+    name: Check-watch candidate decision
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'check-watch')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-check-watch')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+          runner_digest="$({ printf '%s\n' "$ImageOS" "$ImageVersion"; cat /etc/os-release; } | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_DEVEX_OS_IMAGE=github-actions/ubuntu-24.04@sha256:%s\n' "$runner_digest" >> "$GITHUB_ENV"
+          printf 'KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted\n' >> "$GITHUB_ENV"
+      - name: Expose pnpm to authenticated benchmark subprocesses
+        run: |
+          tool_bin="$RUNNER_TEMP/kovo-perf-tool-bin"
+          mkdir -p "$tool_bin"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec vp exec pnpm "$@"' > "$tool_bin/pnpm"
+          chmod 755 "$tool_bin/pnpm"
+          printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
+      - name: Authenticate and prepare exact sealed baseline and candidate scenarios
+        env:
+          KOVO_CHECK_WATCH_BASELINE_SHA: ${{ inputs.check_watch_baseline_sha || 'e3a78ca901035ada82a564943db808255c94ac82' }}
+          KOVO_CHECK_WATCH_CANDIDATE_SHA: ${{ inputs.check_watch_candidate_sha || '2ce61f50b4df290796272e7ea836369e51537e22' }}
+          KOVO_CHECK_WATCH_BASELINE_COMMIT: cc475b3ab2d54ff8201de059e713cc1d7e54400c
+          KOVO_CHECK_WATCH_CANDIDATE_PRODUCTION_COMMIT: 0590083172c0cbdeef4d58219ea384da7cb9f985
+          KOVO_CHECK_WATCH_EVIDENCE_REF: refs/heads/perf-spike/check-watch-repaired-sealed-20260814
+        run: |
+          baseline_root="$RUNNER_TEMP/kovo-check-watch-baseline"
+          candidate_root="$RUNNER_TEMP/kovo-check-watch-candidate"
+          assert_equal() {
+            check_label="$1"
+            expected="$2"
+            actual="$3"
+            if [ "$actual" != "$expected" ]; then
+              printf 'check-watch authentication failed: %s (expected <%s>, got <%s>)\n' "$check_label" "$expected" "$actual" >&2
+              exit 2
+            fi
+          }
+          mkdir -p "$RUNNER_TEMP/kovo-perf/check-watch"
+          case "$KOVO_CHECK_WATCH_BASELINE_SHA" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            *) echo 'check_watch_baseline_sha must be exactly 40 lowercase hexadecimal characters' >&2; exit 2 ;;
+          esac
+          case "$KOVO_CHECK_WATCH_CANDIDATE_SHA" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            *) echo 'check_watch_candidate_sha must be exactly 40 lowercase hexadecimal characters' >&2; exit 2 ;;
+          esac
+          git fetch --no-tags origin \
+            "+$KOVO_CHECK_WATCH_EVIDENCE_REF:refs/perf-evidence/check-watch-sealed"
+          baseline_commit="$(git rev-parse --verify "$KOVO_CHECK_WATCH_BASELINE_SHA^{commit}")"
+          candidate_commit="$(git rev-parse --verify refs/perf-evidence/check-watch-sealed^{commit})"
+          assert_equal 'resolved baseline seal commit' "$KOVO_CHECK_WATCH_BASELINE_SHA" "$baseline_commit"
+          assert_equal 'resolved candidate evidence ref' "$KOVO_CHECK_WATCH_CANDIDATE_SHA" "$candidate_commit"
+          assert_equal 'baseline seal parent' "$KOVO_CHECK_WATCH_BASELINE_COMMIT" "$(git rev-parse "$baseline_commit^")"
+          git diff-tree --no-commit-id --name-only -r "$baseline_commit" | while IFS= read -r seal_path; do
+            case "$seal_path" in
+              packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts|scripts/pack-security.files.json|security/framework-public-runtime-export-posture.json|security/kovo-certificate-policy-v1.json|security/kovo-certificate-v1.json) ;;
+              *) echo "check-watch baseline seal changed unapproved path: $seal_path" >&2; exit 2 ;;
+            esac
+          done
+          assert_equal 'candidate ancestry merge base' "$baseline_commit" "$(git merge-base "$baseline_commit" "$candidate_commit")"
+          candidate_range_count="$(git rev-list --count "$baseline_commit..$candidate_commit")"
+          assert_equal 'candidate sealed range commit count' 2 "$candidate_range_count"
+          production_commit="$(git rev-list --reverse "$baseline_commit..$candidate_commit" | head -n 1)"
+          assert_equal 'candidate production commit' "$KOVO_CHECK_WATCH_CANDIDATE_PRODUCTION_COMMIT" "$production_commit"
+          assert_equal 'production commit parent' "$baseline_commit" "$(git rev-parse "$production_commit^")"
+          assert_equal 'candidate seal parent' "$production_commit" "$(git rev-parse "$candidate_commit^")"
+          sealed_changed_paths="$(git diff --name-only "$baseline_commit" "$production_commit")"
+          assert_equal 'production changed-path count' 7 "$(printf '%s\n' "$sealed_changed_paths" | sed '/^$/d' | wc -l | tr -d ' ')"
+          while IFS= read -r production_path; do
+            case "$production_path" in
+              packages/cli/src/commands/build-export.ts|packages/cli/src/commands/check-session-reuse.test.ts|packages/cli/src/commands/check-session-reuse.ts|packages/cli/src/commands/source-check-session.test.ts|packages/cli/src/commands/source-check-session.ts|packages/cli/src/commands/source-check-watch.test.ts|packages/cli/src/commands/source-check-watch.ts) ;;
+              *) echo "check-watch candidate changed unapproved production path: $production_path" >&2; exit 2 ;;
+            esac
+          done <<< "$sealed_changed_paths"
+          git diff-tree --no-commit-id --name-only -r "$candidate_commit" | while IFS= read -r seal_path; do
+            case "$seal_path" in
+              packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts|scripts/pack-security.files.json|security/framework-public-runtime-export-posture.json|security/kovo-certificate-policy-v1.json|security/kovo-certificate-v1.json) ;;
+              *) echo "check-watch candidate seal changed unapproved path: $seal_path" >&2; exit 2 ;;
+            esac
+          done
+          git worktree add --detach "$baseline_root" "$baseline_commit"
+          git worktree add --detach "$candidate_root" "$candidate_commit"
+          vp exec pnpm --dir "$baseline_root" install --offline --frozen-lockfile --ignore-scripts
+          vp exec pnpm --dir "$candidate_root" install --offline --frozen-lockfile --ignore-scripts
+          KOVO_SOURCE_COMMIT="$baseline_commit" \
+            vp exec node "$baseline_root/scripts/devex-benchmark.mjs" --prepare-kovo-scenario
+          KOVO_SOURCE_COMMIT="$candidate_commit" \
+            vp exec node "$candidate_root/scripts/devex-benchmark.mjs" --prepare-kovo-scenario
+      - name: Run the full serialized check-watch decision
+        run: >-
+          vp exec node scripts/perf-check-watch-spike.mjs
+          --baseline-scenario "$RUNNER_TEMP/kovo-check-watch-baseline/.release/devex/kovo-packed-scenario.json"
+          --baseline-repo "$RUNNER_TEMP/kovo-check-watch-baseline"
+          --spike-scenario "$RUNNER_TEMP/kovo-check-watch-candidate/.release/devex/kovo-packed-scenario.json"
+          --spike-repo "$RUNNER_TEMP/kovo-check-watch-candidate"
+          --samples 30
+          --warmups 3
+          --out "$RUNNER_TEMP/kovo-perf/check-watch/report.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-check-watch-decision
+          path: ${{ runner.temp }}/kovo-perf/check-watch
+          retention-days: 30
+
+  dev-generation-decision:
+    name: N=${{ matrix.corpus }} packed-product dev critical-path candidate decision
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'dev-generation')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-dev-generation')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        corpus: [24, 216]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+      - uses: ./.github/actions/playwright-install
+        with:
+          browsers: chromium
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
+      - name: Expose pnpm to authenticated benchmark subprocesses
+        run: |
+          tool_bin="$RUNNER_TEMP/kovo-perf-tool-bin"
+          mkdir -p "$tool_bin"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec vp exec pnpm "$@"' > "$tool_bin/pnpm"
+          chmod 755 "$tool_bin/pnpm"
+          printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
+      - name: Prepare exact baseline and profile-driven candidate source worktrees
+        env:
+          KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 64abadb44c02d9414ddc684684c67ab1a921fbea
+          KOVO_DEV_GENERATION_CANDIDATE_FIRST_COMMIT: e52ddaf846b8729abcc2d9887ff648429407f86c
+          KOVO_DEV_GENERATION_CANDIDATE_PARENT: 01b2c759468f41a3fc4739225eb13c8f5aa11406
+          KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-query-mode-safe-20260821
+          KOVO_DEV_GENERATION_CANDIDATE_SECOND_COMMIT: 53eef7c028089c6ef8be33594a4626a849c957ca
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: |
+          baseline_root="$RUNNER_TEMP/kovo-dev-generation-n$KOVO_PERF_CORPUS_SIZE-baseline"
+          spike_root="$RUNNER_TEMP/kovo-dev-generation-n$KOVO_PERF_CORPUS_SIZE-spike"
+          mkdir -p "$RUNNER_TEMP/kovo-perf/dev-generation-n$KOVO_PERF_CORPUS_SIZE"
+          git fetch --no-tags origin \
+            "+$KOVO_DEV_GENERATION_CANDIDATE_REF:$KOVO_DEV_GENERATION_CANDIDATE_REF" \
+            "+$KOVO_DEV_GENERATION_CANDIDATE_REF:refs/perf-evidence/dev-generation-candidate"
+          resolved_ref="$(git rev-parse --verify "$KOVO_DEV_GENERATION_CANDIDATE_REF^{commit}")"
+          resolved_candidate="$(git rev-parse --verify refs/perf-evidence/dev-generation-candidate^{commit})"
+          test "$resolved_ref" = "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"
+          test "$resolved_candidate" = "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"
+          test "$(git rev-parse "$KOVO_DEV_GENERATION_CANDIDATE_FIRST_COMMIT^")" = "$KOVO_DEV_GENERATION_CANDIDATE_PARENT"
+          test "$(git rev-parse "$KOVO_DEV_GENERATION_CANDIDATE_SECOND_COMMIT^")" = "$KOVO_DEV_GENERATION_CANDIDATE_FIRST_COMMIT"
+          test "$(git rev-parse "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT^")" = "$KOVO_DEV_GENERATION_CANDIDATE_SECOND_COMMIT"
+          git worktree add --detach "$baseline_root" "$KOVO_DEV_GENERATION_CANDIDATE_PARENT"
+          git worktree add --detach "$spike_root" "$KOVO_DEV_GENERATION_CANDIDATE_PARENT"
+          git -C "$spike_root" \
+            -c user.name='Kovo Performance CI' \
+            -c user.email='performance-ci@kovo.invalid' \
+            -c commit.gpgsign=false \
+            cherry-pick \
+              "$KOVO_DEV_GENERATION_CANDIDATE_FIRST_COMMIT" \
+              "$KOVO_DEV_GENERATION_CANDIDATE_SECOND_COMMIT" \
+              "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"
+          test "$(git -C "$spike_root" rev-parse HEAD~3)" = "$KOVO_DEV_GENERATION_CANDIDATE_PARENT"
+          test "$(git -C "$spike_root" rev-list --count "$KOVO_DEV_GENERATION_CANDIDATE_PARENT..HEAD")" = 3
+          test -z "$(git -C "$baseline_root" status --porcelain=v1 --untracked-files=all)"
+          test -z "$(git -C "$spike_root" status --porcelain=v1 --untracked-files=all)"
+      # The runner prepares/builds/packs/frozen-installs one exact product per source worktree,
+      # then generates and binds a separate deferred-dependency corpus under a fresh external temp
+      # root before any timed block. The workflow must not pre-generate or link a checkout corpus.
+      - name: Run the full packed-product browser-visible critical-path decision
+        env:
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: >-
+          vp exec node scripts/perf-dev-generation-spike.mjs
+          --baseline-root "$RUNNER_TEMP/kovo-dev-generation-n$KOVO_PERF_CORPUS_SIZE-baseline"
+          --spike-root "$RUNNER_TEMP/kovo-dev-generation-n$KOVO_PERF_CORPUS_SIZE-spike"
+          --size "$KOVO_PERF_CORPUS_SIZE"
+          --ready-samples 15
+          --ready-timeout-ms 600000
+          --edit-samples 30
+          --warmups 3
+          --timeout-ms 3600000
+          --measure
+          --out "$RUNNER_TEMP/kovo-perf/dev-generation-n$KOVO_PERF_CORPUS_SIZE/report.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-dev-generation-n${{ matrix.corpus }}
+          path: ${{ runner.temp }}/kovo-perf/dev-generation-n${{ matrix.corpus }}
+          retention-days: 30
+
+  build-package-snapshot-decision:
+    name: N=${{ matrix.corpus }} build package-snapshot candidate decision
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'build-package-snapshot')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-build-package-snapshot')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        corpus: [24, 216]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Expose pnpm to authenticated benchmark subprocesses
+        run: |
+          tool_bin="$RUNNER_TEMP/kovo-perf-tool-bin"
+          mkdir -p "$tool_bin"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec vp exec pnpm "$@"' > "$tool_bin/pnpm"
+          chmod 755 "$tool_bin/pnpm"
+          printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
+      - name: Prepare exact package-snapshot parent and candidate worktrees
+        env:
+          KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_COMMIT: ef242a30662b767fec6f44bd23dfeeb700bd5c66
+          KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_PARENT: 81742e2285dda9f5419bb4531ed83b5dbfe0bb1c
+          KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF: refs/heads/perf-spike/build-package-snapshot-sealed-20260822
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: |
+          baseline_root="$RUNNER_TEMP/kovo-build-package-snapshot-n$KOVO_PERF_CORPUS_SIZE-baseline"
+          spike_root="$RUNNER_TEMP/kovo-build-package-snapshot-n$KOVO_PERF_CORPUS_SIZE-spike"
+          mkdir -p "$RUNNER_TEMP/kovo-perf/build-package-snapshot-n$KOVO_PERF_CORPUS_SIZE"
+          git fetch --no-tags origin \
+            "+$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF:$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF" \
+            "+$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF:refs/perf-evidence/build-package-snapshot-candidate"
+          resolved_candidate="$(git rev-parse --verify refs/perf-evidence/build-package-snapshot-candidate^{commit})"
+          resolved_parent="$(git rev-parse --verify "$resolved_candidate^")"
+          test "$resolved_candidate" = "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_COMMIT"
+          test "$resolved_parent" = "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_PARENT"
+          test "$(git rev-parse --verify "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF^{commit}")" = "$resolved_candidate"
+          git worktree add --detach "$baseline_root" "$resolved_parent"
+          git worktree add --detach "$spike_root" "$resolved_candidate"
+          test "$(git -C "$baseline_root" rev-parse HEAD)" = "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_PARENT"
+          test "$(git -C "$spike_root" rev-parse HEAD)" = "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_COMMIT"
+          test "$(git -C "$spike_root" rev-parse HEAD^)" = "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_PARENT"
+          test "$(git -C "$spike_root" rev-list --count "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_PARENT..HEAD")" = 1
+          test -z "$(git -C "$baseline_root" status --porcelain=v1 --untracked-files=all)"
+          test -z "$(git -C "$spike_root" status --porcelain=v1 --untracked-files=all)"
+          test "$(git rev-parse --verify "$KOVO_BUILD_PACKAGE_SNAPSHOT_CANDIDATE_REF^{commit}")" = "$resolved_candidate"
+      - name: Run five serialized B,S,S,B clean-build repetitions
+        env:
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: >-
+          vp exec node scripts/perf-build-source-trust-spike.mjs
+          --baseline-root "$RUNNER_TEMP/kovo-build-package-snapshot-n$KOVO_PERF_CORPUS_SIZE-baseline"
+          --spike-root "$RUNNER_TEMP/kovo-build-package-snapshot-n$KOVO_PERF_CORPUS_SIZE-spike"
+          --size "$KOVO_PERF_CORPUS_SIZE"
+          --repetitions 5
+          --install-timeout-ms 600000
+          --timeout-ms 1800000
+          --measure
+          --out "$RUNNER_TEMP/kovo-perf/build-package-snapshot-n$KOVO_PERF_CORPUS_SIZE/report.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-build-package-snapshot-n${{ matrix.corpus }}
+          path: ${{ runner.temp }}/kovo-perf/build-package-snapshot-n${{ matrix.corpus }}
+          retention-days: 30
+
+  compressed-cache-decision:
+    name: Proved-document compression-cache decision
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'compressed-cache')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-compressed-cache')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Run the full alternating compression-cache matrix
+        run: |
+          mkdir -p "$RUNNER_TEMP/kovo-perf/compressed-cache"
+          vp exec node scripts/perf-compressed-cache-ab.mjs \
+            --out "$RUNNER_TEMP/kovo-perf/compressed-cache/report.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-compressed-cache-decision
+          path: ${{ runner.temp }}/kovo-perf/compressed-cache
+          retention-days: 30
+
+  cli-startup-decision:
+    name: Packed CLI startup decision
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'cli-startup')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-cli-startup')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - uses: ./.github/actions/kovo-setup
+      - name: Expose pnpm to authenticated benchmark subprocesses
+        run: |
+          tool_bin="$RUNNER_TEMP/kovo-perf-tool-bin"
+          mkdir -p "$tool_bin"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec vp exec pnpm "$@"' > "$tool_bin/pnpm"
+          chmod 755 "$tool_bin/pnpm"
+          printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
+      - name: Bind the report to the runner image
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Run the full packed-versus-source startup measurement
+        run: |
+          mkdir -p "$RUNNER_TEMP/kovo-perf/cli-startup"
+          vp exec node scripts/perf-cli-startup-benchmark.mjs \
+            --packed-fast-budget-ms 1000 \
+            --out "$RUNNER_TEMP/kovo-perf/cli-startup/report.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-cli-startup-decision
+          path: ${{ runner.temp }}/kovo-perf/cli-startup
+          retention-days: 30
+
+  runtime-diagnostics:
+    name: Current forced-dynamic and route-CSS diagnostics
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'runtime-diagnostics')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-runtime-diagnostics')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Profile the current forced-dynamic listing route
+        run: |
+          mkdir -p "$RUNNER_TEMP/kovo-perf/runtime-diagnostics"
+          vp exec node scripts/perf-server-profile.mjs \
+            --route listing \
+            --warmup-ms 5000 \
+            --duration-ms 15000 \
+            --profile-out "$RUNNER_TEMP/kovo-perf/runtime-diagnostics/forced-dynamic.cpuprofile" \
+            --out "$RUNNER_TEMP/kovo-perf/runtime-diagnostics/forced-dynamic.json"
+      - name: Measure the deterministic route-CSS counterfactual
+        run: >-
+          vp exec node scripts/perf-route-css.mjs
+          --out "$RUNNER_TEMP/kovo-perf/runtime-diagnostics/route-css.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-runtime-diagnostics
+          path: ${{ runner.temp }}/kovo-perf/runtime-diagnostics
+          retention-days: 30
+
+  dev-edit-profile:
+    name: N=${{ matrix.corpus }} dev edit-to-paint diagnostic
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'dev-profile')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-dev-profile')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        corpus: [24, 216]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+      - uses: ./.github/actions/playwright-install
+        with:
+          browsers: chromium
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
+      - name: Generate the authenticated Kovo corpus
+        env:
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: vp exec node benchmarks/corpora/generate.mjs --sizes "$KOVO_PERF_CORPUS_SIZE"
+      - name: Collect diagnostic-only CPU and allocation profiles
+        # scripts/perf-dev-edit-profile.mjs owns these Inspector windows. The profiled durations are
+        # deliberately not candidate-acceptance evidence; ordinary unprofiled matrices own latency.
+        env:
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: |
+          output_root="$RUNNER_TEMP/kovo-perf/dev-profile-n$KOVO_PERF_CORPUS_SIZE"
+          mkdir -p "$output_root/raw"
+          case "$KOVO_PERF_CORPUS_SIZE" in
+            24|216) ;;
+            *) echo 'unsupported profiled corpus size' >&2; exit 2 ;;
+          esac
+          # Derive globally distinct exact ports below Linux's default 32768 ephemeral floor. The
+          # adapter authenticates the actual Linux/macOS kernel ranges and refuses any overlap.
+          dev_port=$((20000 + KOVO_PERF_CORPUS_SIZE))
+          inspector_port=$((21000 + KOVO_PERF_CORPUS_SIZE))
+          benchmark_status=0
+          vp exec node benchmarks/corpora/dev-loop.mjs \
+            --manifest "$GITHUB_WORKSPACE/benchmarks/kovo/.corpora/kovo/n$KOVO_PERF_CORPUS_SIZE/manifest.json" \
+            --iterations 3 \
+            --ready-iterations 1 \
+            --warmups 3 \
+            --port "$dev_port" \
+            --inspector-port "$inspector_port" \
+            --ready-timeout-ms 600000 \
+            --profile-dir "$output_root/raw" \
+            --out "$output_root/report.json" || benchmark_status=$?
+          audit_status=0
+          vp exec node scripts/perf-dev-edit-profile-audit.mjs \
+            --report "$output_root/report.json" \
+            --profile-dir "$output_root/raw" \
+            --out "$output_root/audit.json" \
+            --require-provider github-actions || audit_status=$?
+          test "$benchmark_status" -eq 0
+          test "$audit_status" -eq 0
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-dev-profile-n${{ matrix.corpus }}
+          path: ${{ runner.temp }}/kovo-perf/dev-profile-n${{ matrix.corpus }}
+          retention-days: 30
+
+  build-profile:
+    name: N=216 build CPU profiles
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'build-profile')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-build-profile')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - name: Admit requested baseline CPU model
+        uses: ./.github/actions/kovo-perf-baseline-cpu-admission
+        env:
+          KOVO_PERF_BASELINE_FAMILY: build-n216
+          KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      - uses: ./.github/actions/kovo-setup
+      - name: Provision the process-tree tracer
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends strace
+          test "$(command -v strace)" = /usr/bin/strace
+      - name: Bind the report to the runner image
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Generate the authenticated N=216 Kovo corpus
+        run: vp exec node benchmarks/corpora/generate.mjs --sizes 216
+      - name: Collect diagnostic-only warm-build process profiles
+        # SPEC §5.2 rule 9: this runs the ordinary one-shot build for every warmup and profiled
+        # sample. Profiled durations are intentionally absent from the report and decision policy.
+        run: >-
+          vp exec node scripts/perf-build-session-profile.mjs
+          --corpus "$GITHUB_WORKSPACE/benchmarks/kovo/.corpora/kovo/n216/manifest.json"
+          --out-dir "$RUNNER_TEMP/kovo-perf/build-profile-n216"
+          --require-provider github-actions
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-build-profile-n216
+          path: ${{ runner.temp }}/kovo-perf/build-profile-n216
+          retention-days: 30
+
+  loader-runtime-memo-decision:
+    name: Loader-runtime memo candidate decision
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'loader')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-loader')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Expose pnpm to authenticated benchmark subprocesses
+        run: |
+          tool_bin="$RUNNER_TEMP/kovo-perf-tool-bin"
+          mkdir -p "$tool_bin"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec vp exec pnpm "$@"' > "$tool_bin/pnpm"
+          chmod 755 "$tool_bin/pnpm"
+          printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
+      - name: Authenticate historical evidence and prepare exact candidate worktrees
+        env:
+          KOVO_LOADER_BASELINE_SHA: ${{ inputs.loader_baseline_sha || '3010e8df33869413727003c659bb555ac824d104' }}
+          KOVO_LOADER_CANDIDATE_SHA: ${{ inputs.loader_candidate_sha || 'd87b4a1320087c512e25f02a57e88920ae9b1777' }}
+          KOVO_LOADER_HISTORICAL_COMMIT: e54c595b5906df9ab9b9b5e3fbf18e76c99e79b9
+          KOVO_LOADER_HISTORICAL_REF: refs/heads/perf-spike/loader-memo-e54c595b5
+          KOVO_LOADER_PROFILED_PAIR_REF: refs/heads/perf-spike/loader-memo-profiled-pair-20260813
+        run: |
+          baseline_root="$RUNNER_TEMP/kovo-loader-runtime-memo-baseline"
+          spike_root="$RUNNER_TEMP/kovo-loader-runtime-memo-spike"
+          mkdir -p "$RUNNER_TEMP/kovo-perf/loader-runtime-memo"
+          case "$KOVO_LOADER_BASELINE_SHA" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            *) echo 'loader_baseline_sha must be exactly 40 lowercase hexadecimal characters' >&2; exit 2 ;;
+          esac
+          case "$KOVO_LOADER_CANDIDATE_SHA" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            *) echo 'loader_candidate_sha must be exactly 40 lowercase hexadecimal characters' >&2; exit 2 ;;
+          esac
+          git fetch --no-tags origin \
+            "+$KOVO_LOADER_HISTORICAL_REF:refs/perf-evidence/loader-memo-historical" \
+            "+$KOVO_LOADER_PROFILED_PAIR_REF:refs/perf-evidence/loader-memo-profiled-pair"
+          resolved_historical="$(git rev-parse --verify refs/perf-evidence/loader-memo-historical^{commit})"
+          test "$resolved_historical" = "$KOVO_LOADER_HISTORICAL_COMMIT"
+          resolved_profiled_pair="$(git rev-parse --verify refs/perf-evidence/loader-memo-profiled-pair^{commit})"
+          test "$resolved_profiled_pair" = "$KOVO_LOADER_CANDIDATE_SHA"
+          baseline_commit="$(git rev-parse --verify "$KOVO_LOADER_BASELINE_SHA^{commit}")"
+          candidate_commit="$(git rev-parse --verify "$KOVO_LOADER_CANDIDATE_SHA^{commit}")"
+          test "$baseline_commit" = "$KOVO_LOADER_BASELINE_SHA"
+          test "$candidate_commit" = "$KOVO_LOADER_CANDIDATE_SHA"
+          test "$(git rev-parse "$candidate_commit^")" = "$baseline_commit"
+          test "$(git merge-base "$baseline_commit" "$candidate_commit")" = "$baseline_commit"
+          test "$(git rev-list --count "$baseline_commit..$candidate_commit")" = 1
+          git merge-base --is-ancestor "$candidate_commit" "$KOVO_PERF_SOURCE_SHA"
+          git worktree add --detach "$baseline_root" "$baseline_commit"
+          git worktree add --detach "$spike_root" "$candidate_commit"
+          test "$(git -C "$baseline_root" rev-parse HEAD)" = "$baseline_commit"
+          test "$(git -C "$spike_root" rev-parse HEAD)" = "$candidate_commit"
+          vp exec pnpm --dir "$baseline_root" install --offline --frozen-lockfile --ignore-scripts
+          vp exec pnpm --dir "$spike_root" install --offline --frozen-lockfile --ignore-scripts
+          vp exec node scripts/perf-loader-runtime-memo-ab.mjs \
+            --baseline-root "$baseline_root" \
+            --spike-root "$spike_root" \
+            --prepare-only \
+            --profile-dir "$RUNNER_TEMP/kovo-perf/loader-runtime-memo/profiles" \
+            --out "$RUNNER_TEMP/kovo-perf/loader-runtime-memo/prepare.json"
+      - name: Run the full forced-dynamic loader-runtime decision and profiles
+        run: >-
+          vp exec node scripts/perf-loader-runtime-memo-ab.mjs
+          --baseline-root "$RUNNER_TEMP/kovo-loader-runtime-memo-baseline"
+          --spike-root "$RUNNER_TEMP/kovo-loader-runtime-memo-spike"
+          --measure
+          --samples 7
+          --warmup-ms 5000
+          --duration-ms 15000
+          --concurrencies 1,8,32
+          --routes listing,detail
+          --profile-dir "$RUNNER_TEMP/kovo-perf/loader-runtime-memo/profiles"
+          --out "$RUNNER_TEMP/kovo-perf/loader-runtime-memo/report.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-loader-runtime-memo-decision
+          path: ${{ runner.temp }}/kovo-perf/loader-runtime-memo
+          retention-days: 30

@@ -179,7 +179,7 @@ describe('ci-shards', () => {
     );
     const timeoutMinutes = Number(classifierCorpus.match(/timeout-minutes: (\d+)/u)?.[1]);
     expect(timeoutMinutes).toBe(CLASSIFIER_CORPUS_CI_JOB_TIMEOUT_MINUTES);
-    expect(timeoutMinutes * 60_000 - CLASSIFIER_CORPUS_GATE_TIMEOUT_MS).toBe(40 * 60_000);
+    expect(timeoutMinutes * 60_000 - CLASSIFIER_CORPUS_GATE_TIMEOUT_MS).toBe(70 * 60_000);
   });
 
   it('binds the one-shot timeout plan to the exact production trust preflights', async () => {
@@ -434,7 +434,7 @@ describe('ci-shards', () => {
     expect(ROOT_VITEST_SHARD_BUDGET_SECONDS).toBe(50 * 60);
     expect(ROOT_VITEST_SHARD_COUNT / 4).toBe(1.25);
     expect((ROOT_VITEST_SHARD_COUNT * ROOT_VITEST_JOB_TIMEOUT_SECONDS) / 60).toBe(300);
-    expect(rootTestJob).toContain('timeout-minutes: 60');
+    expect(rootTestJob).toContain('timeout-minutes: 120');
     expect(rootTestJob).toContain('shard: [1, 2, 3, 4, 5]');
     expect(rootTestJob).toContain('total: [5]');
     expect(rootTestJob).toContain('.created_at < \\"$run_created_at\\"');
@@ -592,7 +592,7 @@ describe('ci-shards', () => {
     expect(ci).toContain('  static-core:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 90');
     expect(ci).toContain('  paranoid:\n    runs-on: ubuntu-latest');
     expect(ci).toContain(
-      '  starter:\n    needs: starter-packages\n    runs-on: ubuntu-latest\n    timeout-minutes: 40',
+      '  starter:\n    needs: starter-packages\n    runs-on: ubuntu-latest\n    # A degraded hosted Chromium install exceeded 60 minutes on equivalent same-action runners;\n    # the unchanged browser-backed starter proof then needs 13–16 minutes inside its own watchdog.\n    timeout-minutes: 90',
     );
     expect(ci).toContain('name: Validate acceptance ownership and selector coverage');
     expect(nightly).toContain('  starter-security-residual:');

@@ -1,0 +1,1903 @@
+import { createHash } from 'node:crypto';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+import { describe, expect, it } from 'vitest';
+
+import { canonicalJson } from '../scripts/lib/perf-host.mjs';
+import { performanceHostFingerprint } from '../scripts/lib/perf-host.mjs';
+import { devSessionHandoffFindings } from '../scripts/lib/perf-dev-session-evidence.mjs';
+import { BROWSER_PREPARATION_SUPERVISOR_TIMEOUT_MS } from './harness/browser-timeout-policy.mjs';
+import {
+  LIGHTHOUSE_BROWSER_IDENTITY_SCHEMA,
+  LIGHTHOUSE_SAMPLE_FAILURE_SCHEMA,
+  lighthouseTimeoutPolicy,
+} from './harness/lighthouse-policy.mjs';
+import { analyzeNavigationAttribution, sessionBytePhases } from './harness/scenarios.mjs';
+import {
+  BROWSER_FIXTURE_RENDERED_EVIDENCE_SCHEMA,
+  browserFixtureIdentity,
+} from './browser-fixture-identity.mjs';
+import { generateCorpus } from './corpora/generate.mjs';
+import {
+  MATCHED_SERVER_SEMANTIC_SOURCE,
+  matchedServerSemanticContract,
+} from './shared/server-semantic-contract.mjs';
+
+import {
+  bootstrapMedianCi,
+  browserRawMetricCensusFindings,
+  browserReportIntegrityFindings,
+  classifyServerMatrixCells,
+  COMPARE_ADAPTER_FAILURE_SCHEMA,
+  comparisonVerdict,
+  createQuietHostAdmission,
+  devSampleSchedule,
+  EXECUTION_ORDER,
+  fixtureProof,
+  pairedAnalysis,
+  performanceWorkloadIdentity,
+  productArtifactCellFindings,
+  prepareBrowserEntrants,
+  runBrowserComparisonAdapterCell,
+  runChildProcess,
+  runComparison,
+  runDevComparisonAdapterCell,
+  serverSampleSchedule,
+  serverRawMetricCensusFindings,
+  serverSemanticEvidenceFindings,
+  serverSemanticMatrixFindings,
+  summarize,
+  ttiInteractionProof,
+  validateDevCell,
+  validateServerCell,
+  validHostFingerprint,
+} from './compare.mjs';
+
+describe('serialized comparison analysis', () => {
+  it('rejects stale production artifacts before a browser/server comparison starts', async () => {
+    await expect(runComparison({ cells: ['server'], skipBuild: true })).rejects.toThrow(
+      /prepares fresh production artifacts once/u,
+    );
+    await expect(runComparison({ cells: ['browser'], skipBuild: true })).rejects.toThrow(
+      /prepares fresh production artifacts once/u,
+    );
+  });
+
+  it('caps only browser-comparison quiet-host admission at the budgeted 30 seconds', async () => {
+    await expect(runComparison({ cells: ['browser'], hostSettleMaxMs: 30_001 })).rejects.toThrow(
+      /browser comparison quiet-host admission cannot exceed 30000ms/u,
+    );
+    expect(() => createQuietHostAdmission({ maxWaitMs: 60_000, pollMs: 1_000 })).not.toThrow();
+  });
+
+  it('rejects a browser schedule whose supervised maximum exceeds the collect-step cap', async () => {
+    await expect(runComparison({ cells: ['browser'], lighthouseRuns: 6 })).rejects.toThrow(
+      /browser comparison schedule exceeds the enforced collection-step timeout budget/u,
+    );
+  });
+
+  it('pins the alternating K,N,N,K execution order', () => {
+    expect(EXECUTION_ORDER).toEqual(['kovo', 'nextjs', 'nextjs', 'kovo']);
+  });
+
+  it('splits each declared dev total once across K,N,N,K occurrences', () => {
+    const schedule = devSampleSchedule({ editSamples: 30, readySamples: 15, warmups: 3 });
+    expect(schedule).toEqual([
+      {
+        editSamples: 15,
+        framework: 'kovo',
+        occurrence: 0,
+        readySamples: 8,
+        scheduleIndex: 0,
+        warmups: 2,
+      },
+      {
+        editSamples: 15,
+        framework: 'nextjs',
+        occurrence: 0,
+        readySamples: 8,
+        scheduleIndex: 1,
+        warmups: 2,
+      },
+      {
+        editSamples: 15,
+        framework: 'nextjs',
+        occurrence: 1,
+        readySamples: 7,
+        scheduleIndex: 2,
+        warmups: 1,
+      },
+      {
+        editSamples: 15,
+        framework: 'kovo',
+        occurrence: 1,
+        readySamples: 7,
+        scheduleIndex: 3,
+        warmups: 1,
+      },
+    ]);
+    for (const framework of ['kovo', 'nextjs']) {
+      const occurrences = schedule.filter((entry) => entry.framework === framework);
+      expect(occurrences.reduce((total, entry) => total + entry.editSamples, 0)).toBe(30);
+      expect(occurrences.reduce((total, entry) => total + entry.readySamples, 0)).toBe(15);
+      expect(occurrences.reduce((total, entry) => total + entry.warmups, 0)).toBe(3);
+    }
+    expect(() => devSampleSchedule({ editSamples: 1, readySamples: 15, warmups: 3 })).toThrow(
+      /dev edit samples must be an integer from 2 through 100/u,
+    );
+  });
+
+  it('extends K,N,N,K to seven paired server occurrences without concurrency', () => {
+    const schedule = serverSampleSchedule(7);
+    expect(schedule.map((entry) => entry.framework)).toEqual([
+      'kovo',
+      'nextjs',
+      'nextjs',
+      'kovo',
+      'kovo',
+      'nextjs',
+      'nextjs',
+      'kovo',
+      'kovo',
+      'nextjs',
+      'nextjs',
+      'kovo',
+      'kovo',
+      'nextjs',
+    ]);
+    expect(
+      schedule.filter((entry) => entry.framework === 'kovo').map((entry) => entry.occurrence),
+    ).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(
+      schedule.filter((entry) => entry.framework === 'nextjs').map((entry) => entry.occurrence),
+    ).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(() => serverSampleSchedule(0)).toThrow(/between 1 and 100/u);
+  });
+
+  it('separates pre-existing admission from post-benchmark settling', async () => {
+    const samples = [];
+    const loads = [8, 2, 8, 2];
+    let waitedMs = 0;
+    const admission = createQuietHostAdmission({
+      ceiling: 1,
+      maxWaitMs: 100,
+      pollMs: 50,
+      readLoad: () => ({ loadAverage: [loads.shift(), 0, 0], logicalCpuCount: 4 }),
+      samples,
+      wait: async (milliseconds) => {
+        waitedMs += milliseconds;
+      },
+    });
+    const initial = await admission.admit('suite-start');
+    admission.markBenchmarkWork();
+    const afterBenchmark = await admission.admit('matched-l1/browser/kovo/0');
+
+    expect(initial).toMatchObject({
+      comparable: true,
+      loadPerCpu: 0.5,
+      phase: 'quiet-host-admission',
+      posture: 'pre-benchmark',
+      settle: { rejectedObservations: 1, waitedMs: 50 },
+    });
+    expect(afterBenchmark).toMatchObject({
+      comparable: true,
+      loadPerCpu: 0.5,
+      phase: 'quiet-host-settle',
+      posture: 'post-benchmark',
+      settle: { rejectedObservations: 1, waitedMs: 50 },
+    });
+    expect(initial.settle.observations).toHaveLength(2);
+    expect(afterBenchmark.settle.observations).toHaveLength(2);
+    expect(samples).toHaveLength(2);
+    expect(waitedMs).toBe(100);
+    expect(admission.policy()).toMatchObject({ remainingWaitMs: 0, totalWaitedMs: 100 });
+  });
+
+  it('rejects a contaminated host after one total bounded wait across every cell', async () => {
+    const samples = [];
+    let waitedMs = 0;
+    const admission = createQuietHostAdmission({
+      ceiling: 0.5,
+      maxWaitMs: 100,
+      pollMs: 50,
+      readLoad: () => ({ loadAverage: [4, 0, 0], logicalCpuCount: 4 }),
+      samples,
+      wait: async (milliseconds) => {
+        waitedMs += milliseconds;
+      },
+    });
+    const blocked = await admission.admit('suite-start');
+    admission.markBenchmarkWork();
+    const noSecondBudget = await admission.admit('corpus-n216/build-clean/kovo/0');
+
+    expect(blocked).toMatchObject({
+      comparable: false,
+      phase: 'quiet-host-admission',
+      settle: { rejectedObservations: 3, waitedMs: 100 },
+    });
+    expect(noSecondBudget).toMatchObject({
+      comparable: false,
+      phase: 'quiet-host-settle',
+      settle: { maxWaitMs: 0, rejectedObservations: 1, waitedMs: 0 },
+    });
+    expect(waitedMs).toBe(100);
+    expect(samples).toHaveLength(2);
+  });
+
+  it('authenticates a server-only workload without requiring generated dev corpora', async () => {
+    const workload = await performanceWorkloadIdentity(
+      {
+        serverConcurrencies: [1],
+        serverDurationMs: 25,
+        serverEncodings: ['identity'],
+        serverModes: ['HIT'],
+        serverRoutes: ['listing'],
+        serverSamples: 1,
+        serverWarmupMs: 25,
+      },
+      ['server'],
+    );
+    expect(workload).toMatchObject({
+      complete: true,
+      schema: 'kovo-performance-workload-identity/v1',
+      identity: {
+        cells: ['server'],
+        lanes: ['matched-runtime'],
+        policies: {
+          server: {
+            concurrencies: [1],
+            durationMs: 25,
+            encodings: ['identity'],
+            modes: ['HIT'],
+            routes: ['listing'],
+            samples: 1,
+            warmupMs: 25,
+          },
+        },
+        publicationPolicy: {
+          contentDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+          path: 'perf-publication-policy.json',
+          schema: 'kovo-performance-publication-policy/v1',
+        },
+      },
+    });
+    expect(workload.digest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(workload.identity.fixture).toMatchObject({
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+      schema: 'kovo-browser-fixture-identity/v1',
+    });
+    expect(workload.identity.serverSemantic).toMatchObject({
+      contracts: {
+        detail: { sha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u) },
+        listing: { sha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u) },
+      },
+      source: MATCHED_SERVER_SEMANTIC_SOURCE,
+    });
+    expect(workload.digest).toBe(
+      `sha256:${createHash('sha256').update(canonicalJson(workload.identity)).digest('hex')}`,
+    );
+  });
+
+  it('authenticates build sample totals independently from the browser policy', async () => {
+    const workload = await performanceWorkloadIdentity(
+      { cells: ['build'], corpusSize: 24, iterations: 10 },
+      ['build'],
+    );
+    expect(workload.identity.policies).toMatchObject({
+      browserSamples: 10,
+      buildSamples: 10,
+      corpusSize: 24,
+    });
+    expect(workload.identity.lanes).toEqual(['corpus-n24']);
+    expect(workload.identity.productArtifactPolicy).toMatchObject({
+      concreteIdentity: 'report-bound',
+      schema: 'kovo-packed-product-workload-policy/v1',
+    });
+    const laterCommitArtifact = await performanceWorkloadIdentity(
+      {
+        cells: ['build'],
+        corpusSize: 24,
+        iterations: 10,
+        packedProductIdentity: { digest: `sha256:${'f'.repeat(64)}` },
+      },
+      ['build'],
+    );
+    expect(laterCommitArtifact.digest).toBe(workload.digest);
+
+    const firstRoot = await mkdtemp(path.join(os.tmpdir(), 'kovo-packed-workload-first-'));
+    const secondRoot = await mkdtemp(path.join(os.tmpdir(), 'kovo-packed-workload-second-'));
+    const generateManifests = async (outDir) =>
+      Object.fromEntries(
+        await Promise.all(
+          ['kovo', 'nextjs'].map(async (framework) => [
+            framework,
+            await generateCorpus({ dependencyMode: 'deferred', framework, outDir, size: 24 }),
+          ]),
+        ),
+      );
+    try {
+      const [firstManifests, secondManifests] = await Promise.all([
+        generateManifests(firstRoot),
+        generateManifests(secondRoot),
+      ]);
+      const firstExternal = await performanceWorkloadIdentity(
+        {
+          cells: ['build'],
+          corpusManifests: firstManifests,
+          corpusSize: 24,
+          iterations: 10,
+        },
+        ['build'],
+      );
+      const secondExternal = await performanceWorkloadIdentity(
+        {
+          cells: ['build'],
+          corpusManifests: secondManifests,
+          corpusSize: 24,
+          iterations: 10,
+        },
+        ['build'],
+      );
+      expect(firstExternal.complete).toBe(true);
+      expect(firstExternal.identity.corpus.kovo.shapeDigest).toBe(
+        firstExternal.identity.corpus.nextjs.shapeDigest,
+      );
+      expect(secondExternal.complete).toBe(true);
+      expect(secondExternal.identity.corpus.kovo.shapeDigest).toBe(
+        secondExternal.identity.corpus.nextjs.shapeDigest,
+      );
+      expect(secondExternal.digest).toBe(firstExternal.digest);
+    } finally {
+      await Promise.all([
+        rm(firstRoot, { force: true, recursive: true }),
+        rm(secondRoot, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
+  it('requires packed product evidence only on Kovo dev/build cells', () => {
+    const productArtifact = { digest: `sha256:${'a'.repeat(64)}`, schema: 'fixture' };
+    const report = {
+      integrity: {
+        productArtifact: { afterVerified: true, beforeVerified: true, required: true },
+      },
+      productArtifact,
+    };
+    expect(
+      productArtifactCellFindings(
+        { cell: 'build', framework: 'kovo', lane: 'corpus-n24', mode: 'clean', report },
+        productArtifact,
+      ),
+    ).toEqual([]);
+    expect(
+      productArtifactCellFindings(
+        {
+          cell: 'dev',
+          framework: 'nextjs',
+          lane: 'corpus-n24',
+          report: {
+            integrity: {
+              productArtifact: { afterVerified: true, beforeVerified: false, required: false },
+            },
+            productArtifact: null,
+          },
+        },
+        productArtifact,
+      ),
+    ).toEqual([]);
+    expect(
+      productArtifactCellFindings(
+        {
+          cell: 'dev',
+          framework: 'nextjs',
+          lane: 'corpus-n24',
+          report: {
+            integrity: {
+              productArtifact: { afterVerified: true, beforeVerified: true, required: true },
+            },
+            productArtifact: null,
+          },
+        },
+        productArtifact,
+      ),
+    ).toEqual(['corpus-n24/nextjs/dev carried Kovo product evidence']);
+    expect(
+      productArtifactCellFindings(
+        { cell: 'dev', framework: 'nextjs', lane: 'corpus-n24', report },
+        productArtifact,
+      ),
+    ).toEqual(['corpus-n24/nextjs/dev carried Kovo product evidence']);
+    expect(
+      productArtifactCellFindings(
+        {
+          cell: 'build',
+          framework: 'kovo',
+          lane: 'corpus-n24',
+          mode: 'clean',
+          report: { productArtifact: null },
+        },
+        productArtifact,
+      ),
+    ).toEqual(['corpus-n24/kovo/clean packed product evidence is incomplete']);
+    expect(
+      productArtifactCellFindings(
+        {
+          cell: 'dev',
+          framework: 'kovo',
+          lane: 'corpus-n24',
+          report: {
+            ...report,
+            integrity: {
+              productArtifact: { ...report.integrity.productArtifact, afterVerified: false },
+            },
+          },
+        },
+        productArtifact,
+      ),
+    ).toEqual(['corpus-n24/kovo/dev packed product evidence is incomplete']);
+  });
+
+  it('recomputes host digests instead of trusting their presence', () => {
+    const host = performanceHostFingerprint({ runnerImage: 'runner@sha256:fixture' });
+    expect(validHostFingerprint(host)).toBe(true);
+    expect(validHostFingerprint({ ...host, node: 'v0.0.0' })).toBe(false);
+  });
+
+  it('reports raw-summary statistics without dropping sample counts', () => {
+    expect(summarize([1, 2, 3, 4, 100])).toEqual({ mad: 1, median: 3, p95: 100, samples: 5 });
+  });
+
+  it('computes a deterministic paired bootstrap interval', () => {
+    expect(bootstrapMedianCi([1, 2, 3, 4], { iterations: 1_000, seed: 42 })).toEqual([1, 4]);
+  });
+
+  it('pairs raw browser samples by lane/cell/metric', () => {
+    const cells = [
+      browserCell('kovo', 0, [10, 12]),
+      browserCell('nextjs', 0, [20, 22]),
+      browserCell('nextjs', 1, [40]),
+      browserCell('kovo', 1, [30]),
+    ];
+    const analysis = pairedAnalysis(cells, { bootstrapIterations: 100, seed: 3 });
+    expect(analysis['matched-l1/browser//desktop.navigation.navToPaintMs']).toMatchObject({
+      kovo: { median: 12, samples: 3 },
+      nextjs: { median: 22, samples: 3 },
+      pairedDifference: { direction: 'kovo-minus-nextjs', median: -10, samples: 3 },
+    });
+  });
+
+  it('surfaces raw Lighthouse and bfcache samples in browser analysis', () => {
+    const cell = (framework, occurrence, base, count) => ({
+      ...browserCell(
+        framework,
+        occurrence,
+        Array.from({ length: count }, () => base),
+      ),
+      report: {
+        apps: [
+          {
+            bfcache: {
+              iterations: Array.from({ length: count }, (_, index) => ({
+                applicable: framework === 'kovo',
+                evidenceComplete: true,
+                restored: framework === 'kovo' && index % 2 === 0,
+              })),
+            },
+            conditions: {
+              desktop: {
+                navigation: {
+                  iterations: Array.from({ length: count }, () => ({ navToPaintMs: base })),
+                },
+              },
+            },
+            integrity: { policy: { listingPath: '/matched/l1' } },
+            lighthouse: [
+              {
+                formFactor: 'mobile',
+                path: '/matched/l1',
+                samples: Array.from({ length: count }, (_, index) => ({
+                  fcpMs: base + index,
+                  lcpMs: base + 10 + index,
+                })),
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const analysis = pairedAnalysis(
+      [
+        cell('kovo', 0, 100, 3),
+        cell('nextjs', 0, 200, 3),
+        cell('nextjs', 1, 400, 2),
+        cell('kovo', 1, 300, 2),
+      ],
+      { bootstrapIterations: 100, seed: 31 },
+    );
+
+    expect(analysis['matched-l1/browser//lighthouse.mobile.listing.fcpMs'].kovo).toMatchObject({
+      median: 102,
+      samples: 5,
+    });
+    expect(analysis['matched-l1/browser//bfcache.evidenceComplete'].kovo).toMatchObject({
+      median: 1,
+      samples: 5,
+    });
+    expect(analysis['matched-l1/browser//bfcache.applicable'].nextjs).toMatchObject({
+      median: 0,
+      samples: 5,
+    });
+  });
+
+  it('pairs dev edit and independent fresh-ready samples', () => {
+    const cells = [
+      devCell('kovo', 0, [10, 12], [100]),
+      devCell('nextjs', 0, [20, 22], [200]),
+      devCell('nextjs', 1, [40], [400]),
+      devCell('kovo', 1, [30], [300]),
+    ];
+    const analysis = pairedAnalysis(cells, { bootstrapIterations: 100, seed: 4 });
+    expect(analysis['corpus-n24/dev//edit.leafMs'].pairedDifference).toMatchObject({
+      median: -10,
+      samples: 3,
+    });
+    expect(analysis['corpus-n24/dev//ready.durationMs'].pairedDifference).toMatchObject({
+      median: -100,
+      samples: 2,
+    });
+  });
+
+  it('surfaces dev state, diagnostic availability, and edit-session RSS as measured series', () => {
+    const complete = (framework, occurrence, base) => ({
+      cell: 'dev',
+      framework,
+      lane: 'corpus-n24',
+      occurrence,
+      report: {
+        editSession: { peakRssBytes: base * 1_000 },
+        readySamples: [{ durationMs: base * 10, peakRssBytes: base * 100, success: true }],
+        samples: [
+          {
+            dataMs: base,
+            dataStateSurvived: true,
+            entryMs: base,
+            entryStateSurvived: true,
+            leafMs: base,
+            leafStateSurvived: true,
+            recoveryMs: base,
+            recoveryStateSurvived: true,
+            syntaxErrorDiagnosticSignal: 'overlay:parse error',
+            syntaxErrorMs: base,
+            syntaxErrorStateSurvived: true,
+          },
+        ],
+      },
+    });
+    const analysis = pairedAnalysis(
+      [
+        complete('kovo', 0, 10),
+        complete('nextjs', 0, 20),
+        complete('nextjs', 1, 40),
+        complete('kovo', 1, 30),
+      ],
+      { bootstrapIterations: 100, seed: 5 },
+    );
+    expect(analysis['corpus-n24/dev//edit.peakRssBytes'].kovo).toMatchObject({
+      median: 10_000,
+      samples: 2,
+    });
+    expect(analysis['corpus-n24/dev//edit.leafStateSurvived'].kovo).toMatchObject({
+      median: 1,
+      samples: 2,
+    });
+    expect(analysis['corpus-n24/dev//edit.syntaxErrorDiagnosticAvailable'].kovo).toMatchObject({
+      median: 1,
+      samples: 2,
+    });
+    expect(analysis['corpus-n24/dev//ready.successAvailable'].kovo).toMatchObject({
+      median: 1,
+      samples: 2,
+    });
+  });
+
+  it('omits partially observed dev spans instead of presenting short analysis as a baseline', () => {
+    const cell = (framework, values) => ({
+      cell: 'dev',
+      framework,
+      lane: 'corpus-n24',
+      occurrence: 0,
+      report: {
+        readySamples: [],
+        samples: values.map(([leafMs, leafServerGenerationMs]) => ({
+          leafMs,
+          leafServerGenerationMs,
+        })),
+      },
+    });
+    const analysis = pairedAnalysis(
+      [
+        cell('kovo', [
+          [10, 5],
+          [11, null],
+        ]),
+        cell('nextjs', [
+          [20, 7],
+          [21, null],
+        ]),
+      ],
+      { bootstrapIterations: 100, seed: 6 },
+    );
+    expect(analysis['corpus-n24/dev//edit.leafMs'].kovo.samples).toBe(2);
+    expect(Object.hasOwn(analysis, 'corpus-n24/dev//edit.leafServerGenerationMs')).toBe(false);
+  });
+
+  it('pairs all seven single-sample server occurrences', () => {
+    const cells = [];
+    for (let occurrence = 0; occurrence < 7; occurrence += 1) {
+      cells.push(serverCell('kovo', occurrence, 100 + occurrence));
+      cells.push(serverCell('nextjs', occurrence, 90 + occurrence));
+    }
+    const analysis = pairedAnalysis(cells, { bootstrapIterations: 100, seed: 8 });
+    expect(
+      analysis['matched-runtime/server/hit-listing-identity-c1/requestsPerSecond'].pairedDifference,
+    ).toMatchObject({ median: 10, samples: 7 });
+  });
+
+  it('excludes a consistently unsupported server capability while retaining a complete supported matrix', () => {
+    const cells = [];
+    for (let occurrence = 0; occurrence < 2; occurrence += 1) {
+      cells.push({
+        ...serverCell('kovo', occurrence, 100 + occurrence),
+        mode: 'hit-listing-br-c1',
+        report: {
+          samples: [{ requestsPerSecond: 100 + occurrence }],
+          support: { status: 'supported' },
+        },
+      });
+      cells.push({
+        ...serverCell('nextjs', occurrence, 0),
+        mode: 'hit-listing-br-c1',
+        report: { samples: [], support: { status: 'unsupported' } },
+      });
+    }
+    expect(
+      classifyServerMatrixCells(cells, {
+        conditionKeys: ['hit-listing-br-c1'],
+        samples: 2,
+      }),
+    ).toEqual({
+      completeSupportedMatrix: true,
+      excludedUnsupported: [{ condition: 'hit-listing-br-c1', unsupportedFrameworks: ['nextjs'] }],
+      findings: [],
+      supported: [],
+    });
+    expect(pairedAnalysis(cells, { bootstrapIterations: 100, seed: 9 })).toEqual({});
+  });
+
+  it('requires exact structured identity evidence before accepting an unsupported server cell', () => {
+    const host = performanceHostFingerprint();
+    const bodyDigest = `sha256:${'a'.repeat(64)}`;
+    const report = {
+      condition: {
+        concurrency: 1,
+        encoding: 'br',
+        key: 'hit-listing-br-c1',
+        mode: 'HIT',
+        path: '/matched/l0',
+        route: 'listing',
+      },
+      correctness: {
+        bodyBytes: 100,
+        bodySha256: bodyDigest,
+        contentEncoding: null,
+        exactResponseHeaders: { 'content-encoding': null },
+        identityResponse: { bodySha256: bodyDigest, status: 200 },
+        requestAcceptEncoding: 'br',
+        requestIfNoneMatch: null,
+        semanticContent: serverSemanticEvidence(bodyDigest, 'listing'),
+        selectedResponse: {
+          bodySha256: bodyDigest,
+          contentEncoding: null,
+          exactResponseHeaders: { 'content-encoding': null },
+          status: 200,
+        },
+        status: 200,
+        wireBodyBytes: 100,
+        wireBodySha256: bodyDigest,
+      },
+      environment: { host },
+      framework: 'nextjs',
+      integrity: {
+        complete: true,
+        errors: [],
+        misses: 0,
+        sourceStable: true,
+        timingExcluded: true,
+      },
+      optimization: { provedDocumentCompressionCache: 'not-applicable' },
+      policy: { durationMs: 15_000, warmupMs: 5_000 },
+      samples: [],
+      schema: 'kovo-server-benchmark/v1',
+      source: { commit: 'a'.repeat(40), dirty: false, locks: {} },
+      sourceAfter: { commit: 'a'.repeat(40), dirty: false, locks: {} },
+      support: {
+        observedContentEncoding: null,
+        reason: 'requested Brotli returned the identity representation',
+        requestedContentEncoding: 'br',
+        status: 'unsupported',
+      },
+      verdict: { status: 'unsupported' },
+    };
+    const cell = {
+      cell: 'server',
+      framework: 'nextjs',
+      lane: 'matched-runtime',
+      mode: 'hit-listing-br-c1',
+      occurrence: 0,
+      report,
+      serverCondition: report.condition,
+    };
+    const reasons = [];
+    validateServerCell(cell, {
+      policy: { serverDurationMs: 15_000, serverWarmupMs: 5_000 },
+      reasons,
+    });
+    expect(reasons).toEqual([]);
+
+    report.correctness.contentEncoding = 'br';
+    const forgedReasons = [];
+    validateServerCell(cell, {
+      policy: { serverDurationMs: 15_000, serverWarmupMs: 5_000 },
+      reasons: forgedReasons,
+    });
+    expect(forgedReasons).toContain(
+      'matched-runtime/nextjs/hit-listing-br-c1 unsupported response proof failure',
+    );
+  });
+
+  it('marks provenance or comparator mismatches unproven', () => {
+    expect(
+      comparisonVerdict({
+        integrity: { comparatorMatched: false, serialized: true, sourceStable: false },
+        source: { dirty: true },
+      }),
+    ).toEqual({
+      reasons: [
+        'source provenance is dirty',
+        'source provenance changed during run',
+        'comparator pairing is incomplete',
+        'execution identity is incomplete',
+        'workload identity is incomplete',
+      ],
+      status: 'unproven',
+    });
+
+    const source = { commit: 'a'.repeat(40), dirty: false, dirtyPaths: [], locks: {} };
+    expect(
+      comparisonVerdict({
+        integrity: {
+          comparatorMatched: true,
+          executionAuthenticated: true,
+          serialized: true,
+          sourceStable: true,
+          workloadAuthenticated: true,
+        },
+        source,
+        sourceAfter: { ...source, commit: 'b'.repeat(40) },
+      }),
+    ).toMatchObject({
+      reasons: expect.arrayContaining(['source provenance changed during run']),
+      status: 'unproven',
+    });
+  });
+
+  it('uses truthful per-framework script contracts for default and matched fixtures', () => {
+    const zeroScriptFixture = {
+      fixtureBootstrapValid: 1,
+      fixtureContentValid: 1,
+      fixtureControlsValid: 1,
+      fixtureCssValid: 1,
+      fixtureLaneValid: 1,
+      fixtureScriptCount: 0,
+    };
+    expect(fixtureProof(zeroScriptFixture, { framework: 'kovo', lane: 'default' })).toBe(true);
+    expect(fixtureProof(zeroScriptFixture, { framework: 'kovo', lane: 'matched-l0' })).toBe(true);
+    expect(fixtureProof(zeroScriptFixture, { framework: 'kovo', lane: 'matched-l1' })).toBe(false);
+    expect(fixtureProof(zeroScriptFixture, { framework: 'nextjs', lane: 'default' })).toBe(false);
+    expect(
+      fixtureProof(
+        { ...zeroScriptFixture, fixtureScriptCount: 1 },
+        { framework: 'nextjs', lane: 'default' },
+      ),
+    ).toBe(true);
+  });
+
+  it('binds cold fixture proof to the exact workload and rendered-contract digests', async () => {
+    const fixture = await browserFixtureIdentity();
+    const lane = 'matched-l1';
+    const digest = fixture.identity.renderedContracts[lane].digest;
+    const sample = {
+      fixtureBootstrapValid: 1,
+      fixtureContentValid: 1,
+      fixtureControlsValid: 1,
+      fixtureCssValid: 1,
+      fixtureEvidenceDigest: digest,
+      fixtureEvidenceValid: 1,
+      fixtureIdentityDigest: fixture.digest,
+      fixtureIdentitySchema: fixture.schema,
+      fixtureLaneValid: 1,
+      fixtureRenderedContractDigest: digest,
+      fixtureRenderedEvidenceSchema: BROWSER_FIXTURE_RENDERED_EVIDENCE_SCHEMA,
+      fixtureScriptCount: 1,
+    };
+    const workloadFixture = {
+      digest: fixture.digest,
+      identity: fixture.identity,
+      schema: fixture.schema,
+    };
+    expect(fixtureProof(sample, { framework: 'kovo', lane }, workloadFixture)).toBe(true);
+    expect(
+      fixtureProof(
+        { ...sample, fixtureEvidenceDigest: `sha256:${'0'.repeat(64)}` },
+        { framework: 'kovo', lane },
+        workloadFixture,
+      ),
+    ).toBe(false);
+  });
+
+  it('accepts native default checkout without inventing matched-L1 state evidence', () => {
+    expect(
+      ttiInteractionProof({ checkoutConfirmed: 1, stateMutationConfirmed: 0 }, 'default'),
+    ).toBe(true);
+    expect(
+      ttiInteractionProof({ checkoutConfirmed: 1, stateMutationConfirmed: 0 }, 'matched-l1'),
+    ).toBe(false);
+  });
+
+  it('requires a complete browser-adapter integrity verdict and exact policy', () => {
+    const policy = {
+      bfcacheIterations: 5,
+      iterations: 15,
+      lighthouseRepeats: 3,
+      listingPath: '/',
+      scenarios: ['coldLoad', 'ttiProbe', 'navigation'],
+      warmups: 2,
+    };
+    expect(
+      browserReportIntegrityFindings({ integrity: { complete: true, errors: [], policy } }, policy),
+    ).toEqual([]);
+    expect(
+      browserReportIntegrityFindings(
+        { integrity: { complete: false, errors: ['page error'], policy } },
+        { ...policy, iterations: 14 },
+      ),
+    ).toEqual([
+      'browser integrity verdict is incomplete',
+      'browser integrity errors are present or unavailable',
+      'browser integrity policy iterations mismatch',
+    ]);
+  });
+
+  it('rejects a browser raw census with a missing cold vital or byte-phase leaf', () => {
+    const coldApp = rawBrowserCensusApp({ scenarios: ['coldLoad'] });
+    expect(
+      browserRawMetricCensusFindings(coldApp, browserCensusPolicy({ scenarios: ['coldLoad'] })),
+    ).toEqual([]);
+    delete coldApp.conditions.mobile.coldLoad.iterations[0].lcpMs;
+    expect(
+      browserRawMetricCensusFindings(coldApp, browserCensusPolicy({ scenarios: ['coldLoad'] })),
+    ).toContain('mobile/coldLoad[0] cold FCP/LCP census is incomplete');
+
+    const navigationApp = rawBrowserCensusApp({ scenarios: ['navigation'] });
+    expect(
+      browserRawMetricCensusFindings(
+        navigationApp,
+        browserCensusPolicy({ scenarios: ['navigation'] }),
+      ),
+    ).toEqual([]);
+    delete navigationApp.conditions.desktop.navigation.iterations[0].sessionBytes.click.js;
+    expect(
+      browserRawMetricCensusFindings(
+        navigationApp,
+        browserCensusPolicy({ scenarios: ['navigation'] }),
+      ),
+    ).toContain('desktop/navigation[0] session byte phase click.js is not a non-negative integer');
+  });
+
+  it('requires every raw Lighthouse metric in every declared repeat', () => {
+    const app = rawBrowserCensusApp({ lighthouseRepeats: 2, scenarios: [] });
+    const policy = browserCensusPolicy({
+      lighthouseRepeats: 2,
+      scenarios: [],
+      skipLighthouse: false,
+    });
+    expect(browserRawMetricCensusFindings(app, policy)).toEqual([]);
+    delete app.lighthouse[2].samples[1].lcpMs;
+    expect(browserRawMetricCensusFindings(app, policy)).toContain(
+      'Lighthouse[2].lcpMs raw metric census is incomplete',
+    );
+  });
+
+  it('requires one pinned Lighthouse identity, the exact timeout policy, and no sample failures', () => {
+    const policy = browserCensusPolicy({
+      lighthouseRepeats: 2,
+      scenarios: [],
+      skipLighthouse: false,
+    });
+    const wrongVersion = rawBrowserCensusApp({ lighthouseRepeats: 2, scenarios: [] });
+    wrongVersion.lighthouse[2].browser.version = '147.0.0.1';
+    expect(browserRawMetricCensusFindings(wrongVersion, policy)).toContain(
+      'Lighthouse browser identity differs across raw cells',
+    );
+
+    const bfcacheDrift = rawBrowserCensusApp({ lighthouseRepeats: 2, scenarios: [] });
+    for (const cell of bfcacheDrift.lighthouse) cell.browser.version = '147.0.0.1';
+    expect(browserRawMetricCensusFindings(bfcacheDrift, policy)).toContain(
+      'Lighthouse browser version differs from the Playwright bfcache browser',
+    );
+
+    const wrongPolicy = rawBrowserCensusApp({ lighthouseRepeats: 2, scenarios: [] });
+    wrongPolicy.lighthouse[0].policy.invocationTimeoutMs -= 1;
+    expect(browserRawMetricCensusFindings(wrongPolicy, policy)).toContain(
+      'Lighthouse[0] Lighthouse timeout policy is absent or differs from the pinned policy',
+    );
+
+    const failed = rawBrowserCensusApp({ lighthouseRepeats: 2, scenarios: [] });
+    failed.lighthouse[0].failures.push({
+      message: 'interactive: NO_TTI_CPU_IDLE_PERIOD',
+      metric: 'ttiMs',
+      sampleIndex: 0,
+      schema: LIGHTHOUSE_SAMPLE_FAILURE_SCHEMA,
+      scope: 'metric',
+    });
+    expect(browserRawMetricCensusFindings(failed, policy)).toContain(
+      'Lighthouse[0] contains failed Lighthouse samples',
+    );
+  });
+
+  it('requires every supported server throughput/latency/CPU/RSS metric and exact sample count', () => {
+    const report = {
+      samples: [
+        {
+          p50Ms: 1,
+          p95Ms: 2,
+          p99Ms: 3,
+          peakRssBytes: 10,
+          requests: 100,
+          requestsPerSecond: 50,
+          serverCpuMs: 20,
+          serverCpuPercent: 10,
+        },
+      ],
+      support: { status: 'supported' },
+    };
+    expect(serverRawMetricCensusFindings(report, { samples: 1, support: 'supported' })).toEqual([]);
+    delete report.samples[0].p99Ms;
+    expect(serverRawMetricCensusFindings(report, { samples: 1, support: 'supported' })).toContain(
+      'samples[0].p99Ms is absent',
+    );
+    expect(
+      serverRawMetricCensusFindings(
+        { samples: [], support: { status: 'unsupported' } },
+        { samples: 0, support: 'unsupported' },
+      ),
+    ).toEqual([]);
+  });
+
+  it('rejects forged server semantic evidence and cross-entrant contract drift', async () => {
+    const bodyDigest = `sha256:${'b'.repeat(64)}`;
+    const semantic = serverSemanticEvidence(bodyDigest, 'listing');
+    expect(
+      serverSemanticEvidenceFindings(
+        { bodySha256: bodyDigest, semanticContent: semantic },
+        'listing',
+      ),
+    ).toEqual([]);
+    semantic.contract.sha256 = `sha256:${'c'.repeat(64)}`;
+    expect(
+      serverSemanticEvidenceFindings(
+        { bodySha256: bodyDigest, semanticContent: semantic },
+        'listing',
+      ),
+    ).toContain('semantic contract/evidence digest is incomplete');
+
+    const fixture = await browserFixtureIdentity();
+    const workloadFixture = {
+      digest: fixture.digest,
+      identity: fixture.identity,
+      schema: fixture.schema,
+    };
+    const cell = (framework, contractDigest) => {
+      const evidence = serverSemanticEvidence(bodyDigest, 'listing');
+      evidence.contract.sha256 = contractDigest;
+      evidence.evidence.sha256 = contractDigest;
+      return {
+        cell: 'server',
+        framework,
+        report: { condition: { route: 'listing' }, correctness: { semanticContent: evidence } },
+      };
+    };
+    const workload = await performanceWorkloadIdentity(
+      {
+        serverConcurrencies: [1],
+        serverDurationMs: 25,
+        serverEncodings: ['identity'],
+        serverModes: ['HIT'],
+        serverRoutes: ['listing'],
+        serverSamples: 1,
+        serverWarmupMs: 25,
+      },
+      ['server'],
+    );
+    const expectedDigest = workload.identity.serverSemantic.contracts.listing.sha256;
+    expect(
+      serverSemanticMatrixFindings(
+        [cell('kovo', expectedDigest), cell('nextjs', expectedDigest)],
+        workloadFixture,
+        { routes: ['listing'], serverSemanticIdentity: workload.identity.serverSemantic },
+      ),
+    ).toEqual([]);
+    expect(
+      serverSemanticMatrixFindings(
+        [cell('kovo', `sha256:${'d'.repeat(64)}`), cell('nextjs', `sha256:${'e'.repeat(64)}`)],
+        workloadFixture,
+        { routes: ['listing'], serverSemanticIdentity: workload.identity.serverSemantic },
+      ),
+    ).toContain('matched-runtime/server/listing cross-entrant semantic contract mismatch');
+  });
+
+  it('requires exact dev ready/edit counts, stable source, and clean browser evidence', () => {
+    const schedule = {
+      editSamples: 30,
+      framework: 'kovo',
+      occurrence: 0,
+      readySamples: 15,
+      scheduleIndex: 0,
+      warmups: 3,
+    };
+    const reasons = [];
+    validateDevCell(
+      {
+        framework: 'kovo',
+        lane: 'corpus-n24',
+        schedule,
+        report: completeDevValidationReport({ basePort: 49_700, readyIterations: 15 }),
+      },
+      {
+        devPortBase: 49_700,
+        iterations: 30,
+        readyIterations: 15,
+        reasons,
+        schedule,
+        warmups: 3,
+      },
+    );
+    expect(reasons).toEqual([]);
+
+    const handoffTampered = completeDevValidationReport({
+      basePort: 49_700,
+      readyIterations: 15,
+    });
+    handoffTampered.integrity.portAllocation.ports[1] = 49_700;
+    handoffTampered.integrity.handoffs[0].complete = false;
+    handoffTampered.readySamples[0].lifecycle.complete = false;
+    handoffTampered.readySamples[0].browserContextClosed = false;
+    delete handoffTampered.readySamples[1].readinessProbe;
+    handoffTampered.editSession.lifecycle.origin = 'http://localhost:49999';
+    delete handoffTampered.editSession.browserContextClosed;
+    const handoffReasons = [];
+    validateDevCell(
+      {
+        framework: 'kovo',
+        lane: 'corpus-n24',
+        report: handoffTampered,
+        schedule,
+      },
+      {
+        devPortBase: 49_700,
+        iterations: 30,
+        readyIterations: 15,
+        reasons: handoffReasons,
+        schedule,
+        warmups: 3,
+      },
+    );
+    expect(handoffReasons).toEqual(
+      expect.arrayContaining([
+        'corpus-n24/kovo/dev unique per-session dev port allocation is incomplete',
+        'corpus-n24/kovo/dev pre-spawn dev handoff ready[0] is incomplete',
+        'corpus-n24/kovo/dev ready[0] dev readiness/browser-context evidence is incomplete',
+        'corpus-n24/kovo/dev ready[1] dev readiness/browser-context evidence is incomplete',
+        'corpus-n24/kovo/dev ready[0] dev lifecycle is incomplete',
+        'corpus-n24/kovo/dev edit-session dev readiness/browser-context evidence is incomplete',
+        'corpus-n24/kovo/dev edit-session dev lifecycle is incomplete',
+      ]),
+    );
+
+    const mismatched = [];
+    validateDevCell(
+      {
+        framework: 'kovo',
+        lane: 'corpus-n24',
+        schedule: { ...schedule, warmups: 2 },
+        report: {
+          framework: 'kovo',
+          integrity: {
+            browser: { requestFailedCount: 1, responseCount: 0, unexpectedErrorCount: 1 },
+            editCounts: {},
+            iterations: 29,
+            readyIterations: 14,
+            source: { stable: false },
+            warmups: 2,
+          },
+          readySamples: [],
+          source: { commit: 'abc', dirty: false, locks: {} },
+          sourceAfter: { commit: 'def', dirty: true, locks: {} },
+        },
+      },
+      {
+        devPortBase: 49_700,
+        iterations: 30,
+        readyIterations: 15,
+        reasons: mismatched,
+        schedule,
+        warmups: 3,
+      },
+    );
+    expect(mismatched).toContain('corpus-n24/kovo/dev ready iteration policy mismatch');
+    expect(mismatched).toContain('corpus-n24/kovo/dev source stability failure');
+    expect(mismatched).toContain('corpus-n24/kovo/dev browser error evidence');
+    expect(mismatched).toContain('corpus-n24/kovo/dev occurrence schedule mismatch');
+  });
+
+  it.each([
+    ['a non-array', 'invalid'],
+    ['a duplicate', [49_700, 49_700, 49_702]],
+    ['an overflowing value', [49_700, 49_701, 65_536]],
+  ])('fails closed without throwing for %s declared session-port list', (_label, ports) => {
+    const report = completeDevValidationReport({ basePort: 49_700, readyIterations: 2 });
+    report.integrity.portAllocation.ports = ports;
+
+    expect(devSessionHandoffFindings(report, { basePort: 49_700, readyIterations: 2 })).toContain(
+      'unique per-session dev port allocation is incomplete',
+    );
+  });
+
+  it('requires a timestamped exact localhost dual-stack handoff shape', () => {
+    const malformed = completeDevValidationReport({ basePort: 49_700, readyIterations: 2 });
+    malformed.integrity.handoffs[0].check.addresses = [
+      { available: true, errorCode: null, supported: true },
+    ];
+    delete malformed.integrity.handoffs[0].check.checkedAt;
+
+    expect(
+      devSessionHandoffFindings(malformed, { basePort: 49_700, readyIterations: 2 }),
+    ).toContain('pre-spawn dev handoff ready[0] is incomplete');
+
+    const unsupportedIpv6 = completeDevValidationReport({
+      basePort: 49_700,
+      readyIterations: 2,
+    });
+    unsupportedIpv6.integrity.handoffs[0].check.addresses[1] = {
+      address: '::1',
+      available: true,
+      errorCode: 'EAFNOSUPPORT',
+      family: 6,
+      supported: false,
+    };
+    expect(
+      devSessionHandoffFindings(unsupportedIpv6, { basePort: 49_700, readyIterations: 2 }),
+    ).toEqual([]);
+  });
+
+  it('retains nonzero dev adapter evidence and analyzes malformed row arrays fail-closed', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-compare-failed-dev-'));
+    try {
+      const resultFile = path.join(root, 'adapter.json');
+      const retainedFile = path.join(root, 'evidence', 'raw', 'adapter.json');
+      const report = {
+        integrity: { complete: false, errors: ['lifecycle failed'] },
+        readySamples: 'malformed',
+        samples: {},
+        schema: 'kovo-dev-loop-report/v1',
+        verdict: { status: 'unproven' },
+      };
+      const bytes = Buffer.from(JSON.stringify(report));
+      const failure = new Error('adapter exited one');
+      failure.adapterExit = { signal: null, status: 1 };
+      const captured = await runDevComparisonAdapterCell(
+        {
+          adapter: { args: [], cwd: root, label: 'corpus-n24/kovo/dev/0' },
+          cell: {
+            cell: 'dev',
+            framework: 'kovo',
+            lane: 'corpus-n24',
+            occurrence: 0,
+            port: 49_700,
+            schedule: {
+              editSamples: 15,
+              framework: 'kovo',
+              occurrence: 0,
+              readySamples: 8,
+              scheduleIndex: 0,
+              warmups: 2,
+            },
+          },
+          resultFile,
+          retainedFile,
+          retainedReference: 'raw/adapter.json',
+        },
+        {
+          runAdapter: async () => {
+            await writeFile(resultFile, bytes);
+            throw failure;
+          },
+        },
+      );
+
+      expect(captured.error).toContain('adapter exited one');
+      expect(captured.cell).toMatchObject({
+        adapterFailure: {
+          process: { signal: null, status: 1 },
+          rawReport: {
+            available: true,
+            reportBytes: bytes.byteLength,
+            reportSha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+            retainedPath: 'raw/adapter.json',
+            schema: 'kovo-dev-loop-report/v1',
+            verdict: 'unproven',
+          },
+          schema: COMPARE_ADAPTER_FAILURE_SCHEMA,
+        },
+        report,
+      });
+      expect(await readFile(retainedFile)).toEqual(bytes);
+      expect(() =>
+        pairedAnalysis([captured.cell], { bootstrapIterations: 100, seed: 1 }),
+      ).not.toThrow();
+      const reasons = [];
+      validateDevCell(captured.cell, {
+        devPortBase: 49_700,
+        iterations: 15,
+        readyIterations: 8,
+        reasons,
+        schedule: captured.cell.schedule,
+        warmups: 2,
+      });
+      expect(reasons).toEqual(
+        expect.arrayContaining([
+          'corpus-n24/kovo/dev adapter process or report failed',
+          'corpus-n24/kovo/dev adapter evidence is unproven',
+        ]),
+      );
+      expect(
+        comparisonVerdict({
+          integrity: {
+            comparator: { reasons, matched: false },
+            executionAuthenticated: true,
+            executionError: captured.error,
+            sourceStable: true,
+            workloadAuthenticated: true,
+          },
+          source: { dirty: false },
+        }).status,
+      ).toBe('unproven');
+
+      const zeroExitResult = path.join(root, 'zero-exit.json');
+      const zeroExitRetained = path.join(root, 'evidence', 'raw', 'zero-exit.json');
+      const zeroExit = await runDevComparisonAdapterCell(
+        {
+          adapter: { args: [], cwd: root, label: 'corpus-n24/kovo/dev/0' },
+          cell: {
+            cell: 'dev',
+            framework: 'kovo',
+            lane: 'corpus-n24',
+            occurrence: 0,
+            schedule: captured.cell.schedule,
+          },
+          resultFile: zeroExitResult,
+          retainedFile: zeroExitRetained,
+          retainedReference: 'raw/zero-exit.json',
+        },
+        { runAdapter: async () => writeFile(zeroExitResult, bytes) },
+      );
+      expect(zeroExit.error).toContain('report is not measured and complete');
+      expect(zeroExit.cell.adapterFailure).toMatchObject({
+        process: { error: null, status: 0 },
+        rawReport: { retainedPath: 'raw/zero-exit.json' },
+      });
+      expect(await readFile(zeroExitRetained)).toEqual(bytes);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('retains the exact failed browser adapter report with process and byte custody', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-compare-failed-browser-'));
+    try {
+      const resultFile = path.join(root, 'adapter.json');
+      const retainedFile = path.join(root, 'evidence', 'raw', 'adapter.json');
+      const report = {
+        adapterFailure: {
+          error: 'lighthouse[1]/sample[0]/ttiMs: interactive audit failed',
+          schema: 'kovo-browser-benchmark-adapter-failure/v1',
+        },
+        apps: [
+          {
+            integrity: {
+              complete: false,
+              errors: ['lighthouse[1]/sample[0]/ttiMs: interactive audit failed'],
+            },
+          },
+        ],
+        schema: 'kovo-browser-benchmark/v1',
+      };
+      const bytes = Buffer.from(`${JSON.stringify(report)}\n`);
+      const failure = new Error('browser adapter exited one');
+      failure.adapterExit = { signal: null, status: 1 };
+      const captured = await runBrowserComparisonAdapterCell(
+        {
+          adapter: { args: [], cwd: root, label: 'default/kovo/browser/0' },
+          cell: { cell: 'browser', framework: 'kovo', lane: 'default', occurrence: 0 },
+          resultFile,
+          retainedFile,
+          retainedReference: 'raw/adapter.json',
+        },
+        {
+          runAdapter: async () => {
+            await writeFile(resultFile, bytes);
+            throw failure;
+          },
+        },
+      );
+
+      expect(captured.error).toContain('browser adapter exited one');
+      expect(captured.cell).toMatchObject({
+        adapterFailure: {
+          process: { signal: null, status: 1 },
+          rawReport: {
+            available: true,
+            reportBytes: bytes.byteLength,
+            reportSha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+            retainedPath: 'raw/adapter.json',
+            schema: 'kovo-browser-benchmark/v1',
+            verdict: 'kovo-browser-benchmark-adapter-failure/v1',
+          },
+          schema: COMPARE_ADAPTER_FAILURE_SCHEMA,
+        },
+        report,
+      });
+      expect(await readFile(retainedFile)).toEqual(bytes);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('serializes supervised preparation timeouts into an unproven top-level comparison', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-compare-prepare-timeout-'));
+    const invocations = [];
+    try {
+      let rejected;
+      try {
+        await runComparison(
+          {
+            allowDirty: true,
+            bfcacheIterations: 2,
+            bootstrapIterations: 10,
+            cells: ['browser'],
+            hostSettleMaxMs: 0,
+            iterations: 2,
+            lanes: ['default'],
+            lighthouseRuns: 2,
+            maxLoadPerCpu: 1_000_000,
+            outDir: root,
+            skipLighthouse: true,
+            warmups: 0,
+          },
+          {
+            prepareBrowserEntrants: () =>
+              prepareBrowserEntrants({
+                runChildProcess: async (invocation) => {
+                  invocations.push(invocation);
+                  throw new Error(`${invocation.label} reached its synthetic preparation deadline`);
+                },
+              }),
+            runBrowserComparisonAdapterCell: async () => {
+              throw new Error('browser adapter must not run after failed preparation');
+            },
+          },
+        );
+      } catch (error) {
+        rejected = error;
+      }
+
+      const comparisonPath = path.join(root, 'comparison.json');
+      const report = JSON.parse(await readFile(comparisonPath, 'utf8'));
+      expect(rejected).toBeInstanceOf(Error);
+      expect(rejected.message).toContain(`Evidence preserved at ${comparisonPath}`);
+      expect(invocations).toHaveLength(2);
+      expect(
+        invocations.every(
+          ({ supervisorTimeoutMs }) =>
+            supervisorTimeoutMs === BROWSER_PREPARATION_SUPERVISOR_TIMEOUT_MS,
+        ),
+      ).toBe(true);
+      expect(report.browserPreparation.map(({ framework }) => framework)).toEqual([
+        'kovo',
+        'nextjs',
+      ]);
+      expect(report.browserPreparation.every(({ integrity }) => integrity.complete === false)).toBe(
+        true,
+      );
+      expect(
+        report.browserPreparation.every(({ integrity }) =>
+          integrity.errors.some((error) => error.includes('synthetic preparation deadline')),
+        ),
+      ).toBe(true);
+      expect(report.rawCells).toEqual([]);
+      expect(report.verdict.status).toBe('unproven');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it.runIf(process.platform !== 'win32')(
+    'times out an adapter, kills its detached descendant, and retains missing-report custody',
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-compare-tree-timeout-'));
+      const descendantPidFile = path.join(root, 'descendant.pid');
+      let descendantPid = null;
+      let descendantGoneBeforeCustody = false;
+      try {
+        const descendantSource = [
+          "process.on('SIGTERM', () => undefined);",
+          'setInterval(() => undefined, 1_000);',
+        ].join('');
+        const adapterSource = [
+          "const { spawn } = require('node:child_process');",
+          "const { writeFileSync } = require('node:fs');",
+          `const child = spawn(process.execPath, ['-e', ${JSON.stringify(descendantSource)}], { detached: true, env: process.env, stdio: 'ignore' });`,
+          'child.unref();',
+          `writeFileSync(${JSON.stringify(descendantPidFile)}, String(child.pid));`,
+          "process.on('SIGTERM', () => undefined);",
+          'setInterval(() => undefined, 1_000);',
+        ].join('\n');
+        const captured = await runBrowserComparisonAdapterCell(
+          {
+            adapter: {
+              args: ['-e', adapterSource],
+              cwd: root,
+              label: 'default/kovo/browser/0',
+              supervisorTimeoutMs: 500,
+            },
+            cell: { cell: 'browser', framework: 'kovo', lane: 'default', occurrence: 0 },
+            resultFile: path.join(root, 'missing-result.json'),
+            retainedFile: path.join(root, 'raw', 'missing-result.json'),
+            retainedReference: 'raw/missing-result.json',
+          },
+          {
+            runAdapter: async (adapter) => {
+              try {
+                await runChildProcess({ ...adapter, command: process.execPath });
+              } finally {
+                descendantPid = Number(await readFile(descendantPidFile, 'utf8'));
+                descendantGoneBeforeCustody = await processStopsWithin(descendantPid, 1_000);
+              }
+            },
+          },
+        );
+
+        expect(captured.error).toContain('time ceiling exceeded after 500ms');
+        expect(descendantGoneBeforeCustody).toBe(true);
+        expect(captured.cell).toMatchObject({
+          adapterFailure: {
+            process: { signal: 'SIGKILL', status: null },
+            rawReport: {
+              available: false,
+              reportBytes: null,
+              reportSha256: null,
+              retainedPath: null,
+            },
+            schema: COMPARE_ADAPTER_FAILURE_SCHEMA,
+          },
+          report: null,
+        });
+      } finally {
+        if (Number.isSafeInteger(descendantPid) && descendantPid > 0) {
+          try {
+            process.kill(descendantPid, 'SIGKILL');
+          } catch (error) {
+            if (error?.code !== 'ESRCH') throw error;
+          }
+        }
+        await rm(root, { force: true, recursive: true });
+      }
+    },
+  );
+
+  it.each([
+    {
+      bytes: null,
+      expectedAvailable: false,
+      expectedRetainedPath: null,
+      name: 'missing child result',
+    },
+    {
+      bytes: Buffer.from('{"schema":\n'),
+      expectedAvailable: true,
+      expectedRetainedPath: 'raw/default-0-kovo-browser-failed.json',
+      name: 'invalid child JSON',
+    },
+  ])(
+    'writes an unproven top-level comparison with failed-cell custody for $name',
+    async ({ bytes, expectedAvailable, expectedRetainedPath }) => {
+      const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-compare-browser-custody-'));
+      try {
+        const failure = new Error('browser adapter terminated before producing valid evidence');
+        failure.adapterExit = { signal: 'SIGTERM', status: null };
+        let rejected;
+        try {
+          await runComparison(
+            {
+              allowDirty: true,
+              bfcacheIterations: 2,
+              bootstrapIterations: 10,
+              cells: ['browser'],
+              hostSettleMaxMs: 0,
+              iterations: 2,
+              lanes: ['default'],
+              lighthouseRuns: 2,
+              maxLoadPerCpu: 1_000_000,
+              outDir: root,
+              skipLighthouse: true,
+              warmups: 0,
+            },
+            {
+              prepareBrowserEntrants: async () =>
+                ['kovo', 'nextjs'].map((framework) => ({
+                  framework,
+                  integrity: { complete: true, errors: [] },
+                })),
+              runBrowserComparisonAdapterCell: (options) =>
+                runBrowserComparisonAdapterCell(options, {
+                  runAdapter: async () => {
+                    if (bytes !== null) await writeFile(options.resultFile, bytes);
+                    throw failure;
+                  },
+                }),
+            },
+          );
+        } catch (error) {
+          rejected = error;
+        }
+
+        const comparisonPath = path.join(root, 'comparison.json');
+        const report = JSON.parse(await readFile(comparisonPath, 'utf8'));
+        expect(rejected).toBeInstanceOf(Error);
+        expect(rejected.message).toContain(`Evidence preserved at ${comparisonPath}`);
+        expect(report).toMatchObject({
+          analysis: {},
+          integrity: {
+            comparatorMatched: false,
+            executionError: expect.stringContaining(
+              'browser adapter terminated before producing valid evidence',
+            ),
+          },
+          rawCells: [
+            {
+              adapterFailure: {
+                process: { signal: 'SIGTERM', status: null },
+                rawReport: {
+                  available: expectedAvailable,
+                  retainedPath: expectedRetainedPath,
+                },
+                schema: COMPARE_ADAPTER_FAILURE_SCHEMA,
+              },
+              cell: 'browser',
+              framework: 'kovo',
+              lane: 'default',
+              occurrence: 0,
+              report: null,
+            },
+          ],
+          verdict: { status: 'unproven' },
+        });
+        if (bytes === null) {
+          expect(report.rawCells[0].adapterFailure.rawReport).toMatchObject({
+            parseError: null,
+            reportBytes: null,
+            reportSha256: null,
+          });
+        } else {
+          expect(report.rawCells[0].adapterFailure.rawReport).toMatchObject({
+            parseError: expect.stringContaining('invalid JSON'),
+            reportBytes: bytes.byteLength,
+            reportSha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+          });
+          expect(await readFile(path.join(root, expectedRetainedPath))).toEqual(bytes);
+        }
+      } finally {
+        await rm(root, { force: true, recursive: true });
+      }
+    },
+  );
+});
+
+function completeDevValidationReport({ basePort, readyIterations }) {
+  const readinessProbe = () => ({
+    attempts: 2,
+    path: '/',
+    status: 200,
+    transientFailures: 1,
+  });
+  const lifecycle = (port) => ({
+    complete: true,
+    origin: `http://localhost:${String(port)}`,
+    schema: 'kovo-dev-session-stop/v4',
+    socketEvidence: null,
+  });
+  const handoffs = Array.from({ length: readyIterations + 1 }, (_, index) => ({
+    attribution: {
+      from: index === 0 ? null : `ready[${String(index - 1)}]`,
+      priorMarkerSha256: index === 0 ? null : `sha256:${'a'.repeat(64)}`,
+      to: index === readyIterations ? 'edit-session' : `ready[${String(index)}]`,
+    },
+    available: true,
+    check: {
+      addresses: [
+        {
+          address: '127.0.0.1',
+          available: true,
+          errorCode: null,
+          family: 4,
+          supported: true,
+        },
+        {
+          address: '::1',
+          available: true,
+          errorCode: null,
+          family: 6,
+          supported: true,
+        },
+      ],
+      checkedAt: '2026-08-13T00:00:00.000Z',
+      durationMs: 1,
+      probeError: null,
+      sequence: 1,
+    },
+    complete: true,
+    error: null,
+    inspector: null,
+    origin: `http://localhost:${String(basePort + index)}`,
+    schema: 'kovo-dev-session-handoff/v2',
+    socketEvidence: null,
+  }));
+  return {
+    editSession: {
+      browserContextClosed: true,
+      lifecycle: lifecycle(basePort + readyIterations),
+      readinessProbe: readinessProbe(),
+    },
+    framework: 'kovo',
+    integrity: {
+      browser: { requestFailedCount: 0, responseCount: 1, unexpectedErrorCount: 0 },
+      inspectorPort: null,
+      complete: true,
+      editCounts: { data: 30, entry: 30, leaf: 30, recovery: 30, syntaxError: 30 },
+      handoffs,
+      iterations: 30,
+      portAllocation: completePortAllocation(
+        basePort,
+        Array.from({ length: readyIterations + 1 }, (_, index) => basePort + index),
+      ),
+      readyIterations,
+      source: { stable: true },
+      warmups: 3,
+    },
+    readySamples: Array.from({ length: readyIterations }, (_, index) => ({
+      browserContextClosed: true,
+      lifecycle: lifecycle(basePort + index),
+      readinessProbe: readinessProbe(),
+    })),
+    source: { commit: 'abc', dirty: false, locks: { root: 'one' } },
+    sourceAfter: { commit: 'abc', dirty: false, locks: { root: 'one' } },
+    verdict: { status: 'measured' },
+  };
+}
+
+function completePortAllocation(basePort, ports, inspectorPorts = []) {
+  return {
+    basePort,
+    complete: true,
+    errors: [],
+    hostEphemeral: {
+      complete: true,
+      error: null,
+      platform: 'linux',
+      probe: {
+        bytes: 12,
+        contentBase64: 'NjAwMDAgNjU1MzUK',
+        kind: 'procfs',
+        locator: '/proc/sys/net/ipv4/ip_local_port_range',
+        sha256: 'sha256:d57b94cd21854bf7ea2ebac4e57725b65b83a11ca7fab9ea7d1701cb6e73e5bf',
+      },
+      ranges: [{ label: 'default', maximum: 65_535, minimum: 60_000 }],
+      schema: 'kovo-host-ephemeral-port-ranges/v1',
+      scope: 'tcp-loopback-v4-v6/v1',
+    },
+    inspectorPorts,
+    overlaps: [],
+    ports,
+    posture: 'unique-exact-port-outside-host-ephemeral/v2',
+    schema: 'kovo-dev-port-allocation/v1',
+  };
+}
+
+function browserCell(framework, occurrence, values) {
+  return {
+    cell: 'browser',
+    framework,
+    lane: 'matched-l1',
+    occurrence,
+    report: {
+      schema: 'kovo-browser-benchmark/v1',
+      apps: [
+        {
+          conditions: {
+            desktop: {
+              navigation: { iterations: values.map((navToPaintMs) => ({ navToPaintMs })) },
+            },
+          },
+        },
+      ],
+    },
+  };
+}
+
+function devCell(framework, occurrence, editValues, readyValues) {
+  return {
+    cell: 'dev',
+    framework,
+    lane: 'corpus-n24',
+    occurrence,
+    report: {
+      readySamples: readyValues.map((durationMs) => ({ durationMs })),
+      samples: editValues.map((leafMs) => ({ leafMs })),
+    },
+  };
+}
+
+function serverCell(framework, occurrence, requestsPerSecond) {
+  return {
+    cell: 'server',
+    framework,
+    lane: 'matched-runtime',
+    mode: 'hit-listing-identity-c1',
+    occurrence,
+    report: { samples: [{ requestsPerSecond }] },
+  };
+}
+
+function browserCensusPolicy({ lighthouseRepeats = 0, scenarios, skipLighthouse = true }) {
+  return {
+    bfcacheIterations: 1,
+    iterations: 1,
+    lighthouseRepeats,
+    scenarios,
+    skipLighthouse,
+  };
+}
+
+function rawBrowserCensusApp({ lighthouseRepeats = 0, scenarios }) {
+  const scenario = (name) => {
+    if (!scenarios.includes(name)) return { iterations: [] };
+    if (name === 'coldLoad') return { iterations: [{ fcpMs: 10, lcpMs: 20 }] };
+    if (name === 'ttiProbe') return { iterations: [{}] };
+    return { iterations: [rawNavigationCensusSample()] };
+  };
+  const lighthouseMetrics = {
+    bytes: 100,
+    fcpMs: 10,
+    lcpMs: 20,
+    performanceScore: 1,
+    speedIndexMs: 12,
+    tbtMs: 0,
+    ttiMs: 25,
+  };
+  const lighthouseBrowser = {
+    executable: {
+      basename: 'chrome',
+      bytes: 123_456,
+      pathSha256: `sha256:${'a'.repeat(64)}`,
+    },
+    provider: 'playwright.chromium',
+    schema: LIGHTHOUSE_BROWSER_IDENTITY_SCHEMA,
+    version: '148.0.7778.96',
+  };
+  return {
+    bfcache: { available: true, browser: lighthouseBrowser.version, iterations: [{}] },
+    conditions: Object.fromEntries(
+      ['desktop', 'mobile'].map((condition) => [
+        condition,
+        {
+          coldLoad: scenario('coldLoad'),
+          navigation: scenario('navigation'),
+          ttiProbe: scenario('ttiProbe'),
+        },
+      ]),
+    ),
+    lighthouse:
+      lighthouseRepeats === 0
+        ? []
+        : Array.from({ length: 4 }, () => ({
+            browser: structuredClone(lighthouseBrowser),
+            failures: [],
+            metrics: { ...lighthouseMetrics },
+            nullSamples: Object.fromEntries(
+              Object.keys(lighthouseMetrics).map((name) => [name, 0]),
+            ),
+            policy: lighthouseTimeoutPolicy(),
+            repeats: lighthouseRepeats,
+            samples: Array.from({ length: lighthouseRepeats }, () => ({ ...lighthouseMetrics })),
+            spread: Object.fromEntries(Object.keys(lighthouseMetrics).map((name) => [name, 0])),
+          })),
+  };
+}
+
+function rawNavigationCensusSample() {
+  return {
+    navAttribution: analyzeNavigationAttribution({
+      clickTsUs: 1,
+      destinationMarkTsUs: 2,
+      destinationPaintTsUs: 3,
+      epochOffsetMs: 0,
+      mainFrameId: 'main-frame',
+      networkEvents: [],
+      records: [],
+      targetPath: '/matched/l1/product/a',
+      traceEvents: [{ name: 'Paint', ts: 3 }],
+    }),
+    navPaintBoundary: 'first-traced-frame-after-destination-marker',
+    navToPaintMs: 2,
+    sessionBytes: sessionBytePhases([], {
+      clickEpochMs: 1,
+      destinationPaintEpochMs: 2,
+      initialEndEpochMs: 0,
+    }),
+  };
+}
+
+function serverSemanticEvidence(bodySha256, route) {
+  const contractDigest = `sha256:${createHash('sha256')
+    .update(canonicalJson(matchedServerSemanticContract(route)))
+    .digest('hex')}`;
+  return {
+    contract: {
+      schema: 'kovo-matched-server-semantic-contract/v1',
+      sha256: contractDigest,
+      tokenCount: 1,
+    },
+    evidence: { sha256: contractDigest, tokenCount: 1 },
+    identityBodySha256: bodySha256,
+    route,
+    schema: 'kovo-matched-server-semantic-evidence/v1',
+    source: structuredClone(MATCHED_SERVER_SEMANTIC_SOURCE),
+    validated: true,
+  };
+}
+
+async function processStopsWithin(pid, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      if (error?.code === 'ESRCH') return true;
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return false;
+}

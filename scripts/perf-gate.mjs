@@ -22,23 +22,31 @@
  *  - The scaling-exponent metric is a RATIO across rungs of the same ladder in the same session, so
  *    it survives contention far better than any absolute duration, and is gated unconditionally.
  */
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { loadavg } from 'node:os';
+import { cpus, loadavg } from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { measureProcessTreeCommand } from './lib/process-tree-rss.mjs';
+import { executionIdentityFindings, performanceExecutionIdentity } from './lib/perf-execution.mjs';
+import { canonicalJson, performanceHostFingerprint } from './lib/perf-host.mjs';
+import { collectPerformanceProvenance } from './lib/perf-provenance.mjs';
 import { materializePerfWorkload, perfWorkloadEditedComponent } from './perf-workload.mjs';
 
 export const PERF_REPORT_SCHEMA = 'kovo-perf-report/v1';
 export const PERF_BUDGETS_SCHEMA = 'kovo-perf-budgets/v1';
+export const PERF_GATE_WORKLOAD_SCHEMA = 'kovo-performance-workload-identity/v1';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const CHECK_CENSUS_SCHEMA = 'kovo-check-phase-census/v1';
 const CHECK_CENSUS_INCOMPLETE_SCHEMA = 'kovo-check-phase-census-incomplete/v1';
+const DEFAULT_HOST_SETTLE_MAX_MS = 30_000;
+const DEFAULT_HOST_SETTLE_POLL_MS = 1_000;
+const MAX_HOST_SETTLE_MAX_MS = 60_000;
 
 // ---------------------------------------------------------------------------------------------
 // Pure helpers (exported for scripts/perf-gate.test.mjs)
@@ -215,12 +223,233 @@ export function formatEvaluation(results) {
   return `${lines.join('\n')}\n`;
 }
 
+export function parsePositiveIntegerOption(
+  name,
+  raw,
+  fallback,
+  { max = Number.MAX_SAFE_INTEGER, min = 1 } = {},
+) {
+  if (raw === undefined) return fallback;
+  if (raw === true) throw new Error(`--${name} requires an integer value`);
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(
+      `--${name} must be an integer between ${String(min)} and ${String(max)}, got ${JSON.stringify(String(raw))}`,
+    );
+  }
+  return value;
+}
+
+export function parseLadderOption(raw = '8,24,72,216') {
+  if (raw === true) throw new Error('--ladder requires a comma-separated integer value');
+  const values = String(raw)
+    .split(',')
+    .map((value) => value.trim())
+    .map((value) => Number(value));
+  if (
+    values.length < 2 ||
+    values.some((value) => !Number.isInteger(value) || value < 1) ||
+    new Set(values).size !== values.length
+  ) {
+    throw new Error(
+      `--ladder must contain at least two distinct positive integers, got ${JSON.stringify(String(raw))}`,
+    );
+  }
+  return values;
+}
+
+export function wireResponseIntegrityProblems(
+  label,
+  response,
+  { allowedContentEncodings, contentTypePrefix, status = 200 } = {},
+) {
+  const problems = [];
+  if (response?.status !== status) {
+    problems.push(
+      `${label}: expected HTTP ${String(status)}, received ${String(response?.status)}`,
+    );
+  }
+  if (!Number.isFinite(response?.wireBytes) || response.wireBytes <= 0) {
+    problems.push(`${label}: response body carried no wire bytes`);
+  }
+  if (
+    contentTypePrefix !== undefined &&
+    !String(response?.headers?.['content-type'] ?? '').startsWith(contentTypePrefix)
+  ) {
+    problems.push(
+      `${label}: expected Content-Type ${contentTypePrefix}..., received ${String(response?.headers?.['content-type'] ?? 'missing')}`,
+    );
+  }
+  if (
+    allowedContentEncodings !== undefined &&
+    !allowedContentEncodings.includes(response?.contentEncoding)
+  ) {
+    problems.push(
+      `${label}: expected Content-Encoding ${allowedContentEncodings.map(String).join(' or ')}, received ${String(response?.contentEncoding ?? 'identity')}`,
+    );
+  }
+  return problems;
+}
+
+export function loadGenerationIntegrityProblems(label, result) {
+  const problems = [];
+  if ((result?.completed ?? 0) === 0) problems.push(`${label}: completed zero responses`);
+  if ((result?.requestErrors ?? 0) > 0) {
+    problems.push(`${label}: ${String(result.requestErrors)} requests failed before a response`);
+  }
+  if ((result?.responseErrors ?? 0) > 0) {
+    problems.push(`${label}: ${String(result.responseErrors)} response streams failed`);
+  }
+  for (const [status, count] of Object.entries(result?.statusCounts ?? {})) {
+    if (status !== '200' && count > 0) {
+      problems.push(`${label}: ${String(count)} responses returned HTTP ${status}`);
+    }
+  }
+  return problems;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Process plumbing
 // ---------------------------------------------------------------------------------------------
 
 function observedLoadAverage() {
   return loadavg()[0];
+}
+
+/**
+ * One bounded quiet-host budget for an entire suite. The first admission is explicitly before
+ * benchmark work; after `markBenchmarkWork()` timed admissions are labeled as post-benchmark
+ * settling. `observe()` records the final load tail as a non-gating diagnostic because that tail
+ * cannot establish contention before an already-completed timed rung.
+ */
+export function createPerformanceGateHostAdmission({
+  ceiling = 1,
+  maxWaitMs = DEFAULT_HOST_SETTLE_MAX_MS,
+  pollMs = DEFAULT_HOST_SETTLE_POLL_MS,
+  readLoad = () => ({ loadAverage: loadavg(), logicalCpuCount: cpus().length }),
+  timestamp = () => new Date().toISOString(),
+  wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+} = {}) {
+  assertPerformanceGateHostPolicy({ ceiling, maxWaitMs, pollMs });
+  const budget = { remainingWaitMs: maxWaitMs, totalWaitedMs: 0 };
+  let benchmarkWorkStarted = false;
+  async function sample(context, { gatesTiming }) {
+    if (
+      typeof context !== 'string' ||
+      context.length === 0 ||
+      context.length > 512 ||
+      context.includes('\r') ||
+      context.includes('\n') ||
+      context.includes('\0')
+    ) {
+      throw new TypeError('quiet-host context is invalid');
+    }
+    const availableWaitMs = gatesTiming ? budget.remainingWaitMs : 0;
+    const observations = [];
+    let attempt = 0;
+    let waitedMs = 0;
+    while (true) {
+      const observed = readLoad();
+      const loadAverage = observed.loadAverage;
+      const logicalCpuCount = observed.logicalCpuCount;
+      const loadPerCpu =
+        Array.isArray(loadAverage) &&
+        Number.isFinite(loadAverage[0]) &&
+        Number.isSafeInteger(logicalCpuCount) &&
+        logicalCpuCount > 0
+          ? loadAverage[0] / logicalCpuCount
+          : null;
+      const observation = {
+        at: timestamp(),
+        attempt,
+        context,
+        gatesTiming,
+        loadAverage,
+        loadPerCpu,
+        logicalCpuCount,
+        phase: gatesTiming
+          ? benchmarkWorkStarted
+            ? 'quiet-host-settle'
+            : 'quiet-host-admission'
+          : 'host-diagnostic',
+        posture: gatesTiming
+          ? benchmarkWorkStarted
+            ? 'post-benchmark'
+            : 'pre-benchmark'
+          : 'post-timing',
+        waitedMs,
+      };
+      observations.push(observation);
+      const comparable = Number.isFinite(loadPerCpu) && loadPerCpu >= 0 && loadPerCpu <= ceiling;
+      if (comparable || !gatesTiming || waitedMs >= availableWaitMs) {
+        return {
+          ...observation,
+          ceiling,
+          comparable,
+          settle: {
+            maxWaitMs: availableWaitMs,
+            observations,
+            pollMs,
+            rejectedObservations: observations.filter(
+              (entry) =>
+                !Number.isFinite(entry.loadPerCpu) ||
+                entry.loadPerCpu < 0 ||
+                entry.loadPerCpu > ceiling,
+            ).length,
+            totalBudgetRemainingMs: budget.remainingWaitMs,
+            waitedMs,
+          },
+        };
+      }
+      const waitMs = Math.min(pollMs, availableWaitMs - waitedMs);
+      await wait(waitMs);
+      waitedMs += waitMs;
+      budget.remainingWaitMs = Math.max(0, budget.remainingWaitMs - waitMs);
+      budget.totalWaitedMs += waitMs;
+      attempt += 1;
+    }
+  }
+  return {
+    admit(context) {
+      return sample(context, { gatesTiming: true });
+    },
+    markBenchmarkWork() {
+      benchmarkWorkStarted = true;
+    },
+    observe(context) {
+      return sample(context, { gatesTiming: false });
+    },
+    policy() {
+      return {
+        ceiling,
+        maxTotalWaitMs: maxWaitMs,
+        pollMs,
+        remainingWaitMs: budget.remainingWaitMs,
+        totalWaitedMs: budget.totalWaitedMs,
+      };
+    },
+  };
+}
+
+function assertPerformanceGateHostPolicy({ ceiling, maxWaitMs, pollMs }) {
+  if (!Number.isFinite(ceiling) || ceiling <= 0) throw new TypeError('host ceiling is invalid');
+  if (!Number.isSafeInteger(maxWaitMs) || maxWaitMs < 0 || maxWaitMs > MAX_HOST_SETTLE_MAX_MS) {
+    throw new TypeError(
+      `quiet-host total settle max must be between 0 and ${String(MAX_HOST_SETTLE_MAX_MS)}ms`,
+    );
+  }
+  if (!Number.isSafeInteger(pollMs) || pollMs < 10 || pollMs > 60_000) {
+    throw new TypeError('quiet-host settle poll must be between 10 and 60000ms');
+  }
+}
+
+function quietHostFailure(sample) {
+  const observed = Number.isFinite(sample.loadPerCpu)
+    ? sample.loadPerCpu.toFixed(3)
+    : 'unavailable';
+  return `${sample.posture} host load ${observed} per CPU exceeded ceiling ${String(
+    sample.ceiling,
+  )} after bounded ${String(sample.settle?.waitedMs ?? 0)}ms quiet-host admission`;
 }
 
 function kovoCliArgv(args) {
@@ -286,13 +515,35 @@ function profileCensus(directory) {
  */
 export async function runCheckScalingSuite(options) {
   const rungs = [];
-  for (const componentCount of options.ladder) {
+  const quietHost = createPerformanceGateHostAdmission({
+    ceiling: options.maxLoadPerCpu ?? 1,
+    maxWaitMs: options.hostSettleMaxMs ?? DEFAULT_HOST_SETTLE_MAX_MS,
+    pollMs: options.hostSettlePollMs ?? DEFAULT_HOST_SETTLE_POLL_MS,
+  });
+  const hostAdmission = {
+    initial: await quietHost.admit('check-scaling/suite-start'),
+    policy: quietHost.policy(),
+    suiteComplete: null,
+  };
+  let admissionError = hostAdmission.initial.comparable
+    ? null
+    : quietHostFailure(hostAdmission.initial);
+
+  rungLoop: for (const componentCount of options.ladder) {
+    if (admissionError !== null) break;
     const root = path.join(repoRoot, `.tmp-kovo-perf-scaling-${String(componentCount)}`);
-    const workload = materializePerfWorkload({ componentCount, repoRoot, root });
     const samples = [];
     try {
+      quietHost.markBenchmarkWork();
+      const workload = materializePerfWorkload({ componentCount, repoRoot, root });
       for (let sample = 0; sample < options.samples; sample += 1) {
-        const loadAverage = observedLoadAverage();
+        const admission = await quietHost.admit(
+          `check-scaling/N=${String(componentCount)}/sample=${String(sample)}`,
+        );
+        if (!admission.comparable) {
+          admissionError = quietHostFailure(admission);
+          break;
+        }
         const measured = measureProcessTreeCommand(
           [process.execPath, ...kovoCliArgv(['check', '--no-cache'])],
           {
@@ -311,7 +562,8 @@ export async function runCheckScalingSuite(options) {
           censusComplete: census?.complete ?? false,
           durationMs: measured.durationMs,
           exitCode: measured.exitCode,
-          loadAverage,
+          hostAdmission: admission,
+          loadAverage: admission.loadAverage[0],
           peakRssBytes: measured.peakRssBytes,
           phases: census?.evidence?.phases ?? [],
         });
@@ -323,11 +575,21 @@ export async function runCheckScalingSuite(options) {
     rungs.push({
       appSourceTrustMedianMs: trustSamples.length === 0 ? null : median(trustSamples),
       componentCount,
-      durationMedianMs: median(samples.map((sample) => sample.durationMs ?? 0)),
-      peakRssBytes: Math.max(...samples.map((sample) => sample.peakRssBytes ?? 0)),
+      durationMedianMs:
+        samples.length === 0 ? null : median(samples.map((sample) => sample.durationMs ?? 0)),
+      peakRssBytes:
+        samples.length === 0
+          ? null
+          : Math.max(...samples.map((sample) => sample.peakRssBytes ?? 0)),
       samples,
     });
+    if (admissionError !== null) break rungLoop;
   }
+
+  // This observation is after every timed rung. It describes the suite's own load tail and cannot
+  // retroactively establish pre-existing contention, so retain it without gating the ladder.
+  hostAdmission.suiteComplete = await quietHost.observe('check-scaling/suite-complete');
+  hostAdmission.policy = quietHost.policy();
 
   // Rung integrity gates the whole suite. A rung whose `kovo check` exited non-zero, or whose phase
   // census came back incomplete, did not measure the thing these metrics claim to measure — and a
@@ -343,10 +605,25 @@ export async function runCheckScalingSuite(options) {
           })`,
       ),
   );
-  if (brokenRungs.length > 0) {
+  const incompleteLadder =
+    rungs.length !== options.ladder.length ||
+    rungs.some((rung) => rung.samples.length !== options.samples);
+  if (admissionError !== null || brokenRungs.length > 0 || incompleteLadder) {
+    const reasons = [];
+    if (admissionError !== null) reasons.push(admissionError);
+    if (incompleteLadder) reasons.push('quiet-host admission prevented the complete ladder');
+    if (brokenRungs.length > 0) {
+      reasons.push(`check-scaling ladder did not complete cleanly: ${brokenRungs.join('; ')}`);
+    }
     return {
       detail: { rungs },
-      error: `check-scaling ladder did not complete cleanly: ${brokenRungs.join('; ')}`,
+      error: reasons.join('; '),
+      hostAdmission,
+      profiles: {
+        cpu: profileCensus(options.cpuProfDir),
+        heap: profileCensus(options.heapProfDir),
+      },
+      suite: 'check-scaling',
     };
   }
 
@@ -381,6 +658,7 @@ export async function runCheckScalingSuite(options) {
       cpu: profileCensus(options.cpuProfDir),
       heap: profileCensus(options.heapProfDir),
     },
+    hostAdmission,
     suite: 'check-scaling',
   };
 }
@@ -504,15 +782,36 @@ export async function runBytesSuite(options) {
     const compressed = { 'accept-encoding': 'br, gzip' };
     const document = await fetchWire(origin + '/', compressed);
     const identity = await fetchWire(origin + '/', { 'accept-encoding': 'identity' });
+    const integrityProblems = [
+      ...wireResponseIntegrityProblems('compressed document', document, {
+        allowedContentEncodings: ['br', 'gzip'],
+        contentTypePrefix: 'text/html',
+      }),
+      ...wireResponseIntegrityProblems('identity document', identity, {
+        allowedContentEncodings: [null],
+        contentTypePrefix: 'text/html',
+      }),
+    ];
 
     // Render-blocking closure: the document plus every stylesheet it links. Scripts are deferred by
     // construction in Kovo, so they are not on the critical path; a <link rel=stylesheet> is.
     const stylesheetHrefs = [
       ...(identity.text ?? '').matchAll(/<link[^>]+rel="stylesheet"[^>]*href="([^"]+)"/gu),
     ].map((match) => match[1]);
+    if (stylesheetHrefs.length === 0) {
+      integrityProblems.push(
+        "identity document linked no stylesheets; the critical-path metric would pass by omitting the workload's required CSS",
+      );
+    }
     let stylesheetWireBytes = 0;
     for (const href of stylesheetHrefs) {
       const asset = await fetchWire(new URL(href, origin).toString(), compressed);
+      integrityProblems.push(
+        ...wireResponseIntegrityProblems(`stylesheet ${href}`, asset, {
+          allowedContentEncodings: ['br', 'gzip'],
+          contentTypePrefix: 'text/css',
+        }),
+      );
       stylesheetWireBytes += asset.wireBytes;
     }
 
@@ -520,6 +819,12 @@ export async function runBytesSuite(options) {
       ...compressed,
       accept: 'application/vnd.kovo.document-parts+json',
     });
+    integrityProblems.push(
+      ...wireResponseIntegrityProblems('enhanced-navigation document', navigation, {
+        allowedContentEncodings: ['br', 'gzip'],
+        contentTypePrefix: 'application/vnd.kovo.document-parts+json',
+      }),
+    );
 
     const inlineScripts = [
       ...(identity.text ?? '').matchAll(/<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/gu),
@@ -528,6 +833,27 @@ export async function runBytesSuite(options) {
       (longest, candidate) => (candidate.length > longest.length ? candidate : longest),
       '',
     );
+    if (inlineBootstrap === '') {
+      integrityProblems.push(
+        'identity document carried no inline bootstrap; this workload is interactive, so zero bytes would be a functionality failure rather than a size win',
+      );
+    }
+
+    if (integrityProblems.length > 0) {
+      return {
+        detail: {
+          documentContentEncoding: document.contentEncoding,
+          documentStatus: document.status,
+          identityStatus: identity.status,
+          navigationContentType: navigation.headers['content-type'] ?? null,
+          navigationStatus: navigation.status,
+          stylesheetHrefs,
+        },
+        error: `bytes suite integrity check failed: ${integrityProblems.join('; ')}`,
+        metrics: {},
+        suite: 'bytes',
+      };
+    }
 
     return {
       detail: {
@@ -579,24 +905,42 @@ async function loadGenerate(origin, connections, durationMs) {
   const http = await import('node:http');
   const ttfbSamples = [];
   let completed = 0;
+  let requestErrors = 0;
+  let responseErrors = 0;
+  const statusCounts = {};
   const deadline = performance.now() + durationMs;
 
   async function oneRequest() {
     return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
       const startedAt = performance.now();
       const request = http.get(
         `${origin}/`,
         { agent, headers: { 'accept-encoding': 'identity' } },
         (response) => {
+          const status = String(response.statusCode ?? 0);
+          statusCounts[status] = (statusCounts[status] ?? 0) + 1;
           ttfbSamples.push(performance.now() - startedAt);
           response.resume();
           response.on('end', () => {
             completed += 1;
-            resolve();
+            finish();
+          });
+          response.on('error', () => {
+            responseErrors += 1;
+            finish();
           });
         },
       );
-      request.on('error', () => resolve());
+      request.on('error', () => {
+        requestErrors += 1;
+        finish();
+      });
     });
   }
 
@@ -610,6 +954,9 @@ async function loadGenerate(origin, connections, durationMs) {
   agent.destroy();
   return {
     requestsPerSecond: (completed / elapsedMs) * 1000,
+    requestErrors,
+    responseErrors,
+    statusCounts,
     ttfbMedianMs: median(ttfbSamples),
     ttfbSampleCount: ttfbSamples.length,
   };
@@ -652,8 +999,26 @@ export async function runSsrSuite(options) {
         suite: 'ssr',
       };
     }
-    await loadGenerate(origin, options.connections, 2000);
+    const warmup = await loadGenerate(origin, options.connections, 2000);
+    const warmupProblems = loadGenerationIntegrityProblems('SSR warmup', warmup);
+    if (warmupProblems.length > 0) {
+      return {
+        detail: { warmup },
+        error: `SSR suite integrity check failed: ${warmupProblems.join('; ')}`,
+        metrics: {},
+        suite: 'ssr',
+      };
+    }
     const measured = await loadGenerate(origin, options.connections, options.durationMs);
+    const measurementProblems = loadGenerationIntegrityProblems('SSR measurement', measured);
+    if (measurementProblems.length > 0) {
+      return {
+        detail: { measured, warmup },
+        error: `SSR suite integrity check failed: ${measurementProblems.join('; ')}`,
+        metrics: {},
+        suite: 'ssr',
+      };
+    }
     return {
       detail: {
         ...measured,
@@ -661,6 +1026,7 @@ export async function runSsrSuite(options) {
         // Diagnostic only: this is mostly the suite's own saturation, not contention.
         loadAverageDuringRun: observedLoadAverage(),
         preSuiteLoadAverage,
+        warmup,
       },
       metrics: {
         'production.ssr.requestsPerSecondFloor': {
@@ -895,15 +1261,93 @@ function parseArgs(argv) {
   return args;
 }
 
-function hostFacts() {
-  return {
-    arch: process.arch,
-    cpuCount:
-      (spawnSync('sysctl', ['-n', 'hw.ncpu'], { encoding: 'utf8' }).stdout ?? '').trim() || null,
-    loadAverage: loadavg(),
-    node: process.version,
-    platform: process.platform,
+export function performanceGateWorkloadIdentity(suite, options) {
+  const identity = {
+    adapters: { perfGate: PERF_REPORT_SCHEMA, workload: 'kovo-realistic-workload/v1' },
+    cells: [suite],
+    policies:
+      suite === 'check-scaling'
+        ? {
+            hostLoadCeilingPerCpu: options.maxLoadPerCpu ?? 1,
+            hostSettleMaxTotalMs: options.hostSettleMaxMs ?? DEFAULT_HOST_SETTLE_MAX_MS,
+            hostSettlePollMs: options.hostSettlePollMs ?? DEFAULT_HOST_SETTLE_POLL_MS,
+            ladder: [...options.ladder],
+            samplesPerRung: options.samples,
+          }
+        : { componentCount: options.componentCount },
   };
+  return {
+    complete:
+      typeof suite === 'string' &&
+      suite.length > 0 &&
+      (suite !== 'check-scaling' ||
+        (Array.isArray(options.ladder) &&
+          options.ladder.length >= 2 &&
+          Number.isSafeInteger(options.samples) &&
+          options.samples > 0)),
+    digest: `sha256:${createHash('sha256').update(canonicalJson(identity)).digest('hex')}`,
+    identity,
+    schema: PERF_GATE_WORKLOAD_SCHEMA,
+  };
+}
+
+export function performanceGateHostSamples(result, host, ceiling = 1) {
+  const timedSamples =
+    result?.suite === 'check-scaling'
+      ? (result.detail?.rungs ?? []).flatMap((rung) =>
+          (rung.samples ?? []).map((sample, index) => {
+            const oneMinuteLoad = Array.isArray(sample.loadAverage)
+              ? sample.loadAverage[0]
+              : sample.loadAverage;
+            return {
+              at: sample.hostAdmission?.at ?? null,
+              ceiling: sample.hostAdmission?.ceiling ?? ceiling,
+              context: `N=${String(rung.componentCount)}/sample=${String(index)}`,
+              loadAverage: [oneMinuteLoad],
+              loadPerCpu: oneMinuteLoad / host.cpu.count,
+              phase: 'check-scaling',
+              ...(sample.hostAdmission === undefined
+                ? {}
+                : {
+                    posture: sample.hostAdmission.posture,
+                    settle: sample.hostAdmission.settle,
+                  }),
+            };
+          }),
+        )
+      : [];
+  const initialAdmission = result?.hostAdmission?.initial;
+  const lastTimedAdmission = timedSamples.at(-1);
+  const authority =
+    lastTimedAdmission ??
+    (initialAdmission === undefined
+      ? null
+      : {
+          at: initialAdmission.at,
+          ceiling: initialAdmission.ceiling,
+          context: initialAdmission.context,
+          loadAverage: initialAdmission.loadAverage,
+          loadPerCpu: initialAdmission.loadPerCpu,
+          posture: initialAdmission.posture,
+          settle: initialAdmission.settle,
+        });
+  const observed = authority?.loadAverage ?? loadavg();
+  const postTimingDiagnostic = result?.hostAdmission?.suiteComplete ?? null;
+  return [
+    ...timedSamples,
+    {
+      admissionContext: authority?.context ?? null,
+      at: authority === null ? new Date().toISOString() : authority.at,
+      ceiling: authority?.ceiling ?? ceiling,
+      context: result?.suite ?? 'unknown',
+      loadAverage: observed,
+      loadPerCpu: authority?.loadPerCpu ?? observed[0] / host.cpu.count,
+      phase: 'suite-complete',
+      postTimingDiagnostic,
+      ratificationBasis: authority === null ? 'unavailable' : 'last-pre-timing-admission',
+      ...(authority === null ? {} : { posture: 'last-timed-admission', settle: authority.settle }),
+    },
+  ];
 }
 
 async function main(argv) {
@@ -963,6 +1407,7 @@ async function main(argv) {
         '       node scripts/perf-gate.mjs --evaluate report.json [--evaluate other.json]\n' +
         'options: --ladder 8,24,72,216  --samples 1  --components 24  --port 43117\n' +
         '         --connections 32  --duration 10000  --edits 5\n' +
+        '         --host-settle-max-ms 30000  --host-settle-poll-ms 1000\n' +
         '         --cpu-prof <dir>  --heap-prof <dir>\n' +
         '       node scripts/perf-gate.mjs --profile-summary <dir>\n',
     );
@@ -971,35 +1416,96 @@ async function main(argv) {
   }
 
   const options = {
-    componentCount: Number(args.components ?? 24),
-    connections: Number(args.connections ?? 32),
+    componentCount: parsePositiveIntegerOption('components', args.components, 24, { max: 10_000 }),
+    connections: parsePositiveIntegerOption('connections', args.connections, 32, { max: 10_000 }),
     cpuProfDir: args['cpu-prof'] === undefined ? undefined : path.resolve(String(args['cpu-prof'])),
-    durationMs: Number(args.duration ?? 10_000),
-    editTimeoutMs: Number(args['edit-timeout'] ?? 240_000),
-    edits: Number(args.edits ?? 5),
+    durationMs: parsePositiveIntegerOption('duration', args.duration, 10_000, { max: 86_400_000 }),
+    editTimeoutMs: parsePositiveIntegerOption('edit-timeout', args['edit-timeout'], 240_000, {
+      max: 86_400_000,
+    }),
+    edits: parsePositiveIntegerOption('edits', args.edits, 5, { max: 10_000 }),
     heapProfDir:
       args['heap-prof'] === undefined ? undefined : path.resolve(String(args['heap-prof'])),
+    hostSettleMaxMs: parsePositiveIntegerOption(
+      'host-settle-max-ms',
+      args['host-settle-max-ms'],
+      DEFAULT_HOST_SETTLE_MAX_MS,
+      { max: MAX_HOST_SETTLE_MAX_MS, min: 0 },
+    ),
+    hostSettlePollMs: parsePositiveIntegerOption(
+      'host-settle-poll-ms',
+      args['host-settle-poll-ms'],
+      DEFAULT_HOST_SETTLE_POLL_MS,
+      { max: 60_000, min: 10 },
+    ),
     // Default matches the span the budgets were calibrated on (the 72->216 marginal step). A
     // shorter default would compute the exponent over 24->72, where a genuinely quadratic workload
     // can still look linear — a gate that cannot see the regression it exists to catch.
-    ladder: String(args.ladder ?? '8,24,72,216')
-      .split(',')
-      .map((value) => Number(value.trim()))
-      .filter((value) => Number.isInteger(value) && value > 0),
-    port: Number(args.port ?? 43_117),
-    readyTimeoutMs: Number(args['ready-timeout'] ?? 300_000),
-    samples: Number(args.samples ?? 1),
-    timeoutMs: Number(args.timeout ?? 1_800_000),
+    ladder: parseLadderOption(args.ladder),
+    port: parsePositiveIntegerOption('port', args.port, 43_117, { max: 65_534, min: 1024 }),
+    readyTimeoutMs: parsePositiveIntegerOption('ready-timeout', args['ready-timeout'], 300_000, {
+      max: 86_400_000,
+    }),
+    samples: parsePositiveIntegerOption('samples', args.samples, 1, { max: 1_000 }),
+    timeoutMs: parsePositiveIntegerOption('timeout', args.timeout, 1_800_000, {
+      max: 86_400_000,
+    }),
   };
 
   const startedAt = new Date().toISOString();
+  const source = collectPerformanceProvenance({
+    lockFiles: [
+      'pnpm-lock.yaml',
+      'benchmarks/nextjs/pnpm-lock.yaml',
+      'benchmarks/harness/pnpm-lock.yaml',
+    ],
+    repoRoot,
+  });
+  const execution = performanceExecutionIdentity({ startedAt });
   const result = await suite(options);
+  const sourceAfter = collectPerformanceProvenance({
+    lockFiles: [
+      'pnpm-lock.yaml',
+      'benchmarks/nextjs/pnpm-lock.yaml',
+      'benchmarks/harness/pnpm-lock.yaml',
+    ],
+    repoRoot,
+  });
+  const host = performanceHostFingerprint();
+  const workloadIdentity = performanceGateWorkloadIdentity(suiteName, options);
+  const sourceStable = canonicalJson(source) === canonicalJson(sourceAfter);
+  const verdictReasons = [];
+  if (result.error !== undefined) verdictReasons.push(result.error);
+  if (source.dirty || sourceAfter.dirty) verdictReasons.push('source provenance is dirty');
+  if (!sourceStable) verdictReasons.push('source provenance changed during run');
+  for (const finding of executionIdentityFindings(execution)) verdictReasons.push(finding);
+  if (!workloadIdentity.complete) verdictReasons.push('workload identity is incomplete');
   const report = {
+    execution,
     finishedAt: new Date().toISOString(),
-    host: hostFacts(),
+    generatedAt: new Date().toISOString(),
+    host,
+    hostDiagnostics:
+      result.hostAdmission?.suiteComplete === undefined ? [] : [result.hostAdmission.suiteComplete],
+    hostSamples: performanceGateHostSamples(result, host),
+    integrity: {
+      complete: result.error === undefined,
+      executionAuthenticated: executionIdentityFindings(execution).length === 0,
+      publishable: source.dirty === false && sourceAfter.dirty === false,
+      serialized: true,
+      sourceStable,
+      workloadAuthenticated: workloadIdentity.complete,
+    },
     options,
     schema: PERF_REPORT_SCHEMA,
+    source,
+    sourceAfter,
     startedAt,
+    verdict: {
+      reasons: [...new Set(verdictReasons)].sort(),
+      status: verdictReasons.length === 0 ? 'measured' : 'unproven',
+    },
+    workloadIdentity,
     ...result,
   };
   const outPath = args.out === undefined ? null : path.resolve(String(args.out));

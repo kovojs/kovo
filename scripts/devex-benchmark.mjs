@@ -73,7 +73,7 @@ const KOVO_DEV_PHASE_CENSUS_SCHEMA = 'kovo-devex-dev-phase-census/v1';
 const KOVO_PACKED_CHECK_PHASES = Object.freeze([
   Object.freeze({ name: 'lifecycle-policy', status: 'not-applicable' }),
   Object.freeze({ name: 'config-trust', status: 'executed' }),
-  Object.freeze({ name: 'typescript', status: 'not-applicable' }),
+  Object.freeze({ name: 'typescript', status: 'executed' }),
   Object.freeze({ name: 'project-quality', status: 'not-applicable' }),
   Object.freeze({ name: 'sound-subset', status: 'not-applicable' }),
   Object.freeze({ name: 'session-authority', status: 'executed' }),
@@ -84,11 +84,13 @@ const KOVO_PACKED_CHECK_PHASES = Object.freeze([
   Object.freeze({ name: 'graph-diagnostics', status: 'executed' }),
 ]);
 const KOVO_INCREMENTAL_ALWAYS_EXECUTED_PHASES = new Set([
+  'session-authority',
   'app-evaluation',
   'build-check-graph',
   'graph-diagnostics',
 ]);
 const KOVO_INCREMENTAL_EDIT_DEPENDENT_PHASES = new Set([
+  'typescript',
   'session-authority',
   'app-source-trust',
   'stylesheet',
@@ -99,7 +101,6 @@ const KOVO_INCREMENTAL_EDIT_DEPENDENT_PHASES = new Set([
 const KOVO_INCREMENTAL_EDIT_INVARIANT_PHASES = new Set([
   'lifecycle-policy',
   'config-trust',
-  'typescript',
   'project-quality',
   'sound-subset',
 ]);
@@ -1895,7 +1896,6 @@ function packedCheckPhaseFindings(phases, label, incremental = false) {
       !expectedStatus.includes(observed?.status) ||
       !finiteNonNegative(observed?.durationMs) ||
       (expected.status === 'not-applicable' && observed.durationMs !== 0) ||
-      (observed?.status === 'reused-authenticated' && observed.durationMs !== 0) ||
       (incremental && !validDigest(observed?.inputDigest))
     ) {
       findings.push(
@@ -1922,21 +1922,28 @@ function observeIncrementalPhaseDigests(evidence, phases, revision, sourceRevisi
       throw new Error(`${label}.${expected.name} cannot reuse an empty session cache`);
     }
     const previousDigest = evidence.previousDigests.get(expected.name);
-    if (observed.status === 'reused-authenticated' && previousDigest !== observed.inputDigest) {
-      throw new Error(`${label}.${expected.name} reused facts for a changed input digest`);
+    const sourceKey = `${expected.name}\0${String(sourceRevision)}`;
+    const sourceDigest = evidence.digestsBySourceRevision.get(sourceKey);
+    if (
+      observed.status === 'reused-authenticated' &&
+      expected.name !== 'typescript' &&
+      sourceDigest === undefined &&
+      previousDigest !== observed.inputDigest
+    ) {
+      throw new Error(`${label}.${expected.name} reused unauthenticated facts`);
     }
     if (
       expected.status === 'executed' &&
       previousDigest !== undefined &&
       previousDigest !== observed.inputDigest &&
-      observed.status !== 'executed'
+      observed.status !== 'executed' &&
+      expected.name !== 'typescript' &&
+      sourceDigest !== observed.inputDigest
     ) {
       throw new Error(`${label}.${expected.name} did not execute for its changed input digest`);
     }
     evidence.previousDigests.set(expected.name, observed.inputDigest);
 
-    const sourceKey = `${expected.name}\0${String(sourceRevision)}`;
-    const sourceDigest = evidence.digestsBySourceRevision.get(sourceKey);
     if (sourceDigest !== undefined && sourceDigest !== observed.inputDigest) {
       throw new Error(
         `${label}.${expected.name} maps source revision ${String(
@@ -4365,6 +4372,12 @@ export function produceFreshKovoPackedRelease(options = {}) {
       ['run', 'check:publish'],
       sourceRoot,
       'fresh pack code-owned publish build',
+      {
+        ...process.env,
+        // The detached source is the artifact authority. An enclosing PR job's GITHUB_SHA names
+        // a different commit and must not leak into the authenticated docs snapshot.
+        KOVO_SOURCE_COMMIT: sourceCommit,
+      },
     );
     const trackedChanges = producerCommand(
       spawn,

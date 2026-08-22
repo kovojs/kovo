@@ -9,6 +9,7 @@ import { createApp } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import {
+  bindKovoAppShellViteDevLiveTargetAttestationSecret,
   createKovoAppShellDevDiagnosticLedger,
   dispatchKovoAppShellViteDevRequest,
   kovoAppShellViteDevPlugin as createRawKovoAppShellViteDevPlugin,
@@ -863,7 +864,10 @@ function viteDevSsrLoadModule(
 ): (id: string) => Promise<Record<string, unknown>> {
   return async (id) =>
     id === '@kovojs/server/internal/app-shell-vite'
-      ? { dispatchKovoAppShellViteDevRequest }
+      ? {
+          bindKovoAppShellViteDevLiveTargetAttestationSecret,
+          dispatchKovoAppShellViteDevRequest,
+        }
       : id === '@kovojs/server'
         ? {}
         : await loadAppModule(id);

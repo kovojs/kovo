@@ -2757,6 +2757,10 @@ describe('kovo check', () => {
       writeFileSync(join(parent, 'package.json'), '{"type":"module"}\n', 'utf8');
       symlinkSync(new URL('./bin.ts', import.meta.url), entryPath);
       symlinkSync(
+        new URL('./cli-version-fast-path.mjs', import.meta.url),
+        join(spacedDir, 'cli-version-fast-path.mjs'),
+      );
+      symlinkSync(
         new URL('./invocation-environment.ts', import.meta.url),
         join(spacedDir, 'invocation-environment.ts'),
       );
@@ -2784,6 +2788,11 @@ describe('kovo check', () => {
 
     try {
       writeFileSync(entryPath, readFileSync(new URL('./bin.ts', import.meta.url), 'utf8'), 'utf8');
+      writeFileSync(
+        join(parent, 'cli-version-fast-path.mjs'),
+        readFileSync(new URL('./cli-version-fast-path.mjs', import.meta.url), 'utf8'),
+        'utf8',
+      );
       writeFileSync(
         join(parent, 'invocation-environment.js'),
         [

@@ -27,6 +27,7 @@ import { deriveClosedKovoApp } from './app-snapshot.js';
 import { runWithGeneratedLiveTargetRegistry } from './live-target-registry.js';
 import { createRequestHandler } from './app.js';
 import type { KovoApp } from './app-types.js';
+import { mintDevelopmentLiveTargetAttestationSecret } from './crypto-authority.js';
 import {
   computeRenderPlanFingerprint,
   replaceVersionedClientModuleBuildSnapshot,
@@ -65,7 +66,11 @@ import {
   type NodeRequestHandler,
 } from './node.js';
 import { renderLiveTargetChunks } from './mutation.js';
-import { mutationWireRequestFromHeaders, type LiveTargetRenderer } from './mutation-wire.js';
+import {
+  bindViteDevelopmentLiveTargetAttestationSecret,
+  mutationWireRequestFromHeaders,
+  type LiveTargetRenderer,
+} from './mutation-wire.js';
 import { readHeader, routeResponseToWebResponse, type RoutePageResponse } from './response.js';
 import { authorizeRouteRequest } from './route.js';
 import { matchShellDispatch } from './shell.js';
@@ -110,6 +115,7 @@ import {
   securityNumberIsInteger,
   securityPromiseResolve,
   securityPromiseThen,
+  securityRandomBytes,
   securityRegExpReplace,
   securityResponseBody,
   securityResponseHeaders,
@@ -128,6 +134,7 @@ import {
   securityStringToLowerCase,
   securityStringTrim,
 } from './response-security-intrinsics.js';
+import { replaceDocumentHeader } from './document-core.js';
 import {
   createWitnessWeakMap,
   witnessDefineProperty,
@@ -145,10 +152,12 @@ import {
 import { createNativeRequest } from './request-carrier.js';
 import { sourceDocumentHeaderIsRetained } from './source-document-headers.js';
 import { buildSecurityFunctionSource } from './build-security-intrinsics.js';
+import { admitKovoViteDevStyleNonce, admitKovoViteDevStyleNonceHeader } from './vite-dev-csp.js';
 
 const kovoHmrClientPath = '/@kovo/hmr-client';
 const kovoHmrRouteRefreshPath = '/@kovo/hmr/refresh/route';
 const kovoHmrLiveTargetRefreshPath = '/@kovo/hmr/refresh/live-targets';
+const kovoViteDevelopmentLiveTargetAttestationSecret = mintDevelopmentLiveTargetAttestationSecret();
 const kovoHmrClientScript = `<script type="module" src="${kovoHmrClientPath}"></script>`;
 const kovoHmrWireInputGrammarSource = canonicalJsonStringify(FRAMEWORK_WIRE_INPUT_GRAMMAR);
 const kovoHmrWireTargetCodecSource = buildSecurityFunctionSource(createFrameworkWireTargetCodec);
@@ -851,6 +860,17 @@ export async function dispatchKovoAppShellViteDevRequest(
 }
 
 /**
+ * Bind the outer trusted Vite plugin's process-lifetime dev signing secret before app import.
+ *
+ * @internal A fresh SSR generation re-evaluates framework modules, so its module-local fallback
+ * cannot authenticate descriptors minted by the prior generation. The supported runner supplies
+ * one stable value through this framework-only export (SPEC §6.2.1/§6.6/§9.5.1).
+ */
+export function bindKovoAppShellViteDevLiveTargetAttestationSecret(secret: unknown): void {
+  bindViteDevelopmentLiveTargetAttestationSecret(secret);
+}
+
+/**
  * Eagerly prove one fresh runner generation before the broker can make it active.
  *
  * @internal SPEC §6.2.1: app import, single assembly, exact opaque-token adoption, and compiler
@@ -1170,6 +1190,7 @@ export function kovoAppShellViteDevPlugin(
   options: KovoAppShellViteDevPluginOptions = {},
 ): KovoAppShellViteDevPlugin {
   const moduleId = options.moduleId ?? '/src/app-shell.ts';
+  const liveTargetAttestationSecret = kovoViteDevelopmentLiveTargetAttestationSecret;
   let root = process.cwd();
   let stageRunnerGeneration: ((token: object) => Promise<void>) | undefined;
 
@@ -1302,6 +1323,11 @@ export function kovoAppShellViteDevPlugin(
         async validate(moduleServer: KovoViteDevRunnerModuleServer): Promise<void> {
           const serverModule =
             await moduleServer.ssrLoadModule<Record<string, unknown>>(appShellModuleId);
+          bindKovoAppShellViteDevGenerationLiveTargetAttestationSecret(
+            serverModule,
+            appShellModuleId,
+            liveTargetAttestationSecret,
+          );
           const prepareGeneration = viteDevModuleExportValue(
             serverModule,
             'prepareKovoAppShellViteDevGeneration',
@@ -1355,6 +1381,11 @@ export function kovoAppShellViteDevPlugin(
       }
       const serverModule =
         await moduleServer.ssrLoadModule<Record<string, unknown>>(appShellModuleId);
+      bindKovoAppShellViteDevGenerationLiveTargetAttestationSecret(
+        serverModule,
+        appShellModuleId,
+        liveTargetAttestationSecret,
+      );
       const dispatch = viteDevModuleExportValue(
         serverModule,
         'dispatchKovoAppShellViteDevRequest',
@@ -1428,6 +1459,24 @@ export function kovoAppShellViteDevPlugin(
     },
     name: options.name ?? 'kovo-app-shell-dev',
   };
+}
+
+function bindKovoAppShellViteDevGenerationLiveTargetAttestationSecret(
+  serverModule: Record<string, unknown>,
+  appShellModuleId: string,
+  secret: string,
+): void {
+  const bind = viteDevModuleExportValue(
+    serverModule,
+    'bindKovoAppShellViteDevLiveTargetAttestationSecret',
+    `${appShellModuleId} development live-target attestation binder`,
+  );
+  if (typeof bind !== 'function') {
+    throw new TypeError(
+      `${appShellModuleId} must export its development live-target attestation binder.`,
+    );
+  }
+  witnessReflectApply(bind, undefined, [secret]);
 }
 
 function requiredViteDevRunnerModuleId(
@@ -1910,18 +1959,25 @@ function exactHmrPreviousBuildToken(
 function injectKovoHmrScriptIntoRouteResponse(response: RoutePageResponse): RoutePageResponse {
   if (
     typeof response.body !== 'string' ||
-    !shouldInjectKovoHmrScript(
-      response.status,
-      readHeader(response.headers, 'Content-Type'),
-      response.body,
-    )
+    !shouldInjectKovoHmrScript(response.status, readHeader(response.headers, 'Content-Type'))
   ) {
     return response;
   }
 
+  const nonce = createKovoViteDevCspNonce();
+  const policy = readHeader(response.headers, 'Content-Security-Policy');
+
   return {
     ...response,
-    body: injectKovoHmrScript(response.body),
+    body: injectKovoHmrScript(response.body, nonce),
+    headers:
+      policy === undefined
+        ? response.headers
+        : replaceDocumentHeader(
+            response.headers,
+            'Content-Security-Policy',
+            admitKovoViteDevStyleNonce(policy, nonce),
+          ),
   };
 }
 
@@ -1929,12 +1985,21 @@ async function injectKovoHmrScriptIntoWebResponse(response: Response): Promise<R
   const responseHeaders = securityResponseHeaders(response);
   const contentType = securityHeadersGet(responseHeaders, 'Content-Type');
   const status = securityResponseStatus(response);
-  if (!shouldInjectKovoHmrScript(status, contentType, null)) return response;
+  if (!shouldInjectKovoHmrScript(status, contentType)) return response;
 
   const headers = createSecurityHeaders(responseHeaders);
   securityHeadersDelete(headers, 'content-length');
+  const nonce = createKovoViteDevCspNonce();
+  const policy = securityHeadersGet(headers, 'Content-Security-Policy');
+  if (policy !== null) {
+    securityHeadersSet(
+      headers,
+      'Content-Security-Policy',
+      admitKovoViteDevStyleNonce(policy, nonce),
+    );
+  }
 
-  return createSecurityResponse(injectKovoHmrScript(await securityResponseText(response)), {
+  return createSecurityResponse(injectKovoHmrScript(await securityResponseText(response), nonce), {
     headers,
     status,
     statusText: securityResponseStatusText(response),
@@ -2021,11 +2086,21 @@ function injectKovoHmrScriptIntoNodeResponse(
       );
       const status = response.statusCode;
       const body = securityBufferToString(securityBufferConcat(chunks), 'utf8');
-      const nextBody = shouldInjectKovoHmrScript(status, contentType, body)
-        ? injectKovoHmrScript(body)
-        : body;
-      if (nextBody !== body) {
+      const inject = shouldInjectKovoHmrScript(status, contentType);
+      const nonce = inject ? createKovoViteDevCspNonce() : null;
+      const nextBody = nonce === null ? body : injectKovoHmrScript(body, nonce);
+      if (nonce !== null && nextBody !== body) {
         witnessReflectApply(viteDevNodeResponseRemoveHeader, response, ['Content-Length']);
+        const policy = witnessReflectApply<unknown>(viteDevNodeResponseGetHeader, response, [
+          'Content-Security-Policy',
+        ]);
+        const admittedPolicy = admitKovoViteDevStyleNonceHeader(policy, nonce);
+        if (admittedPolicy !== null) {
+          witnessReflectApply(viteDevNodeResponseSetHeader, response, [
+            'Content-Security-Policy',
+            admittedPolicy,
+          ]);
+        }
       }
 
       if (typeof encodingOrCallback === 'function') {
@@ -2080,10 +2155,8 @@ function appendNodeResponseChunk(
 function shouldInjectKovoHmrScript(
   status: number,
   contentType: string | null | undefined,
-  body: unknown,
 ): boolean {
   if (status < 200 || status >= 600) return false;
-  if (typeof body === 'string' && securityStringIncludes(body, kovoHmrClientPath)) return false;
   return securityStringIncludes(securityStringToLowerCase(contentType ?? ''), 'text/html');
 }
 
@@ -2099,14 +2172,30 @@ function isKovoFragmentOrQueryReadRequest(request: IncomingMessage): boolean {
   );
 }
 
-function injectKovoHmrScript(html: string): string {
-  if (securityStringIncludes(html, kovoHmrClientPath)) return html;
+function injectKovoHmrScript(html: string, nonce: string): string {
+  const hasHmrClient = securityStringIncludes(html, kovoHmrClientPath);
+  const nonceMeta = `<meta property="csp-nonce" nonce="${nonce}">`;
+  const openingHead = '<head>';
+  const openingHeadIndex = securityStringIndexOf(html, openingHead);
   const closingHead = '</head>';
   const closingHeadIndex = securityStringIndexOf(html, closingHead);
   if (closingHeadIndex >= 0) {
-    return `${securityStringSlice(html, 0, closingHeadIndex)}${kovoHmrClientScript}${securityStringSlice(html, closingHeadIndex)}`;
+    const withNonce =
+      openingHeadIndex >= 0 && openingHeadIndex < closingHeadIndex
+        ? `${securityStringSlice(html, 0, openingHeadIndex + openingHead.length)}${nonceMeta}${securityStringSlice(html, openingHeadIndex + openingHead.length)}`
+        : `${nonceMeta}${html}`;
+    if (hasHmrClient) return withNonce;
+    const adjustedClosingHeadIndex = securityStringIndexOf(withNonce, closingHead);
+    return `${securityStringSlice(withNonce, 0, adjustedClosingHeadIndex)}${kovoHmrClientScript}${securityStringSlice(withNonce, adjustedClosingHeadIndex)}`;
   }
-  return `${kovoHmrClientScript}${html}`;
+  return `${nonceMeta}${hasHmrClient ? '' : kovoHmrClientScript}${html}`;
+}
+
+function createKovoViteDevCspNonce(): string {
+  // Vite reads this exact value from meta[property=csp-nonce] for its runtime error-overlay and
+  // CSS style nodes. It must be fresh per response; a static development nonce would turn the
+  // strict CSP floor into reusable inline-style authority (SPEC §6.6 rule 3 / §9.5.1).
+  return securityBufferToString(securityRandomBytes(16), 'base64');
 }
 
 /** @internal Exact dev-client source; exported for in-repo security execution tests. */
@@ -2126,16 +2215,15 @@ const hmrTargetSnapshotReader = createHmrTargetSnapshotReader(
   frameworkWireTargetCodec,
 );
 const currentBuild = () => hmrTargetSnapshotReader.currentBuild(document);
-const liveTargets = () => hmrTargetSnapshotReader.liveTargets(document);
-const dependencyTargets = () => hmrTargetSnapshotReader.dependencyTargets(document);
 
-async function refreshLiveTargets() {
+async function refreshLiveTargets(event) {
   const apply = globalThis.__kovo_a;
   let live;
   let targets;
   try {
-    live = liveTargets();
-    targets = dependencyTargets();
+    const snapshot = hmrTargetSnapshotReader.componentRefreshSnapshot(event, document);
+    live = snapshot.liveTargets;
+    targets = snapshot.targets;
   } catch {
     return reload();
   }
@@ -2185,12 +2273,12 @@ async function refreshLiveTargets() {
 }
 
 let liveTargetRefreshRunning = false;
-async function scheduleLiveTargetRefresh() {
+async function scheduleLiveTargetRefresh(event) {
   if (liveTargetRefreshRunning) return;
 
   liveTargetRefreshRunning = true;
   try {
-    await refreshLiveTargets();
+    await refreshLiveTargets(event);
   } catch {
     reload();
   } finally {
@@ -2198,16 +2286,20 @@ async function scheduleLiveTargetRefresh() {
   }
 }
 
-hot.on("kovo:component-render", () => {
+hot.on("kovo:component-render", (event) => {
   // SPEC §9.5.1: one source invalidation can produce adjacent component-render notices.
   // Coalesce them while the server-owned refresh is pending so a duplicate cannot use the first
   // response's committed build with its already-consumed live-target attestation and force a
   // document reload that discards client-owned draft state.
-  void scheduleLiveTargetRefresh();
+  void scheduleLiveTargetRefresh(event);
 });
 // SPEC §5.2 rule 10: a whole-document refresh must re-enter the canonical server document sink.
 // Do not introduce a second raw HTML parser through document.write in the dev-only client.
-hot.on("kovo:diagnostics", reload);
+hot.on("kovo:diagnostics", () => {
+  // SPEC §9.5.1: this authenticated event is an observation, not DOM authority. The compiler
+  // follows it with Vite's native error frame and clears that native overlay only after every
+  // still-current diagnostic source recovers, preserving the retained document's local state.
+});
 hot.on("kovo:route-shell", reload);
 hot.on("kovo:full-reload", reload);
 `;

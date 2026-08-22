@@ -41,6 +41,7 @@ import { layout, route } from './route.js';
 import {
   createKovoAppShellDevDiagnosticLedger,
   createKovoAppShellViteDevIntegration,
+  bindKovoAppShellViteDevLiveTargetAttestationSecret,
   dispatchKovoAppShellViteDevRequest,
   kovoAppShellViteDevPlugin as createRawKovoAppShellViteDevPlugin,
   prepareKovoAppShellViteDevGeneration,
@@ -526,14 +527,22 @@ describe('server app shell Vite dev seam', () => {
 
   it('reloads the graph-local request dispatcher after Vite SSR invalidation', async () => {
     let middleware: KovoAppShellViteMiddleware | undefined;
+    const generationEvents: string[] = [];
+    const generationSecrets: string[] = [];
     const integration = createKovoAppShellViteDevIntegration({
       moduleId: '/src/app-shell.ts',
     });
     const firstDispatch = vi.fn(
-      async (...args: Parameters<typeof dispatchKovoAppShellViteDevRequest>) => args[4](),
+      async (...args: Parameters<typeof dispatchKovoAppShellViteDevRequest>) => {
+        generationEvents.push('first:dispatch');
+        args[4]();
+      },
     );
     const reloadedDispatch = vi.fn(
-      async (...args: Parameters<typeof dispatchKovoAppShellViteDevRequest>) => args[4](),
+      async (...args: Parameters<typeof dispatchKovoAppShellViteDevRequest>) => {
+        generationEvents.push('reloaded:dispatch');
+        args[4]();
+      },
     );
     let requestCount = 0;
     const server = {
@@ -545,9 +554,14 @@ describe('server app shell Vite dev seam', () => {
       },
       async ssrLoadModule(id: string) {
         expect(id).toBe('@kovojs/server/internal/app-shell-vite');
+        const generation = requestCount === 0 ? 'first' : 'reloaded';
+        const dispatch = requestCount++ === 0 ? firstDispatch : reloadedDispatch;
         return {
-          dispatchKovoAppShellViteDevRequest:
-            requestCount++ === 0 ? firstDispatch : reloadedDispatch,
+          bindKovoAppShellViteDevLiveTargetAttestationSecret(secret: string) {
+            generationEvents.push(`${generation}:bind`);
+            generationSecrets.push(secret);
+          },
+          dispatchKovoAppShellViteDevRequest: dispatch,
         };
       },
       ws: { send: vi.fn() },
@@ -574,6 +588,17 @@ describe('server app shell Vite dev seam', () => {
       devDiagnostics: integration.diagnostics,
       moduleId: '/src/app-shell.ts',
     });
+    // SPEC §9.5.1: the outer trusted plugin must carry one process-lifetime attestation secret
+    // into every fresh SSR generation before that generation can import or dispatch the app.
+    expect(generationEvents).toEqual([
+      'first:bind',
+      'first:dispatch',
+      'reloaded:bind',
+      'reloaded:dispatch',
+    ]);
+    expect(generationSecrets).toHaveLength(2);
+    expect(generationSecrets[0]).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(generationSecrets[1]).toBe(generationSecrets[0]);
   });
 
   it('rejects a structural app clone after a simulated HMR module reload', async () => {
@@ -590,7 +615,10 @@ describe('server app shell Vite dev seam', () => {
       },
       async ssrLoadModule(id) {
         if (id === '@kovojs/server/internal/app-shell-vite') {
-          return { dispatchKovoAppShellViteDevRequest };
+          return {
+            bindKovoAppShellViteDevLiveTargetAttestationSecret,
+            dispatchKovoAppShellViteDevRequest,
+          };
         }
         if (id === '@kovojs/server') return {};
         expect(id).toBe('/src/app-shell.ts');
@@ -1198,12 +1226,27 @@ describe('server app shell Vite dev seam', () => {
       const origin = `http://127.0.0.1:${address.port}`;
       const documentResponse = await fetch(`${origin}/`);
       const documentBody = await documentResponse.text();
+      const secondDocumentResponse = await fetch(`${origin}/`);
+      const secondDocumentBody = await secondDocumentResponse.text();
 
       // SPEC.md section 9.5: dev and export share the app-shell request handler.
       expect(documentResponse.status).toBe(200);
       expect(documentResponse.headers.get('content-type')).toContain('text/html');
       expect(documentBody).toContain('<main>dev app shell</main>');
       expect(documentBody).toContain('<script type="module" src="/@kovo/hmr-client"></script>');
+      const nonce = /<meta property="csp-nonce" nonce="([^"]+)">/u.exec(documentBody)?.[1];
+      const secondNonce = /<meta property="csp-nonce" nonce="([^"]+)">/u.exec(
+        secondDocumentBody,
+      )?.[1];
+      expect(nonce).toMatch(/^[A-Za-z0-9+/]{22}==$/u);
+      expect(secondNonce).toMatch(/^[A-Za-z0-9+/]{22}==$/u);
+      expect(secondNonce).not.toBe(nonce);
+      expect(documentResponse.headers.get('content-security-policy')).toContain(
+        `style-src 'self' 'nonce-${String(nonce)}'`,
+      );
+      expect(secondDocumentResponse.headers.get('content-security-policy')).toContain(
+        `style-src 'self' 'nonce-${String(secondNonce)}'`,
+      );
 
       const moduleResponse = await fetch(`${origin}${moduleHref}`);
       const moduleBody = await moduleResponse.text();
@@ -1585,10 +1628,11 @@ describe('server app shell Vite dev seam', () => {
     expect(customPredicateCalls).toBe(0);
   });
 
-  it('serves and injects the dev-only HMR client through Vite middleware', async () => {
+  it('serves and de-duplicates a pre-existing dev-only HMR client through Vite middleware', async () => {
     const originalStringReplace = String.prototype.replace;
     const NativeResponse = globalThis.Response;
-    const safeDocument = '<!doctype html><html><head></head><body><main>Cart</main></body></html>';
+    const safeDocument =
+      '<!doctype html><html><head><script type="module" src="/@kovo/hmr-client"></script></head><body><main>Cart</main></body></html>';
     const poisonedDocument = '<script>globalThis.__kovoDevHmrPwned=1</script>';
     const poisonedClient = 'globalThis.__kovoDevHmrClientPwned=1;';
     const app = createApp({
@@ -1618,10 +1662,14 @@ describe('server app shell Vite dev seam', () => {
             _request: unknown,
             response: {
               end(body: string): void;
-              setHeader(name: string, value: string): void;
+              setHeader(name: string, value: readonly string[] | string): void;
             },
           ) {
             response.setHeader('Content-Type', 'text/html; charset=utf-8');
+            response.setHeader('Content-Security-Policy', [
+              "default-src 'self'",
+              "default-src 'self'; style-src 'self'",
+            ]);
             response.end(safeDocument);
           },
         };
@@ -1667,13 +1715,21 @@ describe('server app shell Vite dev seam', () => {
       expect(documentBody).toContain(
         '<script type="module" src="/@kovo/hmr-client"></script></head>',
       );
+      expect(documentBody.split('/@kovo/hmr-client')).toHaveLength(2);
       expect(documentBody).not.toContain(poisonedDocument);
+      const nonce = /<meta property="csp-nonce" nonce="([^"]+)">/u.exec(documentBody)?.[1];
+      const csp = documentResponse.headers.get('content-security-policy');
+      expect(nonce).toMatch(/^[A-Za-z0-9+/]{22}==$/u);
+      expect(
+        csp?.split(`default-src 'self'; style-src 'self' 'nonce-${String(nonce)}'`),
+      ).toHaveLength(3);
+      expect(csp?.split(`nonce-${String(nonce)}`)).toHaveLength(3);
       expect(clientResponse.status).toBe(200);
       expect(clientResponse.headers.get('cache-control')).toBe('no-store');
       expect(clientBody).not.toBe(poisonedClient);
       expect(clientBody).toContain('createHotContext("/@kovo/hmr-client")');
       expect(clientBody).toContain('hot.on("kovo:component-render"');
-      expect(clientBody).toContain('hot.on("kovo:diagnostics", reload);');
+      expect(clientBody).toContain('hot.on("kovo:diagnostics", () => {');
       expect(clientBody).not.toContain('document.open()');
       expect(clientBody).not.toContain('document.write(');
       expect(clientBody).not.toContain('document.close()');
@@ -2542,7 +2598,10 @@ function viteDevSsrLoadModule(
 ): (id: string) => Promise<Record<string, unknown>> {
   return async (id) =>
     id === '@kovojs/server/internal/app-shell-vite'
-      ? { dispatchKovoAppShellViteDevRequest }
+      ? {
+          bindKovoAppShellViteDevLiveTargetAttestationSecret,
+          dispatchKovoAppShellViteDevRequest,
+        }
       : id === '@kovojs/server'
         ? {}
         : await loadAppModule(id);

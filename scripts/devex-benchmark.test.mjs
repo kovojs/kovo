@@ -79,6 +79,10 @@ const kovoPackedComponentSource = readFileSync(
   ),
   'utf8',
 );
+const kovoPackedStyleTypesSource = readFileSync(
+  path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/src/style.d.ts'),
+  'utf8',
+);
 const kovoPackedBrowserBuildSource = readFileSync(
   path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/build-browser.mjs'),
   'utf8',
@@ -543,6 +547,13 @@ describe('DevEx benchmark foundation', () => {
     expect(kovoPackedWorkloadSource).toContain('kovo-check-phase-census/v1');
     expect(kovoPackedWorkloadSource).toContain("import { app } from '../kovo.js'");
     expect(kovoPackedWorkloadSource).toContain('app.query({');
+    expect(kovoPackedWorkloadSource).toContain(
+      'render: ({ benchmark }: { benchmark: { label: string } }, state)',
+    );
+    expect(kovoPackedComponentSource).toContain(
+      'render: ({ benchmark }: { benchmark: { label: string } }, state)',
+    );
+    expect(kovoPackedStyleTypesSource).toBe("declare module '*.css';\n");
     expect(kovoPackedWorkloadSource).not.toContain(
       "import { publicAccess, query, s } from '@kovojs/server'",
     );
@@ -566,6 +577,7 @@ describe('DevEx benchmark foundation', () => {
       "['install', '--offline', '--frozen-lockfile', '--ignore-scripts']",
     );
     expect(devexBenchmarkSource).toContain("['run', 'check:publish']");
+    expect(devexBenchmarkSource).toContain('KOVO_SOURCE_COMMIT: sourceCommit');
   });
 
   it('builds the benchmark browser bootstrap from exact compiler and graph facts', async () => {
@@ -714,13 +726,31 @@ describe('DevEx benchmark foundation', () => {
       validateIncrementalSessionMarkerForTesting(withIncrementalSessionDigest(reusedGraph), 5),
     ).toThrow(/build-check-graph=executed/u);
 
+    const measuredReuse = structuredClone(evidence);
+    measuredReuse.observations[1].diagnosticPhases[2].status = 'reused-authenticated';
+    measuredReuse.observations[1].diagnosticPhases[2].durationMs = 0.75;
+    measuredReuse.observations[2].diagnosticPhases[6].status = 'reused-authenticated';
+    measuredReuse.observations[2].diagnosticPhases[6].durationMs = 0.5;
+    measuredReuse.observations[2].diagnosticPhases[7].status = 'reused-authenticated';
+    measuredReuse.observations[2].diagnosticPhases[7].durationMs = 0.25;
+    expect(
+      validateIncrementalSessionMarkerForTesting(withIncrementalSessionDigest(measuredReuse), 5),
+    ).toEqual(withIncrementalSessionDigest(measuredReuse));
+
+    const reusedAuthority = structuredClone(evidence);
+    reusedAuthority.observations[1].diagnosticPhases[5].status = 'reused-authenticated';
+    reusedAuthority.observations[1].diagnosticPhases[5].durationMs = 0.5;
+    expect(() =>
+      validateIncrementalSessionMarkerForTesting(withIncrementalSessionDigest(reusedAuthority), 5),
+    ).toThrow(/session-authority=executed/u);
+
     const changedReuse = structuredClone(evidence);
     changedReuse.observations[1].diagnosticPhases[1].status = 'reused-authenticated';
     changedReuse.observations[1].diagnosticPhases[1].durationMs = 0;
     changedReuse.observations[1].diagnosticPhases[1].inputDigest = `sha256:${'8'.repeat(64)}`;
     expect(() =>
       validateIncrementalSessionMarkerForTesting(withIncrementalSessionDigest(changedReuse), 5),
-    ).toThrow(/reused facts for a changed input digest|unrelated source edit/u);
+    ).toThrow(/reused unauthenticated facts|unrelated source edit/u);
   });
 
   it('sums one sampled process tree without counting an unrelated sibling', () => {
@@ -1775,14 +1805,13 @@ function fixturePackedCheckPhases(
   const invariant = new Set([
     'lifecycle-policy',
     'config-trust',
-    'typescript',
     'project-quality',
     'sound-subset',
   ]);
   return [
     ['lifecycle-policy', 'not-applicable'],
     ['config-trust', 'executed'],
-    ['typescript', 'not-applicable'],
+    ['typescript', 'executed'],
     ['project-quality', 'not-applicable'],
     ['sound-subset', 'not-applicable'],
     ['session-authority', 'executed'],

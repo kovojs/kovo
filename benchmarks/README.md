@@ -52,11 +52,56 @@ For a faster local smoke run:
 node benchmarks/run-all.mjs --iterations 2 --skip-lighthouse --out-dir /tmp/kovo-bench
 ```
 
-Useful flags: `--apps kovo,nextjs`, `--port-base 4820` (so two runs on one machine
-cannot measure each other's server), `--lighthouse-runs N`, `--bfcache-iterations N`,
+Before comparing the matched lanes, compile Kovo and exercise the actual emitted L0/L1 runtime in
+Chromium. This gate proves L0 stays script-free, L1 state transitions work, and L1 navigation uses
+the structured-parts protocol rather than merely matching source strings:
+
+```sh
+node benchmarks/matched-fixture-gate.mjs
+```
+
+Generate the equal-shape developer/build corpora with:
+
+```sh
+node benchmarks/corpora/generate.mjs
+```
+
+The generated manifests live at
+`benchmarks/<framework>/.corpora/<framework>/n{24,216}/manifest.json`. They are ignored,
+sentinel-owned scratch apps; regeneration refuses to replace a directory that was not created by
+the generator. The manifest commands bind development servers to literal `localhost`, including
+Next.js Turbopack, so its HMR websocket origin matches the benchmark URL exactly.
+
+The corpus shape digest also authenticates
+`editStatePosture: refresh-surfaces-sibling-to-local-state/v1`. Leaf, entry, and data edits each
+land in a distinct component refresh surface. Kovo's three edited components are query-backed
+inferred live targets (SPEC §4.1, §4.9, and §9.5.1); Next.js mirrors the same observable
+component/DOM topology. The stateful counter is a direct sibling of every edited surface, never a
+child of a Kovo morph target (KV420). The dev adapter rejects any manifest whose edit files or
+selectors drift from those authenticated roots and requires `Count 1` to survive every edit.
+
+Useful flags: `--apps kovo,nextjs`, `--lane default|matched-l0|matched-l1`,
+`--warmups N`, `--port-base 4820` (so two runs on one machine cannot measure each
+other's server), `--lighthouse-runs N`, `--bfcache-iterations N`,
 `--settle-quiet-ms` / `--settle-max-ms`. Every numeric flag is validated and rejects
 a non-integer instead of coercing it to `NaN`: an unvalidated `NaN` count runs its
 loop zero times and publishes an empty cell that reads like a measurement.
+
+The authoritative Kovo/Next comparison is serialized through one orchestrator:
+
+```sh
+node benchmarks/compare.mjs --cells browser,dev,build --iterations 30 --warmups 3 \
+  --dev-ready-iterations 15 --dev-iterations 30 --dev-warmups 3 \
+  --lighthouse-runs 5 --bfcache-iterations 10 --out-dir /tmp/kovo-next-comparison
+```
+
+It runs each cell in `Kovo, Next, Next, Kovo` order, rejects a busy host before the
+next entrant starts, embeds raw per-cell reports, and writes paired median/MAD/p95
+plus a deterministic bootstrap confidence interval. Source commit, root and Next
+lock digests, corpus identity, sample counts, browser evidence, and adapter integrity
+must all match or `comparison.json` is retained with an `unproven` verdict. A dirty
+tree is rejected before execution; `--allow-dirty` permits a diagnostic run only and
+can never produce publishable evidence.
 
 To regenerate `report.md` from an existing `results.json` without re-running the
 benchmark, pass the path explicitly — there is no default, because
@@ -93,18 +138,25 @@ each iteration. It records:
 - TTI proxy: a tight in-page poll loop repeatedly clicks the cart button until
   `[role=dialog]` is visible, exposing hydration dead time versus Kovo's first
   lazy interaction import;
-- navigation: click the first product card and measure **to actual paint** — the
-  destination document's first contentful paint when the navigation replaced the
-  document, otherwise the first frame rendered after the destination content is in
-  the DOM. Timestamps are absolute, because a document-replacing navigation resets
-  the document timeline. The report also records how many navigations replaced the
-  document, and what the superseded DOM-presence probe would have reported.
-  **Those two branches are not the same instrument and the difference is one-sided**:
-  the document-replacing branch reads a browser-recorded paint timestamp with no
-  harness cost in it, while the same-document branch pays a poll interval, CDP
-  round-trips and two animation frames. Kovo is the document-replacing entrant, so
-  the error runs in Kovo's favour. The report states this under "Known limits of
-  this instrument"; do not quote a small navigation gap as a result;
+- navigation: click the first product card and measure **to actual paint** using one
+  Chrome trace boundary for both navigation types. An init-script MutationObserver
+  emits a trace timestamp when the destination marker appears; the first later
+  compositor/paint frame is the reported destination paint. Click-to-paint duration
+  stays on that trace clock; timestamps are mapped to epoch time only to place
+  requests into session-byte phases across document replacement. Those phases keep
+  explicit prefetch-header traffic separate from unclassified background requests
+  that happen after load but before the click; timing alone is not called prefetch.
+  The report also
+  records how many navigations replaced the document and what the superseded
+  DOM-presence probe would have reported. Navigation attribution authenticates the selected
+  click-window document/document-parts/RSC response against both Playwright request evidence and
+  Chrome's `ResourceSendRequest`/`ResourceReceiveResponse`/`ResourceFinish` trace triplet. Server,
+  transfer, and the combined response-headers-to-destination-marker processing/DOM-apply envelope
+  therefore use the same monotonic trace clock. Chrome timeline events separately report parser
+  construction, style, layout, and paint. The response read/decode and DOM morph/apply rows stay
+  explicitly `unsupported`: Chromium cannot separate them without entrant-specific
+  instrumentation, and the combined envelope is reported as overlapping evidence rather than
+  split by residual arithmetic;
 - back/forward cache: a separate probe in full Chromium with Playwright's
   `--disable-back-forward-cache` removed (the default `chrome-headless-shell`
   cannot participate in bfcache at all). Frameworks that navigate in-document are
@@ -136,6 +188,16 @@ rejected the Kovo entrant on every run, for doing the thing it is being measured
 A source whose statuses could not be read at all is printed as
 `[integrity] untracked: …` on stderr, named in the generated report, and never
 silently counted as clean.
+
+Each navigation attribution record carries a canonical SHA-256 digest over its request identity,
+Playwright/trace clock-agreement witness, trace boundary, trace-event census, and phase verdicts.
+The adapter recomputes that digest before returning a sample. A Playwright response without exactly
+one matching complete Chrome Resource trace triplet aborts the sample, as does more than 25 ms of
+clock-bridge divergence. This is tamper-evidence inside the source- and execution-authenticated
+comparison report, not a claim that a self-hash independently proves where the browser evidence
+came from. The exact boundary contract and why decode/build/morph cannot be split portably are
+recorded in
+[`docs/performance/navigation-attribution-contract.md`](../docs/performance/navigation-attribution-contract.md).
 
 ### Rate limiting and iteration count
 

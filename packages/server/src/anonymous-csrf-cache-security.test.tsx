@@ -242,7 +242,7 @@ describe('anonymous mutation-form document cache posture', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('vary')).toContain('Cookie');
   });
 

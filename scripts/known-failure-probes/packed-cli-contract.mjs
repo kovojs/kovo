@@ -100,6 +100,10 @@ try {
       2,
     )}\n`,
   );
+  // SPEC §5.2.3: even a deliberately graph-empty consumer must carry immutable package-graph
+  // provenance so this probe reaches the missing-app contract it owns instead of failing at the
+  // earlier lockfile boundary.
+  writeFileSync(path.join(appRoot, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
   const cli = path.join(nodeModules, '@kovojs', 'cli', 'dist', 'bin.mjs');
   if (!existsSync(cli)) {
     infrastructureFailure('packed CLI materialization', {

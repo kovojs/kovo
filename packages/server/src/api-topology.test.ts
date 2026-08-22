@@ -184,6 +184,19 @@ describe('@kovojs/server public topology', () => {
     expectTypeOf<StoredFileSchema['parseAsync']>().returns.toEqualTypeOf<
       Promise<StoredFileUpload>
     >();
+    // SPEC §6.6/§9.1: the audited upload escape stays an expando on the callable verified-MIME
+    // constructor; the runtime-source representation must not split or widen the public surface.
+    expectTypeOf(securityApi.accept).toBeCallableWith(['image/png'] as const);
+    expectTypeOf(securityApi.accept).returns.toEqualTypeOf<readonly string[]>();
+    expectTypeOf(securityApi.accept.unverified).toBeCallableWith(
+      ['text/plain'] as const,
+      'legacy importer trusts client MIME',
+    );
+    expectTypeOf(
+      securityApi.accept.unverified,
+    ).returns.toEqualTypeOf<securityApi.UnverifiedAcceptance>();
+    expect(securityApi.accept).toBeTypeOf('function');
+    expect(securityApi.accept.unverified).toBeTypeOf('function');
     expectTypeOf<{
       csrf?: true;
       handler(request: Request): Response;

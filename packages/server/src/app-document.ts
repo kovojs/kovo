@@ -45,6 +45,7 @@ import {
   appendResponseHeader,
   cloneResponseHeaders,
   markFrameworkDocumentResponse,
+  markFrameworkProvedDocumentCompressionResponse,
   readHeader,
   routeResponseToDocumentResponse,
   type ResponseHeaders,
@@ -709,9 +710,10 @@ export function provedDocumentCachedResponse(
       entry.buildToken,
     );
   }
-  return markFrameworkDocumentResponse(
+  return markFrameworkProvedDocumentCompressionResponse(
     { body: entry.body, headers: cloneResponseHeaders(entry.headers), status: 200 as const },
     entry.buildToken,
+    entry.body,
   );
 }
 
@@ -782,9 +784,24 @@ function applyProvedDocumentValidatorTier(
 ): DocumentRoutePageResponseWithCsp {
   // Runtime signals reject, never widen: any credential/personalization evidence computed by the
   // caller (noStore) or present on the wire keeps the response off the proved tier entirely.
-  if (options.noStore) return response;
+  if (options.noStore) {
+    return markFrameworkDocumentResponse(
+      stampCredentialBearingResponseCacheFloor(response),
+      options.buildToken,
+    );
+  }
   const entry = provedDocumentManifestEntry(route);
-  if (entry === undefined) return response;
+  if (entry === undefined) {
+    // SPEC §9.4/§9.5: a missing or shared-cache-closed document manifest is a proof gap, not an
+    // anonymous/public observation. Buffered document bytes therefore keep the exact credential
+    // floor even when the current request happens to carry no Cookie or Authorization.
+    return response.status === 200 && documentResponseIsAcceptNegotiated(response)
+      ? markFrameworkDocumentResponse(
+          stampCredentialBearingResponseCacheFloor(response),
+          options.buildToken,
+        )
+      : response;
+  }
   if (response.status !== 200 || typeof response.body !== 'string') return response;
   if (requestBearsAmbientCredentials(request)) return response;
   if (!documentResponseIsAcceptNegotiated(response)) return response;
@@ -816,7 +833,15 @@ function applyProvedDocumentValidatorTier(
       options.buildToken,
     );
   }
-  const stamped = markFrameworkDocumentResponse({ ...response, headers }, options.buildToken);
+  const provedResponse = { ...response, headers };
+  const stamped =
+    response.body.length <= PROVED_DOCUMENT_CACHE_MAX_BODY_BYTES
+      ? markFrameworkProvedDocumentCompressionResponse(
+          provedResponse,
+          options.buildToken,
+          response.body,
+        )
+      : markFrameworkDocumentResponse(provedResponse, options.buildToken);
   witnessWeakSetAdd(provedDocumentTierResponses, stamped);
   return stamped;
 }

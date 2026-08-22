@@ -7,3 +7,7 @@ export { createRequestHandler } from '../app.js';
 export { resolveKovoAppToken } from '../app-token.js';
 export { deriveClosedKovoApp } from '../app-snapshot.js';
 export { runWithGeneratedLiveTargetRegistry } from '../live-target-registry.js';
+// SPEC §§2/9.5/14: this is deliberately a read-only generated-handler bridge. It can
+// recognize only the exact Response object marked by this module graph's private WeakMap; neither
+// authored headers nor a structurally similar witness can manufacture cache authority.
+export { frameworkProvedDocumentCompressionWitness as readFrameworkProvedDocumentCompressionWitnessForGeneratedHandler } from '../response.js';

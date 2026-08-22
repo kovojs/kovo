@@ -332,6 +332,17 @@ export function mintLiveTargetLocalAudienceNonce(): string {
   return nonce;
 }
 
+/** @internal Mint one process-lifetime development live-target secret (SPEC §6.6). */
+export function mintDevelopmentLiveTargetAttestationSecret(): string {
+  const secret = securityBufferToString(nativeRandomBytes(32), 'base64url');
+  if (secret.length !== 43 || !securityRegExpTest(/^[A-Za-z0-9_-]{43}$/u, secret)) {
+    throw new TypeError(
+      'Kovo crypto authority returned an invalid development live-target attestation secret.',
+    );
+  }
+  return secret;
+}
+
 export function createRenderedHtmlCryptoHandle(secret: SigningSecret): PurposeCryptoHandle {
   return createPurposeHandle(secret, 'rendered-html-coercion', 'server-rendered-html');
 }

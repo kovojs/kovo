@@ -1,9 +1,9 @@
 {
   "schema": "kovo-capability-surface-census/v2",
   "summary": {
-    "internalRegistries": 136,
+    "internalRegistries": 138,
     "mints": 3,
-    "sites": 139
+    "sites": 141
   },
   "rows": [
     {
@@ -776,6 +776,14 @@
     },
     {
       "api": "createWitnessWeakMap",
+      "file": "packages/server/src/loader-runtime-client-module.ts",
+      "id": "packages/server/src/loader-runtime-client-module.ts#loaderRuntimeHrefMemo",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Memoizes a successfully validated loader-runtime href only for one exact private registry identity and its current active publish-epoch token. Every successful publication replaces that token and forces full revalidation, staging changes remain inactive, refusal paths are never stored, and the WeakMap exposes no outward authority."
+    },
+    {
+      "api": "createWitnessWeakMap",
       "file": "packages/server/src/logging.ts",
       "id": "packages/server/src/logging.ts#scrubSecretLifecycleValue.return",
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
@@ -1053,6 +1061,14 @@
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Allocates a framework-private identity registry through the canonical witness intrinsic; the registry is not an outward capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/response.ts",
+      "id": "packages/server/src/response.ts#frameworkProvedDocumentCompressionWitnesses",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Backs the private compression-cache authority witness for one exact framework-owned response identity with a frozen build token and body digest. Production callers mint it only when the compiler-proved buffered body is at or below the cache-admission ceiling, cache admission separately requires a credential-neutral buffered 200, structural clones and public headers cannot recover it, transfer requires an already witnessed source, and weak response identity bounds retention."
     },
     {
       "api": "createWitnessWeakMap",

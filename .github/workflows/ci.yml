@@ -45,8 +45,9 @@ jobs:
 
   classifier-corpus:
     runs-on: ubuntu-24.04
-    # The corpus gate has a 50-minute process ceiling; retain 40 minutes for setup and cleanup.
-    timeout-minutes: 90
+    # A degraded hosted Chromium install exceeded 60 minutes while the unchanged corpus proof
+    # recently required 33–34 minutes. Preserve its 50-minute inner ceiling with bounded headroom.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -343,7 +344,9 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # A degraded hosted Chromium install exceeded 60 minutes before unchanged root shards whose
+    # recent substantive tails reached 42–44 minutes. Preserve the existing inner shard ceilings.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -451,7 +454,9 @@ jobs:
   starter:
     needs: starter-packages
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # A degraded hosted Chromium install exceeded 60 minutes on equivalent same-action runners;
+    # the unchanged browser-backed starter proof then needs 13–16 minutes inside its own watchdog.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:

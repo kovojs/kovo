@@ -1,0 +1,190 @@
+{
+  "budget": "sha256:2756956d01794092b35eafdab45f43db7815b95739f5d59019f31783555d8d64",
+  "candidate": {
+    "execution": "sha256:39ab0738b84a339f4c555757a68ea14b577eb974852b21d603e278f2025b82ee",
+    "sourceCommit": "01b2c759468f41a3fc4739225eb13c8f5aa11406"
+  },
+  "checks": [
+    {
+      "id": "corpus-n216/build/clean/durationMs.median",
+      "kind": "regression",
+      "limit": 283357.0364583,
+      "status": "pass",
+      "value": 269672.485914
+    },
+    {
+      "id": "corpus-n216/build/clean/durationMs.p95",
+      "kind": "regression",
+      "limit": 284474.0751447,
+      "status": "pass",
+      "value": 271543.508601
+    },
+    {
+      "id": "corpus-n216/build/clean/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 2258251161.6,
+      "status": "pass",
+      "value": 2139594752
+    },
+    {
+      "id": "corpus-n216/build/clean/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 2339704012.8,
+      "status": "pass",
+      "value": 2227154944
+    },
+    {
+      "id": "corpus-n216/build/clean/artifactBytes.median",
+      "kind": "regression",
+      "limit": 16227525.3,
+      "status": "pass",
+      "value": 15454786
+    },
+    {
+      "id": "corpus-n216/build/clean/artifactBytes.p95",
+      "kind": "regression",
+      "limit": 16227525.3,
+      "status": "pass",
+      "value": 15454786
+    },
+    {
+      "id": "corpus-n216/build/unchanged/durationMs.median",
+      "kind": "regression",
+      "limit": 279405.8618589,
+      "status": "pass",
+      "value": 267478.083379
+    },
+    {
+      "id": "corpus-n216/build/unchanged/durationMs.p95",
+      "kind": "regression",
+      "limit": 284610.36900975,
+      "status": "pass",
+      "value": 268743.567705
+    },
+    {
+      "id": "corpus-n216/build/unchanged/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 2256612556.8,
+      "status": "pass",
+      "value": 2135818240
+    },
+    {
+      "id": "corpus-n216/build/unchanged/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 2339501875.2000003,
+      "status": "pass",
+      "value": 2238566400
+    },
+    {
+      "id": "corpus-n216/build/unchanged/artifactBytes.median",
+      "kind": "regression",
+      "limit": 16227525.3,
+      "status": "pass",
+      "value": 15454786
+    },
+    {
+      "id": "corpus-n216/build/unchanged/artifactBytes.p95",
+      "kind": "regression",
+      "limit": 16227525.3,
+      "status": "pass",
+      "value": 15454786
+    },
+    {
+      "id": "corpus-n216/build/edit/durationMs.median",
+      "kind": "regression",
+      "limit": 279847.84585905005,
+      "status": "pass",
+      "value": 268398.121467
+    },
+    {
+      "id": "corpus-n216/build/edit/durationMs.p95",
+      "kind": "regression",
+      "limit": 289207.42209555005,
+      "status": "pass",
+      "value": 270613.823934
+    },
+    {
+      "id": "corpus-n216/build/edit/peakRssBytes.median",
+      "kind": "regression",
+      "limit": 2258737152,
+      "status": "pass",
+      "value": 2150256640
+    },
+    {
+      "id": "corpus-n216/build/edit/peakRssBytes.p95",
+      "kind": "regression",
+      "limit": 2335932211.2000003,
+      "status": "pass",
+      "value": 2224996352
+    },
+    {
+      "id": "corpus-n216/build/edit/artifactBytes.median",
+      "kind": "regression",
+      "limit": 16227811.950000001,
+      "status": "pass",
+      "value": 15455059
+    },
+    {
+      "id": "corpus-n216/build/edit/artifactBytes.p95",
+      "kind": "regression",
+      "limit": 16227811.950000001,
+      "status": "pass",
+      "value": 15455059
+    },
+    {
+      "id": "corpus-n216/build/clean/durationMs.median-vs-next",
+      "kind": "milestone",
+      "limit": 6,
+      "status": "fail",
+      "value": 35.35748813725383
+    },
+    {
+      "id": "corpus-n216/build/clean/peakRssBytes.median-vs-next",
+      "kind": "milestone",
+      "limit": 2,
+      "status": "fail",
+      "value": 2.3015293241629693
+    },
+    {
+      "id": "corpus-n216/build/unchanged/durationMs.median-vs-next",
+      "kind": "milestone",
+      "limit": 6,
+      "status": "fail",
+      "value": 34.2795327453157
+    },
+    {
+      "id": "corpus-n216/build/unchanged/peakRssBytes.median-vs-next",
+      "kind": "milestone",
+      "limit": 2,
+      "status": "fail",
+      "value": 2.274349020805164
+    },
+    {
+      "id": "corpus-n216/build/edit/durationMs.median-vs-next",
+      "kind": "milestone",
+      "limit": 6,
+      "status": "fail",
+      "value": 34.35830076223845
+    },
+    {
+      "id": "corpus-n216/build/edit/peakRssBytes.median-vs-next",
+      "kind": "milestone",
+      "limit": 2,
+      "status": "fail",
+      "value": 2.2789884957673108
+    }
+  ],
+  "schema": "kovo-build-performance-evaluation/v1",
+  "verdict": {
+    "failures": [
+      "corpus-n216/build/clean/durationMs.median-vs-next",
+      "corpus-n216/build/clean/peakRssBytes.median-vs-next",
+      "corpus-n216/build/unchanged/durationMs.median-vs-next",
+      "corpus-n216/build/unchanged/peakRssBytes.median-vs-next",
+      "corpus-n216/build/edit/durationMs.median-vs-next",
+      "corpus-n216/build/edit/peakRssBytes.median-vs-next"
+    ],
+    "reasons": [],
+    "status": "regression"
+  }
+}

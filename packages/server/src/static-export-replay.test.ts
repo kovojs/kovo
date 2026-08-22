@@ -35,6 +35,11 @@ const staticExportReportingHeaders = {
   // negotiated on Accept (the kovo-document-parts/v1 variant), exports included.
   vary: 'Accept',
 };
+const staticExportCookiePersonalizedHeaders = {
+  'cache-control': 'private, no-store',
+  ...staticExportReportingHeaders,
+  vary: 'Accept, Cookie',
+};
 
 describe('server static export app replay boundary', () => {
   it('reconstructs public route-region metadata when the route declaration crosses module instances', async () => {
@@ -106,7 +111,7 @@ describe('server static export app replay boundary', () => {
             'origin-agent-cluster': '?1',
             'permissions-policy':
               'camera=();report-to=kovo-csp, microphone=();report-to=kovo-csp, geolocation=();report-to=kovo-csp, payment=();report-to=kovo-csp, usb=();report-to=kovo-csp',
-            ...staticExportReportingHeaders,
+            ...staticExportCookiePersonalizedHeaders,
             'x-frame-options': 'DENY',
             'x-content-type-options': 'nosniff',
           },

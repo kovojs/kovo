@@ -14,11 +14,6 @@ import {
   buildApply,
   buildArrayJoin,
   buildArrayLength,
-  buildCreateMap,
-  buildMapClear,
-  buildMapHas,
-  buildMapSet,
-  buildMapSize,
   buildOwnDataValue,
   buildRegExpExec,
   buildSecurityArrayAppend,
@@ -28,11 +23,7 @@ import {
   buildStringStartsWith,
 } from './build-security-intrinsics.js';
 import { kovoBuildOneShotDigest, type KovoBuildOneShotIdentity } from './build-one-shot-handoff.js';
-import {
-  planKovoSourceCheckSessionReuse,
-  revalidateKovoCheckTypeScriptPreflight,
-} from './check-session-reuse.js';
-import { resolveKovoArtifactProvenance } from '../artifact-provenance.js';
+import { KovoSourceCheckSessionFactCache } from './check-session-reuse.js';
 import { superviseKovoCliSessionParent } from './process-supervision.js';
 import { type KovoCommandSecurityDisposition } from './security-disposition.js';
 import {
@@ -44,9 +35,7 @@ import {
   type KovoAcceptedSourceCheckInputProof,
   type KovoRejectedSourceCheckInputProof,
   type KovoSourceCheckPhaseObservation,
-  type KovoSourceCheckPhaseStatus,
   type KovoSourceCheckRevisionResult,
-  type KovoSourceCheckSessionContinuity,
   type KovoSourceCheckWatchSessionOptions,
   type KovoSourceCheckWatchSnapshot,
 } from './source-check-session.js';
@@ -55,7 +44,6 @@ import { type CliCommandResult } from '../shared.js';
 
 const phaseCensusEnvironmentName = 'KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE';
 const phaseCensusLinePrefix = 'kovo-check-phase-census/v1 ';
-const maximumSessionFactKeys = 512;
 const digestPattern = /^sha256:[0-9a-f]{64}$/u;
 const NativeAbortSignalAny = AbortSignal.any;
 const NativeObject = Object;
@@ -98,93 +86,7 @@ export interface KovoSourceCheckWatchCommandControls {
   readonly write?: (line: string) => void;
 }
 
-/** @internal Observable lifecycle only; cached values are digest keys, never compiler outputs. */
-export interface KovoSourceCheckSessionFactCacheSnapshot {
-  readonly closed: boolean;
-  readonly enabled: boolean;
-  readonly entries: number;
-  readonly hits: number;
-  readonly misses: number;
-}
-
-/**
- * Session-confined cache of authenticated phase-input identities.
- *
- * This cache deliberately cannot return diagnostics, graphs, app values, source text, or runtime
- * authority. A revision must first complete the fresh one-shot producer and handoff revalidation;
- * only then may its content-addressed phase keys be remembered. The current adapter executes every
- * diagnostic-producing phase and uses this ledger to prove bounded lifecycle/invalidation. Future
- * phase reuse must add an explicit compiler-owned fact payload and validator before it may publish
- * `reused-authenticated`.
- */
-export class KovoSourceCheckSessionFactCache {
-  readonly #enabled: boolean;
-  readonly #keys = buildCreateMap<string, true>();
-  #closed = false;
-  #hits = 0;
-  #misses = 0;
-
-  constructor(enabled: boolean) {
-    if (typeof enabled !== 'boolean') {
-      throw new NativeTypeError('Source-check session cache posture must be boolean.');
-    }
-    this.#enabled = enabled;
-  }
-
-  observe(phaseName: string, inputDigest: string): boolean {
-    this.#assertOpen();
-    if (
-      typeof phaseName !== 'string' ||
-      phaseName === '' ||
-      typeof inputDigest !== 'string' ||
-      buildRegExpExec(digestPattern, inputDigest) === null
-    ) {
-      throw new NativeTypeError('Source-check session cache key is invalid.');
-    }
-    if (!this.#enabled) {
-      this.#misses += 1;
-      return false;
-    }
-    const key = kovoBuildOneShotDigest({
-      inputDigest,
-      phaseName,
-      schema: 'kovo-check-session-fact-key/v1',
-    });
-    const hit = buildMapHas(this.#keys, key);
-    if (hit) {
-      this.#hits += 1;
-      return true;
-    }
-    this.#misses += 1;
-    if (buildMapSize(this.#keys) >= maximumSessionFactKeys) buildMapClear(this.#keys);
-    buildMapSet(this.#keys, key, true);
-    return false;
-  }
-
-  close(): void {
-    if (this.#closed) return;
-    buildMapClear(this.#keys);
-    this.#closed = true;
-  }
-
-  snapshot(): KovoSourceCheckSessionFactCacheSnapshot {
-    return buildApply(NativeObjectFreeze, undefined, [
-      {
-        closed: this.#closed,
-        enabled: this.#enabled,
-        entries: buildMapSize(this.#keys),
-        hits: this.#hits,
-        misses: this.#misses,
-      },
-    ]);
-  }
-
-  #assertOpen(): void {
-    if (this.#closed) {
-      throw new NativeTypeError('Source-check session cache is closed.');
-    }
-  }
-}
+export { KovoSourceCheckSessionFactCache } from './check-session-reuse.js';
 
 /**
  * Execute `kovo check source --watch` through the same fresh one-shot producer and finisher used
@@ -212,23 +114,17 @@ export async function runKovoSourceCheckWatchCommand(
     controls.signal === undefined
       ? supervision.signal
       : NativeAbortSignalAny([controls.signal, supervision.signal]);
-  // plans/good-perf.md O11: the latest accepted revision's evidence stays in this session-scoped
-  // binding only. There is no daemon and no disk store; the process exit destroys it.
-  let continuity: KovoSourceCheckSessionContinuity | undefined;
   const sessionOptions: KovoSourceCheckWatchSessionOptions = {
     appModulePath: options.appModulePath,
     invocationRoot: root,
     async runRevision(_revision, trigger) {
-      const checked = await runKovoSourceCheckWatchRevision(
+      return runKovoSourceCheckWatchRevision(
         options,
         checkSecurity,
         trigger,
         cache,
         snapshotProject,
-        continuity,
       );
-      continuity = checked.continuity;
-      return checked;
     },
     ...(controls.maxRevisions === undefined ? {} : { maxRevisions: controls.maxRevisions }),
     ...(controls.pollIntervalMs === undefined ? {} : { pollIntervalMs: controls.pollIntervalMs }),
@@ -253,7 +149,6 @@ export async function runKovoSourceCheckWatchRevision(
   trigger: KovoSourceCheckWatchSnapshot,
   cache: KovoSourceCheckSessionFactCache,
   snapshotProject: (root: string) => KovoSourceCheckWatchSnapshot = snapshotKovoSourceCheckProject,
-  previous?: KovoSourceCheckSessionContinuity,
 ): Promise<KovoSourceCheckRevisionResult> {
   const root = resolve(security.invocationCwd);
   const entryPath = projectRelativePath(root, options.appModulePath);
@@ -267,22 +162,6 @@ export async function runKovoSourceCheckWatchRevision(
     );
   }
 
-  // plans/good-perf.md O11: authenticated in-session reuse. Every refusal inside the attempt
-  // falls through to the complete fresh pipeline below; reuse can only ever skip work whose
-  // exact inputs were re-proven byte-identical, and the whole-project `typescript` phase is
-  // re-executed rather than assumed. `--no-cache` sessions never retain or consume evidence.
-  if (options.cache && previous !== undefined) {
-    const reused = await reuseKovoSourceCheckSessionRevision(
-      previous,
-      options,
-      security,
-      trigger,
-      cache,
-      snapshotProject,
-    );
-    if (reused !== undefined) return reused;
-  }
-
   const before = stableRevisionSnapshot(root, trigger, snapshotProject);
   if (before === undefined) {
     return rejectedRevision(
@@ -293,7 +172,10 @@ export async function runKovoSourceCheckWatchRevision(
     );
   }
 
-  const produced = await produceKovoSourceCheckOneShotAnalysis(options, security);
+  // SPEC §11.4: every revision still enters the complete producer. The session can return only
+  // authenticated, serializable compiler facts; app evaluation/runtime, graph assembly, graph
+  // diagnostics, and the final diagnostic result are always rebuilt below.
+  const produced = await produceKovoSourceCheckOneShotAnalysis(options, security, cache);
   if (isCliCommandResult(produced)) {
     return rejectedRevision(entryPath, trigger, entryFailureReason(entryAbsolute, false), produced);
   }
@@ -323,7 +205,6 @@ export async function runKovoSourceCheckWatchRevision(
 
   let input: KovoAcceptedSourceCheckInputProof;
   let identity: KovoBuildOneShotIdentity;
-  let closureSources: KovoSourceCheckSessionContinuity['closureSources'];
   try {
     const sourceFiles = buildOwnDataValue(
       analysis,
@@ -341,9 +222,6 @@ export async function runKovoSourceCheckWatchRevision(
       approvedConfig === undefined ? [] : approvedConfig.files,
     );
     identity = kovoSourceCheckOneShotIdentity(options, analysis, security);
-    closureSources = buildApply(NativeObjectFreeze, undefined, [
-      [...sourceFiles, ...(approvedConfig === undefined ? [] : approvedConfig.files)],
-    ]);
   } catch {
     return rejectedRevision(
       entryPath,
@@ -384,7 +262,6 @@ export async function runKovoSourceCheckWatchRevision(
       identity,
       trigger,
       graphDigest,
-      cache,
     );
     result = extracted.result;
   } catch {
@@ -395,138 +272,7 @@ export async function runKovoSourceCheckWatchRevision(
       sourceCheckWatchError('one-shot phase evidence could not be authenticated'),
     );
   }
-  // Retain the accepted revision's exact evidence for the next revision's reuse attempt. The
-  // snapshot chosen is the trigger the before/after scans proved stable across this proof.
-  const continuity: KovoSourceCheckSessionContinuity | undefined = options.cache
-    ? buildApply(NativeObjectFreeze, undefined, [
-        {
-          census,
-          closureSources,
-          graphDigest,
-          identity,
-          input,
-          result,
-          trigger,
-        },
-      ])
-    : undefined;
-  return buildApply(NativeObjectFreeze, undefined, [
-    { census, ...(continuity === undefined ? {} : { continuity }), input, result },
-  ]);
-}
-
-/**
- * Attempt one authenticated reused revision. `undefined` refuses and the caller runs the
- * complete fresh pipeline; nothing reported from this path is ever weaker than the evidence
- * the previous accepted revision published plus a fresh whole-project TypeScript re-execution.
- */
-async function reuseKovoSourceCheckSessionRevision(
-  previous: KovoSourceCheckSessionContinuity,
-  options: KovoSourceCheckOptions,
-  security: KovoCommandSecurityDisposition,
-  trigger: KovoSourceCheckWatchSnapshot,
-  cache: KovoSourceCheckSessionFactCache,
-  snapshotProject: (root: string) => KovoSourceCheckWatchSnapshot,
-): Promise<KovoSourceCheckRevisionResult | undefined> {
-  const root = resolve(security.invocationCwd);
-  const entryPath = projectRelativePath(root, options.appModulePath);
-  const entryAbsolute = resolve(root, options.appModulePath);
-  const plan = planKovoSourceCheckSessionReuse(previous, trigger);
-  if (!plan.eligible) return undefined;
-  if (previous.input.entry.path !== entryPath) return undefined;
-  if (stableRevisionSnapshot(root, trigger, snapshotProject) === undefined) return undefined;
-  // The previous identity is only replayable under the exact same framework provenance; a
-  // framework or lockfile change mid-session refuses reuse and re-proves from scratch.
-  let provenanceDigest: string;
-  try {
-    provenanceDigest = kovoBuildOneShotDigest(
-      resolveKovoArtifactProvenance({ appModulePath: entryAbsolute }),
-    );
-  } catch {
-    return undefined;
-  }
-  if (provenanceDigest !== previous.identity.compilerProvenanceDigest) return undefined;
-  // Belt over the planner's set diff: every previously admitted closure input must appear in
-  // the fresh scan with its previous byte digest.
-  const candidateDigests = trigger.fileDigests;
-  const previousDigests = previous.trigger.fileDigests;
-  if (candidateDigests === undefined || previousDigests === undefined) return undefined;
-  for (let index = 0; index < previous.input.closure.length; index += 1) {
-    const row = previous.input.closure[index]!;
-    const current = candidateDigests.get(row.path);
-    if (current === undefined || current !== previousDigests.get(row.path)) return undefined;
-  }
-  // SPEC §11.4: `typescript` stays keyed on the whole project (a tsconfig `extends` chain may
-  // name any file), so it is re-executed here, never reused.
-  const previousTypescript = previous.census.phases[2]!;
-  let typescriptPhase: { readonly durationMs: number; readonly executed: boolean };
-  if (previousTypescript.status === 'not-applicable') {
-    typescriptPhase = { durationMs: 0, executed: false };
-  } else {
-    const revalidated = await revalidateKovoCheckTypeScriptPreflight(
-      entryAbsolute,
-      root,
-      security.invocationEnv,
-    );
-    if (revalidated === undefined || !revalidated.executed) return undefined;
-    typescriptPhase = revalidated;
-  }
-  if (stableRevisionSnapshot(root, trigger, snapshotProject) === undefined) return undefined;
-
-  const phases: KovoSourceCheckPhaseObservation[] = [];
-  for (let index = 0; index < KOVO_SOURCE_CHECK_PHASES.length; index += 1) {
-    const name = KOVO_SOURCE_CHECK_PHASES[index]!;
-    const previousPhase = previous.census.phases[index]!;
-    let status: KovoSourceCheckPhaseStatus;
-    let durationMs = 0;
-    if (previousPhase.status === 'not-applicable') {
-      status = 'not-applicable';
-    } else if (index === 2) {
-      status = 'executed';
-      durationMs = typescriptPhase.durationMs;
-    } else {
-      status = 'reused-authenticated';
-    }
-    const inputDigest = sourceCheckPhaseInputDigest(
-      name,
-      status === 'not-applicable' ? 'not-applicable' : 'executed',
-      previous.input,
-      previous.identity,
-      trigger,
-      previous.graphDigest,
-    );
-    cache.observe(name, inputDigest);
-    buildSecurityArrayAppend(
-      phases,
-      buildApply(NativeObjectFreeze, undefined, [{ durationMs, inputDigest, name, status }]),
-      'Source-check reused phase observations',
-    );
-  }
-  const census: KovoSourceCheckRevisionResult['census'] = buildApply(
-    NativeObjectFreeze,
-    undefined,
-    [
-      {
-        checkGraphDigest: previous.graphDigest,
-        phases: buildApply(NativeObjectFreeze, undefined, [phases]),
-        schema: 'kovo-check-phase-census/v2' as const,
-      },
-    ],
-  );
-  const continuity: KovoSourceCheckSessionContinuity = buildApply(NativeObjectFreeze, undefined, [
-    {
-      census,
-      closureSources: previous.closureSources,
-      graphDigest: previous.graphDigest,
-      identity: previous.identity,
-      input: previous.input,
-      result: previous.result,
-      trigger,
-    },
-  ]);
-  return buildApply(NativeObjectFreeze, undefined, [
-    { census, continuity, input: previous.input, result: previous.result },
-  ]);
+  return buildApply(NativeObjectFreeze, undefined, [{ census, input, result }]);
 }
 
 function acceptedPhaseCensus(
@@ -536,7 +282,6 @@ function acceptedPhaseCensus(
   identity: KovoBuildOneShotIdentity,
   trigger: KovoSourceCheckWatchSnapshot,
   graphDigest: string,
-  cache: KovoSourceCheckSessionFactCache,
 ): KovoSourceCheckRevisionResult['census'] {
   const rawPhases = buildSnapshotDenseArray(
     buildOwnDataValue(raw, 'phases', 'Source-check one-shot phase census') as readonly {
@@ -572,7 +317,7 @@ function acceptedPhaseCensus(
     const durationMs = buildOwnDataValue(phase, 'durationMs', 'Source-check one-shot phase');
     if (
       name !== expectedName ||
-      (status !== 'executed' && status !== 'not-applicable') ||
+      (status !== 'executed' && status !== 'not-applicable' && status !== 'reused-authenticated') ||
       typeof durationMs !== 'number' ||
       !(durationMs >= 0 && durationMs < positiveInfinity) ||
       (status === 'not-applicable' && durationMs !== 0)
@@ -593,15 +338,23 @@ function acceptedPhaseCensus(
     } else if (status !== 'executed') {
       throw new NativeTypeError('Source-check graph diagnostics phase was not executed.');
     }
+    if (
+      (expectedName === 'session-authority' ||
+        expectedName === 'app-evaluation' ||
+        expectedName === 'build-check-graph' ||
+        expectedName === 'graph-diagnostics') &&
+      status !== 'executed'
+    ) {
+      throw new NativeTypeError(`Source-check phase ${expectedName} must execute every revision.`);
+    }
     const inputDigest = sourceCheckPhaseInputDigest(
       expectedName,
-      status,
+      status === 'not-applicable' ? 'not-applicable' : 'executed',
       input,
       identity,
       trigger,
       graphDigest,
     );
-    cache.observe(expectedName, inputDigest);
     buildSecurityArrayAppend(
       phases,
       buildApply(NativeObjectFreeze, undefined, [

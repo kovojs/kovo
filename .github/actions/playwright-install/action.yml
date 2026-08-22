@@ -15,9 +15,17 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Remove transient Microsoft apt sources
+    - name: Sanitize hosted-runner apt sources
       run: |
-        grep -lR "packages.microsoft.com" /etc/apt/sources.list.d 2>/dev/null | xargs -r sudo rm -f
+        while IFS= read -r source_file; do
+          sudo rm -f -- "$source_file"
+        done < <(grep -lR "packages.microsoft.com" /etc/apt/sources.list.d 2>/dev/null || true)
+        mirror_file=/etc/apt/apt-mirrors.txt
+        if test -f "$mirror_file" &&
+          grep -Eq '^[[:space:]]*https?://azure\.archive\.ubuntu\.com/ubuntu/?([[:space:]]|$)' "$mirror_file" &&
+          grep -Eq '^[[:space:]]*https?://archive\.ubuntu\.com/ubuntu/?([[:space:]]|$)' "$mirror_file"; then
+          sudo sed -i -E '\#^[[:space:]]*https?://azure\.archive\.ubuntu\.com/ubuntu/?([[:space:]]|$)#d' "$mirror_file"
+        fi
       shell: bash
     - name: Restore Playwright browser cache
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
@@ -26,5 +34,7 @@ runs:
         key: ${{ inputs['cache-key'] }}
         restore-keys: ${{ inputs['restore-key'] }}
     - name: Install Playwright browsers
-      run: vp exec playwright install --with-deps ${{ inputs.browsers }}
+      env:
+        PLAYWRIGHT_INSTALL_BROWSERS: ${{ inputs.browsers }}
+      run: '"$GITHUB_ACTION_PATH/install.sh" "$PLAYWRIGHT_INSTALL_BROWSERS"'
       shell: bash

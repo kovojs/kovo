@@ -16,6 +16,15 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+/* Author CSS sets `.cart-dialog { display: grid }`; retain the native closed-popover boundary. */
+[popover]:not(:popover-open) {
+  display: none;
+}
+
 body {
   margin: 0;
   background: #f7f7f4;

@@ -2644,16 +2644,37 @@ function functionParameterScopeDeclaresIdentifierNamed(
   return false;
 }
 
-function scopeDeclaresIdentifierNamed(
-  scope: TS.Node,
-  name: string,
-  excluded: TS.Identifier | undefined,
-): boolean {
-  let found = false;
+/**
+ * SPEC.md §5.2 exact-snapshot source proof: declaration facts are memoized only against the
+ * exact parser-owned AST scope object that proved them. This is deliberately not a source-text or
+ * file-name cache: a fresh parse receives fresh node identities, while an AST shared within one
+ * immutable snapshot shares its already-proved scope facts. Weak keys keep the facts bounded by
+ * that AST's lifetime.
+ *
+ * A `null` value means that at least two distinct declaration identifiers have this name. One
+ * exact identifier is retained otherwise so the existing `excluded` identity rule remains exact.
+ * All table operations use boot-captured compiler intrinsics; poisoned Map/WeakMap prototypes
+ * cannot alter a source-trust verdict.
+ */
+const lexicalScopeDeclarationIndexes = compilerCreateWeakMap<
+  TS.Node,
+  ReadonlyMap<string, TS.Identifier | null>
+>();
 
-  const visitBindingName = (bindingName: TS.BindingName): void => {
+function declarationIndexForScope(scope: TS.Node): ReadonlyMap<string, TS.Identifier | null> {
+  const cached = compilerWeakMapGet(lexicalScopeDeclarationIndexes, scope);
+  if (cached !== undefined) return cached;
+
+  const declarations = compilerCreateMap<string, TS.Identifier | null>();
+
+  const recordBindingName = (bindingName: TS.BindingName): void => {
     if (ts.isIdentifier(bindingName)) {
-      if (bindingName !== excluded && bindingName.text === name) found = true;
+      const existing = compilerMapGet(declarations, bindingName.text);
+      if (existing === undefined) {
+        compilerMapSet(declarations, bindingName.text, bindingName);
+      } else if (existing !== bindingName) {
+        compilerMapSet(declarations, bindingName.text, null);
+      }
       return;
     }
     const elementLength = compilerArrayLength(bindingName.elements, 'Scope binding elements');
@@ -2663,39 +2684,38 @@ function scopeDeclaresIdentifierNamed(
         index,
         'Scope binding elements',
       ) as TS.ArrayBindingElement | undefined;
-      if (element && ts.isBindingElement(element)) visitBindingName(element.name);
+      if (element && ts.isBindingElement(element)) recordBindingName(element.name);
     }
   };
 
   const visit = (node: TS.Node, insideNestedLexicalBlock: boolean): void => {
-    if (found) return;
     if (node !== scope && isFunctionScopeNode(node)) {
       if (ts.isFunctionDeclaration(node) && node.name && !insideNestedLexicalBlock) {
-        visitBindingName(node.name);
+        recordBindingName(node.name);
       }
       return;
     }
     if (node !== scope && ts.isClassDeclaration(node)) {
-      if (node.name && !insideNestedLexicalBlock) visitBindingName(node.name);
+      if (node.name && !insideNestedLexicalBlock) recordBindingName(node.name);
       return;
     }
-    if (ts.isImportClause(node) && node.name) visitBindingName(node.name);
-    if (ts.isNamespaceImport(node)) visitBindingName(node.name);
-    if (ts.isImportSpecifier(node)) visitBindingName(node.name);
-    if (ts.isParameter(node)) visitBindingName(node.name);
+    if (ts.isImportClause(node) && node.name) recordBindingName(node.name);
+    if (ts.isNamespaceImport(node)) recordBindingName(node.name);
+    if (ts.isImportSpecifier(node)) recordBindingName(node.name);
+    if (ts.isParameter(node)) recordBindingName(node.name);
     if (ts.isVariableDeclaration(node)) {
       const declarationList = ts.isVariableDeclarationList(node.parent) ? node.parent : undefined;
       const blockScoped =
         (declarationList !== undefined &&
           (declarationList.flags & ts.NodeFlags.BlockScoped) !== 0) ||
         ts.isCatchClause(node.parent);
-      if (!insideNestedLexicalBlock || !blockScoped) visitBindingName(node.name);
+      if (!insideNestedLexicalBlock || !blockScoped) recordBindingName(node.name);
     }
     if (ts.isFunctionDeclaration(node) && node.name && !insideNestedLexicalBlock) {
-      visitBindingName(node.name);
+      recordBindingName(node.name);
     }
     if (ts.isClassDeclaration(node) && node.name && !insideNestedLexicalBlock) {
-      visitBindingName(node.name);
+      recordBindingName(node.name);
     }
     const nestedForChildren =
       insideNestedLexicalBlock || (node !== scope && isLexicalScopeNode(node));
@@ -2703,7 +2723,22 @@ function scopeDeclaresIdentifierNamed(
   };
 
   visit(scope, false);
-  return found;
+  compilerWeakMapSet(lexicalScopeDeclarationIndexes, scope, declarations);
+  return declarations;
+}
+
+/** @internal Test-only exact-object witness; not exported from a package barrel. */
+export function lexicalScopeDeclarationIndexIdentityForTesting(scope: TS.Node): object {
+  return declarationIndexForScope(scope);
+}
+
+function scopeDeclaresIdentifierNamed(
+  scope: TS.Node,
+  name: string,
+  excluded: TS.Identifier | undefined,
+): boolean {
+  const declaration = compilerMapGet(declarationIndexForScope(scope), name);
+  return declaration === null || (declaration !== undefined && declaration !== excluded);
 }
 
 function isLexicalScopeNode(node: TS.Node): boolean {

@@ -1,6 +1,12 @@
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { constants as zlibConstants, createBrotliCompress, createGzip } from 'node:zlib';
+import {
+  brotliCompress,
+  constants as zlibConstants,
+  createBrotliCompress,
+  createGzip,
+  gzip,
+} from 'node:zlib';
 import {
   IncomingMessage as NativeIncomingMessage,
   ServerResponse as NativeServerResponse,
@@ -14,14 +20,19 @@ import {
 import { Socket as NativeSocket, type Socket } from 'node:net';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type { RequestHandler } from './app-types.js';
+import {
+  frameworkProvedDocumentCompressionWitness,
+  type FrameworkProvedDocumentCompressionWitness,
+} from './response.js';
 import { requestUrlLimitFailure } from './request-url-limits.js';
 import { requestStateCanonicalClientIpValue } from './request-state-intrinsics.js';
-import { securityRandomBytes } from './response-security-intrinsics.js';
+import { securityBufferFrom, securityRandomBytes } from './response-security-intrinsics.js';
 import {
   bindRequestDeadlineResponseTransport,
   registerRequestDeadlineTransport,
 } from './request-deadline.js';
 import {
+  createWitnessMap,
   witnessCreateNullRecord,
   createWitnessWeakMap,
   createWitnessSet,
@@ -30,6 +41,12 @@ import {
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
   witnessIsArray,
+  witnessMapDelete,
+  witnessMapForEach,
+  witnessMapGet,
+  witnessMapSet,
+  witnessMapSize,
+  witnessObjectIs,
   witnessObjectKeys,
   witnessReflectApply,
   witnessSetAdd,
@@ -104,6 +121,7 @@ const nativeHeadersGetSetCookie = NativeHeaders.prototype.getSetCookie;
 const nativeHeadersHas = NativeHeaders.prototype.has;
 const nativeHeadersSet = NativeHeaders.prototype.set;
 const nativeResponseBodyGetter = requiredGetter(NativeResponse.prototype, 'body');
+const nativeResponseArrayBuffer = stablePrototypeFunction(NativeResponse.prototype, 'arrayBuffer');
 const nativeResponseHeadersGetter = requiredGetter(NativeResponse.prototype, 'headers');
 const nativeResponseStatusGetter = requiredGetter(NativeResponse.prototype, 'status');
 const nativeResponseStatusTextGetter = requiredGetter(NativeResponse.prototype, 'statusText');
@@ -134,6 +152,7 @@ const readableStreamReaderPrototype = requiredPrototype(
   'ReadableStream reader',
 );
 const nativeStreamReaderRead = stablePrototypeFunction(readableStreamReaderPrototype, 'read');
+const nativeStreamReaderCancel = stablePrototypeFunction(readableStreamReaderPrototype, 'cancel');
 const nativeStreamReaderReleaseLock = stablePrototypeFunction(
   readableStreamReaderPrototype,
   'releaseLock',
@@ -272,6 +291,8 @@ const nativeReadableToWeb = Readable.toWeb;
 const nativePipeline = pipeline;
 const nativeCreateBrotliCompress = createBrotliCompress;
 const nativeCreateGzip = createGzip;
+const nativeBrotliCompress = brotliCompress;
+const nativeGzip = gzip;
 // SPEC §9.5 transport compression: brotli quality for per-request dynamic responses. Node's
 // default quality 11 costs ~163 ms for a 225 KB document versus ~1.4 ms at quality 5 for a
 // nearly identical wire size (plans/good-perf.md O1); quality 11 belongs to build-time static
@@ -295,6 +316,20 @@ witnessSetAdd(bodylessMethods, 'GET');
 witnessSetAdd(bodylessMethods, 'HEAD');
 const requestPeerAddressProperty = '__kovoPeerAddress';
 const nodeResponseTransports = createWitnessWeakMap<ServerResponse, NodeResponseTransport>();
+const PROVED_DOCUMENT_COMPRESSION_CACHE_MAX_ENTRIES = 128;
+const PROVED_DOCUMENT_COMPRESSION_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+const provedDocumentCompressionCache = createWitnessMap<string, ProvedDocumentCompressionEntry>();
+let provedDocumentCompressionCacheBytes = 0;
+let provedDocumentCompressionCacheCancellations = 0;
+let provedDocumentCompressionCacheCompressions = 0;
+let provedDocumentCompressionCacheHits = 0;
+let provedDocumentCompressionCacheMisses = 0;
+let provedDocumentCompressionCacheDisabledForBenchmark = false;
+
+interface ProvedDocumentCompressionEntry {
+  readonly promise: Promise<Buffer>;
+  size: number;
+}
 
 function requiredPropertyDescriptor(value: object, property: PropertyKey): PropertyDescriptor {
   const propertyDescriptor = witnessGetOwnPropertyDescriptor(value, property);
@@ -1119,6 +1154,7 @@ export async function writeWebResponseToNode(
   options: WriteWebResponseToNodeOptions = {},
 ): Promise<void> {
   const responseTransport = pinNodeResponseTransport(nodeResponse);
+  const provedDocumentWitness = frameworkProvedDocumentCompressionWitness(response);
   // SPEC §6.6 rule 5: the final transport pins the complete Response once. Authored code may
   // share this realm, so no status/header/body getter is re-read after this boundary decision.
   const pinnedResponse = snapshotWebResponse(response);
@@ -1129,6 +1165,16 @@ export async function writeWebResponseToNode(
   );
   stampBrowserStateResponseCacheFloor(pinnedResponse.headers);
   const compression = responseCompression(pinnedResponse, options, method);
+  const cachedCompressedBody =
+    compression === undefined ||
+    !provedDocumentCompressionCacheEligible(pinnedResponse, provedDocumentWitness, method)
+      ? undefined
+      : await compressedProvedDocumentBody(
+          response,
+          pinnedResponse.body!,
+          provedDocumentWitness!,
+          compression,
+        );
   const responseHeaders = pinnedResponse.headers;
   if (
     options.httpVersion !== '2.0' &&
@@ -1168,6 +1214,10 @@ export async function writeWebResponseToNode(
   ]);
   if (method === 'HEAD' || pinnedResponse.body === null) {
     witnessReflectApply(responseTransport.end, nodeResponse, []);
+    return;
+  }
+  if (cachedCompressedBody !== undefined) {
+    witnessReflectApply(responseTransport.end, nodeResponse, [cachedCompressedBody]);
     return;
   }
   const source = witnessReflectApply<Readable>(nativeReadableFromWeb, Readable, [
@@ -1478,6 +1528,218 @@ function urlSearch(url: URL): string {
 
 function urlUsername(url: URL): string {
   return witnessReflectApply(nativeUrlUsernameGetter, url, []);
+}
+
+const PROVED_DOCUMENT_CACHE_CONTROL = 'public, max-age=0, must-revalidate';
+
+function provedDocumentCompressionCacheEligible(
+  response: PinnedWebResponse,
+  witness: FrameworkProvedDocumentCompressionWitness | undefined,
+  method: string,
+): witness is FrameworkProvedDocumentCompressionWitness {
+  // SPEC §§2/9.5/14: the private witness is the positive proof. It is minted only after the
+  // compiler manifest and credential-neutral request floor pass; Cookie/Authorization requests,
+  // structural Response clones, and public ETags therefore arrive here without authority.
+  if (
+    provedDocumentCompressionCacheDisabledForBenchmark ||
+    witness === undefined ||
+    method === 'HEAD'
+  ) {
+    return false;
+  }
+  if (response.status !== 200 || response.body === null) return false;
+  if (
+    hasHeader(response.headers, 'Set-Cookie') ||
+    hasHeader(response.headers, 'Clear-Site-Data') ||
+    hasHeader(response.headers, 'Content-Encoding')
+  ) {
+    return false;
+  }
+  const cacheControl = getHeader(response.headers, 'Cache-Control') ?? '';
+  if (cacheControl !== PROVED_DOCUMENT_CACHE_CONTROL) return false;
+  return (
+    !cacheControlHasDirective(cacheControl, 'private') &&
+    !cacheControlHasDirective(cacheControl, 'no-store') &&
+    !cacheControlHasDirective(cacheControl, 'no-transform')
+  );
+}
+
+function provedDocumentCompressionCacheEntry(
+  witness: FrameworkProvedDocumentCompressionWitness,
+  encoding: 'br' | 'gzip',
+): ProvedDocumentCompressionEntry | undefined {
+  return witnessMapGet(
+    provedDocumentCompressionCache,
+    provedDocumentCompressionCacheKey(witness, encoding),
+  );
+}
+
+async function compressedProvedDocumentBody(
+  response: Response,
+  pinnedBody: ReadableStream<Uint8Array>,
+  witness: FrameworkProvedDocumentCompressionWitness,
+  encoding: 'br' | 'gzip',
+): Promise<Buffer> {
+  const key = provedDocumentCompressionCacheKey(witness, encoding);
+  const existing = provedDocumentCompressionCacheEntry(witness, encoding);
+  if (existing !== undefined) {
+    provedDocumentCompressionCacheHits += 1;
+    // LRU touch. Pending entries participate so a concurrent first-hit burst cannot evict its own
+    // single-flight merely because another representation arrives while compression is running.
+    witnessMapDelete(provedDocumentCompressionCache, key);
+    witnessMapSet(provedDocumentCompressionCache, key, existing);
+    // This exact response body will not feed compression: cancel its request-deadline wrapper so
+    // the upstream reader and occupancy lease release. A caller may concurrently reuse/lock the
+    // same Response despite Fetch's one-shot contract; cancellation then safely becomes a no-op.
+    // Do not await authored upstream cancellation: cached bytes are independently authenticated,
+    // and a hostile cancel hook cannot be allowed to delay their transport.
+    void cancelUnusedProvedDocumentBody(pinnedBody).catch(() => undefined);
+    return existing.promise;
+  }
+
+  provedDocumentCompressionCacheMisses += 1;
+  const promise = compressProvedDocumentResponse(response, encoding);
+  const entry: ProvedDocumentCompressionEntry = { promise, size: 0 };
+  witnessMapSet(provedDocumentCompressionCache, key, entry);
+  trimProvedDocumentCompressionCache();
+
+  try {
+    const bytes = await promise;
+    if (witnessObjectIs(witnessMapGet(provedDocumentCompressionCache, key), entry)) {
+      entry.size = bytes.byteLength;
+      provedDocumentCompressionCacheBytes += entry.size;
+      trimProvedDocumentCompressionCache();
+    }
+    return bytes;
+  } catch (error) {
+    deleteProvedDocumentCompressionEntry(key, entry);
+    throw error;
+  }
+}
+
+async function cancelUnusedProvedDocumentBody(body: ReadableStream<Uint8Array>): Promise<void> {
+  let reader: ReadableStreamDefaultReader<Uint8Array>;
+  try {
+    reader = witnessReflectApply<ReadableStreamDefaultReader<Uint8Array>>(
+      nativeReadableStreamGetReader,
+      body,
+      [],
+    );
+  } catch {
+    return;
+  }
+  try {
+    await witnessReflectApply<Promise<void>>(nativeStreamReaderCancel, reader, [
+      'Kovo proved-document compressed representation cache hit',
+    ]);
+  } finally {
+    witnessReflectApply(nativeStreamReaderReleaseLock, reader, []);
+    provedDocumentCompressionCacheCancellations += 1;
+  }
+}
+
+function provedDocumentCompressionCacheKey(
+  witness: FrameworkProvedDocumentCompressionWitness,
+  encoding: 'br' | 'gzip',
+): string {
+  return `${witness.buildToken.length}:${witness.buildToken}${witness.bodyDigest.length}:${witness.bodyDigest}:${encoding}`;
+}
+
+async function compressProvedDocumentResponse(
+  response: Response,
+  encoding: 'br' | 'gzip',
+): Promise<Buffer> {
+  provedDocumentCompressionCacheCompressions += 1;
+  const body = securityBufferFrom(
+    await witnessReflectApply<Promise<ArrayBuffer>>(nativeResponseArrayBuffer, response, []),
+  );
+  return new Promise<Buffer>((resolve, reject) => {
+    const callback = (error: Error | null, compressed: Buffer): void => {
+      if (error !== null) reject(error);
+      else resolve(compressed);
+    };
+    if (encoding === 'br') {
+      nativeBrotliCompress(
+        body,
+        { params: { [brotliQualityParam]: BROTLI_DYNAMIC_QUALITY } },
+        callback,
+      );
+    } else {
+      nativeGzip(body, { flush: gzipStreamFlush }, callback);
+    }
+  });
+}
+
+function trimProvedDocumentCompressionCache(): void {
+  while (
+    witnessMapSize(provedDocumentCompressionCache) >
+      PROVED_DOCUMENT_COMPRESSION_CACHE_MAX_ENTRIES ||
+    provedDocumentCompressionCacheBytes > PROVED_DOCUMENT_COMPRESSION_CACHE_MAX_BYTES
+  ) {
+    let oldestKey: string | undefined;
+    let oldestEntry: ProvedDocumentCompressionEntry | undefined;
+    witnessMapForEach(provedDocumentCompressionCache, (entry, key) => {
+      if (oldestKey === undefined) {
+        oldestKey = key;
+        oldestEntry = entry;
+      }
+    });
+    if (oldestKey === undefined || oldestEntry === undefined) return;
+    deleteProvedDocumentCompressionEntry(oldestKey, oldestEntry);
+  }
+}
+
+function deleteProvedDocumentCompressionEntry(
+  key: string,
+  entry: ProvedDocumentCompressionEntry,
+): void {
+  if (!witnessObjectIs(witnessMapGet(provedDocumentCompressionCache, key), entry)) return;
+  witnessMapDelete(provedDocumentCompressionCache, key);
+  provedDocumentCompressionCacheBytes -= entry.size;
+}
+
+/** @internal Test-only observation/reset seam; not exported from the public Node entrypoint. */
+export function provedDocumentCompressionCacheStatsForTest(): {
+  readonly bytes: number;
+  readonly cancellations: number;
+  readonly compressions: number;
+  readonly entries: number;
+  readonly hits: number;
+  readonly misses: number;
+} {
+  return {
+    bytes: provedDocumentCompressionCacheBytes,
+    cancellations: provedDocumentCompressionCacheCancellations,
+    compressions: provedDocumentCompressionCacheCompressions,
+    entries: witnessMapSize(provedDocumentCompressionCache),
+    hits: provedDocumentCompressionCacheHits,
+    misses: provedDocumentCompressionCacheMisses,
+  };
+}
+
+/**
+ * @internal Disable-only performance harness seam. It cannot mint or substitute the private
+ * SPEC §§2/9.5/14 Response witness and deliberately has no corresponding enable operation.
+ */
+export function disableProvedDocumentCompressionCacheForBenchmark(): void {
+  provedDocumentCompressionCacheDisabledForBenchmark = true;
+  clearProvedDocumentCompressionCacheForTest();
+}
+
+/** @internal Test-only reset; pending evicted work cannot repopulate the cache. */
+export function clearProvedDocumentCompressionCacheForTest(): void {
+  const keys: string[] = [];
+  witnessMapForEach(provedDocumentCompressionCache, (_entry, key) => {
+    keys[keys.length] = key;
+  });
+  for (let index = 0; index < keys.length; index += 1) {
+    witnessMapDelete(provedDocumentCompressionCache, keys[index]!);
+  }
+  provedDocumentCompressionCacheBytes = 0;
+  provedDocumentCompressionCacheCancellations = 0;
+  provedDocumentCompressionCacheCompressions = 0;
+  provedDocumentCompressionCacheHits = 0;
+  provedDocumentCompressionCacheMisses = 0;
 }
 
 function responseCompression(
