@@ -142,6 +142,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
       'readinessProbe: expected an exact successful root-route probe; observed object(keys=3,attempts=number(1),path=undefined,status=number(500),transientFailures=number(0))',
       `readyDiagnostic.schema: expected ${DEV_READY_PROFILE_WINDOW_SCHEMA}; observed string(length=${String(secretSchema.length)})`,
       'readyDiagnostic.diagnosticOnly.acceptanceEligible: expected false; observed true',
+      `errorContext,category=other,utf8Bytes=0,sha256=${sha256(Buffer.from(''))}`,
     ]);
     const message = (() => {
       try {
@@ -154,6 +155,54 @@ describe('authenticated cold-first-ready diagnostic', () => {
     expect(message).toContain(findings.join('; '));
     expect(message).not.toContain('do-not-disclose');
     expect(message.length).toBeLessThan(4_096);
+  });
+
+  it('adds bounded deterministic error context only after an existing observation failure', () => {
+    const valid = completeProfiledObservation();
+    valid.error = `dev process exited before ready: ${'VALID_SECRET'.repeat(1_000)}`;
+    expect(profiledReadyObservationFindings(valid)).toEqual([]);
+    expect(validateProfiledReadyObservation(valid)).toBe(valid);
+
+    const cases = [
+      ['dev process exited before ready: PRIVATE_LOG_TAIL', 'process-exited-before-ready'],
+      ['dev ready timed out: PRIVATE_SELECTOR', 'dev-ready-timeout'],
+      ['dev ready shared deadline expired during browser navigation', 'shared-deadline'],
+      ['dev ready route probe timed out: PRIVATE_RESPONSE', 'route-probe-timeout'],
+      ['unclassified; browser telemetry recorded 1 request failures', 'browser'],
+      ['fresh-ready diagnostic abort: PRIVATE_INSPECTOR_FAILURE', 'profiler'],
+      ['fresh ready did not produce process-tree RSS evidence', 'rss'],
+      ['PRIVATE_OTHER_FAILURE_雪', 'other'],
+    ];
+    expect(Buffer.byteLength(cases.at(-1)[0], 'utf8')).toBeGreaterThan(cases.at(-1)[0].length);
+    for (const [error, category] of cases) {
+      const invalid = completeProfiledObservation();
+      invalid.success = false;
+      invalid.error = error;
+      const expectedContext = [
+        'errorContext',
+        `category=${category}`,
+        `utf8Bytes=${String(Buffer.byteLength(error, 'utf8'))}`,
+        `sha256=${sha256(Buffer.from(error))}`,
+      ].join(',');
+      const findings = profiledReadyObservationFindings(invalid);
+      expect(findings).toEqual([
+        'success: expected true; observed false',
+        expectedContext,
+      ]);
+      expect(profiledReadyObservationFindings(invalid)).toEqual(findings);
+      expect(findings.join('; ')).not.toContain('PRIVATE_');
+      expect(findings).toHaveLength(2);
+
+      let message = '';
+      try {
+        validateProfiledReadyObservation(invalid);
+      } catch (cause) {
+        message = cause.message;
+      }
+      expect(message).toContain(expectedContext);
+      expect(message).not.toContain('PRIVATE_');
+      expect(message.length).toBeLessThan(1_024);
+    }
   });
 
   it('fixes one N=216 first-ready window in exact B,S,S,B order', () => {

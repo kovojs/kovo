@@ -1809,6 +1809,9 @@ export function profiledReadyObservationFindings(observation) {
     'false',
     observed.readyDiagnostic?.diagnosticOnly?.acceptanceEligible,
   );
+  if (findings.length > 0) {
+    findings.push(profiledReadyObservationErrorContext(observed.error));
+  }
   return Object.freeze(findings);
 }
 
@@ -1847,6 +1850,46 @@ function boundedReadyRouteProbeObservation(value) {
     `status=${boundedObservedScalar(value.status)}`,
     `transientFailures=${boundedObservedScalar(value.transientFailures)})`,
   ].join(',');
+}
+
+function profiledReadyObservationErrorContext(error) {
+  const source = typeof error === 'string' ? error : '';
+  return [
+    'errorContext',
+    `category=${profiledReadyObservationErrorCategory(source)}`,
+    `utf8Bytes=${String(Buffer.byteLength(source, 'utf8'))}`,
+    `sha256=${sha256Utf8(source)}`,
+  ].join(',');
+}
+
+function profiledReadyObservationErrorCategory(source) {
+  const hasStage = (...prefixes) =>
+    prefixes.some(
+      (prefix) => source.startsWith(prefix) || source.includes(`; ${prefix}`),
+    );
+  if (hasStage('dev process exited before ready:')) return 'process-exited-before-ready';
+  if (hasStage('dev ready route probe timed out:')) return 'route-probe-timeout';
+  if (hasStage('dev ready shared deadline expired')) return 'shared-deadline';
+  if (hasStage('dev ready timed out:')) return 'dev-ready-timeout';
+  if (hasStage('browser context close:', 'browser telemetry recorded ')) return 'browser';
+  if (
+    hasStage('fresh-ready diagnostic ', 'fresh-ready profiler ', 'fresh-ready Inspector ')
+  ) {
+    return 'profiler';
+  }
+  if (
+    hasStage(
+      'fresh ready did not produce process-tree RSS evidence',
+      'process-tree RSS ',
+    )
+  ) {
+    return 'rss';
+  }
+  return 'other';
+}
+
+function sha256Utf8(value) {
+  return `sha256:${createHash('sha256').update(value, 'utf8').digest('hex')}`;
 }
 
 export function parseDevReadyProfileArgs(argv) {
