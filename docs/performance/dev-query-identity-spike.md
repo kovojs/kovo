@@ -99,3 +99,22 @@ were 27,276.38–27,822.25 ms. The corresponding first baseline sample was also 
 30,680.27 ms. That shape is useful diagnostic evidence, but the preregistered p95 rule includes
 those fresh samples. It cannot be discarded or reinterpreted after measurement. Any follow-up must
 be a distinct implementation with its own exact binding and complete N=24/N=216 decision.
+
+## Rejected non-causal follow-up
+
+The pushed durable ref `refs/heads/perf-spike/dev-query-zero-query-noncausal-20260821` identifies
+follow-up commit `7bb67229847db06fae4bbefea867fdb6ce5b29dc` (tree
+`65e20dbda134b48edca4b9b8c2f5422d984db978`, stable patch ID
+`f23a6764520c44223ddc8e75519904024c613fd6`). It is correctness-safe but was rejected before
+timing because independent production-path review proved that its proposed shortcut cannot affect
+the measured corpus.
+
+Production Vite emits query-plan bootstrap metadata only for modules that contain query plans, and
+calls `resolveComponentQueryRuntimeNames` only when that metadata exists. The N=216 corpus has 215
+zero-query fanout components that therefore never enter the changed function. Its three actual
+query-bearing sources use imported query expressions, have no locally resolved known name, and
+continue through the unchanged dependency-analysis path. The new test called the internal resolver
+directly for synthetic zero-query modules, bypassing Vite's eligibility condition, so its work
+census did not authenticate production scope. No benchmark result exists for this commit and none
+should be inferred from it; a replacement candidate must first prove that it changes a profiled
+production call path.

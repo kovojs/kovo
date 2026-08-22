@@ -223,6 +223,10 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     and RSS guardrail, but N=216 fresh-ready p95 regressed 6.92% against the 5% limit. Exact
     candidate custody, metrics, raw-report digests, and the non-retry disposition are in
     `docs/performance/dev-query-identity-spike.md`.
+  - Rejected before timing; do not integrate `7bb672298`. Its zero-query shortcut is outside the
+    measured Vite path: only modules with query-plan bootstrap metadata invoke the resolver, and the
+    three query-bearing N=216 modules still take the unchanged dependency-analysis path. Exact ref,
+    patch custody, and production call-chain proof are in the same decision record.
 - [ ] Reach the syntax-error/recovery first milestone at both N=24 and N=216: syntax p95 at most
       1 second, recovery p95 at most 2 seconds, zero lost/silent revisions, and no greater than 5%
       p95 latency or process-tree RSS regression. Accept an implementation only under the plan's
