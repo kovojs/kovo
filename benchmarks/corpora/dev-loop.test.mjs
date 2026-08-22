@@ -424,6 +424,77 @@ describe('single-entrant developer-loop adapter', () => {
     ).toThrow(/confused its authenticated dist entry/u);
   });
 
+  it('retains the exact paused packed argv and strips inherited Node loader options', async () => {
+    const root = await temporaryRoot();
+    const entrypoint = path.join(root, 'node_modules/@kovojs/cli/dist/bin.mjs');
+    const devPort = 49_120;
+    const inspectorPort = 49_121;
+    const argv = [
+      process.execPath,
+      entrypoint,
+      'dev',
+      './src/app.tsx',
+      '--host',
+      'localhost',
+      '--strict-port',
+      '--port',
+      String(devPort),
+    ];
+    const spawnProcess = vi.fn(() => ({
+      once() {},
+      pid: 9_121,
+      stderr: { on() {} },
+      stdout: { on() {} },
+    }));
+    const launched = await launchDevSessionAfterHandoff(
+      {
+        appRoot: root,
+        command: {
+          argv,
+          cwd: root,
+          env: { NODE_OPTIONS: '--require=/tmp/untrusted.cjs', NODE_PATH: '/tmp/untrusted' },
+          origin: `http://localhost:${String(devPort)}`,
+          packedProduct: { cliEntry: entrypoint },
+        },
+        inspectorPauseOnStart: true,
+        inspectorPort,
+        priorProcessMarker: null,
+        priorSession: null,
+        spawnProcess,
+        targetSession: 'ready[0]',
+      },
+      {
+        now: monotonicTestClock(),
+        portAvailability: async () => dualStackPortObservation(),
+        wallNow: () => '2026-08-13T00:00:00.000Z',
+      },
+    );
+
+    const expectedProfiledArgv = [
+      `--inspect-brk=127.0.0.1:${String(inspectorPort)}`,
+      ...argv.slice(1),
+    ];
+    expect(launched.session.inspectorInvocation).toEqual({
+      argv: expectedProfiledArgv,
+      executable: process.execPath,
+      pauseOnStart: true,
+      port: inspectorPort,
+      schema: 'kovo-profiled-process-invocation/v1',
+    });
+    expect(Object.isFrozen(launched.session.inspectorInvocation)).toBe(true);
+    expect(Object.isFrozen(launched.session.inspectorInvocation.argv)).toBe(true);
+    expect(spawnProcess).toHaveBeenCalledWith(
+      process.execPath,
+      expectedProfiledArgv,
+      expect.objectContaining({
+        env: expect.not.objectContaining({
+          NODE_OPTIONS: expect.anything(),
+          NODE_PATH: expect.anything(),
+        }),
+      }),
+    );
+  });
+
   it('preserves diagnostic options when parsed CLI options cross the benchmark boundary', () => {
     const parsed = parseDevLoopArgs([
       '--manifest',

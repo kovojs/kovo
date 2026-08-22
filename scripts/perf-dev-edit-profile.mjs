@@ -13,6 +13,7 @@ import path from 'node:path';
 export const DEV_EDIT_PROFILE_SCHEMA = 'kovo-dev-edit-profile/v1';
 export const DEV_EDIT_PROFILE_CLASSIFIER = 'kovo-dev-edit-profile-classifier/stack-v3';
 export const DEV_EDIT_PROFILE_AUDIT_SCHEMA = 'kovo-dev-edit-profile-audit/v1';
+export const DEV_PAUSED_INSPECTOR_BOOTSTRAP_SCHEMA = 'kovo-paused-inspector-bootstrap/v1';
 export const DEV_EDIT_PROFILE_CATEGORIES = Object.freeze([
   'self-time',
   'allocation',
@@ -27,6 +28,15 @@ const HEAP_SAMPLING_INTERVAL_BYTES = 32_768;
 const CONNECTION_TIMEOUT_MS = 15_000;
 const INSPECTOR_TARGET_LIST_MAX_CHARS = 64 * 1024;
 const INSPECTOR_TARGET_LIST_MAX_ENTRIES = 64;
+const INSPECTOR_INVOCATION_MAX_STRING = 8_192;
+const pausedInspectorSessions = new WeakMap();
+
+class PausedInspectorTerminalError extends Error {
+  constructor(message, options) {
+    super(message, options);
+    this.name = 'PausedInspectorTerminalError';
+  }
+}
 
 export async function createDevEditProfiler(options, dependencies = {}) {
   const framework = requiredString(options.framework, 'framework');
@@ -906,6 +916,305 @@ export async function connectDevInspector(options, dependencies = {}) {
   throw new Error(lastError);
 }
 
+/**
+ * Authenticate a Node `--inspect-brk` target before Node bootstrap advances. At this phase Node
+ * intentionally exposes the inherited environment but not `process.pid`, `process.argv`, or
+ * `process.execArgv`; PID authority therefore comes from the exact default Runtime execution-context
+ * name, while invocation authority comes from the framework-owned spawn record. The returned
+ * one-shot capability starts both cold samplers before it releases the runtime.
+ */
+export async function connectPausedDevInspector(options, dependencies = {}) {
+  const inspectorPort = boundedInteger(options.inspectorPort, 1_024, 65_535, 'inspectorPort');
+  const expectedPid = boundedInteger(
+    options.expectedPid,
+    1,
+    Number.MAX_SAFE_INTEGER,
+    'expectedPid',
+  );
+  const processMarker = requiredProcessMarker(options.processMarker);
+  const expectedDevPort = boundedInteger(options.expectedDevPort, 1_024, 65_535, 'dev port');
+  const samplingIntervalMicros = boundedInteger(
+    options.samplingIntervalMicros,
+    100,
+    10_000,
+    'Inspector CPU sampling interval',
+  );
+  const invocation = validatePausedInspectorInvocation(options.invocation, {
+    expectedDevPort,
+    expectedEntrypoint: options.expectedEntrypoint,
+    inspectorPort,
+  });
+  const fetchInspector = dependencies.fetch ?? fetch;
+  const openSession = dependencies.openSession ?? openInspectorSession;
+  const now = dependencies.now ?? (() => Date.now());
+  const pause =
+    dependencies.delay ??
+    ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  const timeoutMs = boundedInteger(
+    dependencies.timeoutMs ?? CONNECTION_TIMEOUT_MS,
+    1,
+    60_000,
+    'Inspector connection timeout',
+  );
+  const deadline = now() + timeoutMs;
+  let lastError = 'paused Inspector did not answer';
+  while (now() < deadline) {
+    try {
+      const response = await fetchInspector(`http://127.0.0.1:${String(inspectorPort)}/json/list`);
+      if (!response.ok) throw new Error(`Inspector returned HTTP ${String(response.status)}`);
+      const targets = parseInspectorTargetList(await response.text(), inspectorPort);
+      for (const target of targets) {
+        let session;
+        try {
+          session = await openSession(target.webSocketDebuggerUrl);
+          const bootstrap = await readPausedBootstrapIdentity(
+            session,
+            { expectedPid, processMarker, targetId: target.id },
+            { deadline, now, pause },
+          );
+          if (!bootstrap.processMarkerMatched) {
+            lastError = 'paused Inspector target did not carry the spawned session marker';
+            session.close();
+            continue;
+          }
+          const authenticated = {
+            close() {
+              pausedInspectorSessions.delete(authenticated);
+              session.close();
+            },
+            identity: {
+              bootstrap,
+              pid: expectedPid,
+              processMarkerMatched: true,
+              processMarkerSha256: sha256(processMarker),
+              targetId: target.id,
+            },
+            invocation,
+            send(method, params) {
+              return session.send(method, params);
+            },
+            async startAndResume() {
+              const state = pausedInspectorSessions.get(authenticated);
+              if (state?.phase !== 'authenticated-pre-bootstrap' || state.targetId !== target.id) {
+                throw new Error('paused Inspector session custody changed before runtime advance');
+              }
+              let coverageActive = false;
+              let profilerActive = false;
+              try {
+                await session.send('Profiler.enable');
+                await session.send('Profiler.setSamplingInterval', {
+                  interval: samplingIntervalMicros,
+                });
+                await session.send('Profiler.startPreciseCoverage', {
+                  callCount: true,
+                  detailed: true,
+                });
+                coverageActive = true;
+                await session.send('Profiler.start');
+                profilerActive = true;
+                dependencies.beforeRuntimeAdvance?.({ bootstrap, invocation, target });
+                state.phase = 'profiling-pre-bootstrap';
+                await session.send('Runtime.runIfWaitingForDebugger');
+                state.phase = 'advanced';
+              } catch (error) {
+                await Promise.allSettled([
+                  ...(profilerActive ? [session.send('Profiler.stop')] : []),
+                  ...(coverageActive ? [session.send('Profiler.stopPreciseCoverage')] : []),
+                ]);
+                authenticated.close();
+                throw error;
+              }
+            },
+          };
+          pausedInspectorSessions.set(authenticated, {
+            phase: 'authenticated-pre-bootstrap',
+            targetId: target.id,
+          });
+          return authenticated;
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : String(error);
+          session?.close();
+          if (error instanceof PausedInspectorTerminalError) throw error;
+        }
+      }
+      if (targets.length === 0) lastError = 'Inspector did not expose a websocket target';
+    } catch (error) {
+      if (error instanceof PausedInspectorTerminalError) throw error.cause ?? error;
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    await pause(Math.max(1, Math.min(25, deadline - now())));
+  }
+  throw new Error(lastError);
+}
+
+function validatePausedInspectorInvocation(
+  value,
+  { expectedDevPort, expectedEntrypoint, inspectorPort },
+) {
+  const entrypoint = requiredString(expectedEntrypoint, 'paused Inspector packed entrypoint');
+  if (!path.isAbsolute(entrypoint) || path.resolve(entrypoint) !== entrypoint) {
+    throw new TypeError('paused Inspector packed entrypoint must be an absolute normalized path');
+  }
+  const expectedFlag = `--inspect-brk=127.0.0.1:${String(inspectorPort)}`;
+  const expectedArgv = [
+    expectedFlag,
+    entrypoint,
+    'dev',
+    './src/app.tsx',
+    '--host',
+    'localhost',
+    '--strict-port',
+    '--port',
+    String(expectedDevPort),
+  ];
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    !sameExactStringSet(Object.keys(value), [
+      'argv',
+      'executable',
+      'pauseOnStart',
+      'port',
+      'schema',
+    ]) ||
+    value.schema !== 'kovo-profiled-process-invocation/v1' ||
+    value.executable !== process.execPath ||
+    value.pauseOnStart !== true ||
+    value.port !== inspectorPort ||
+    !Array.isArray(value.argv) ||
+    value.argv.length !== expectedArgv.length ||
+    value.argv.some(
+      (argument) =>
+        typeof argument !== 'string' ||
+        argument.length === 0 ||
+        argument.length > INSPECTOR_INVOCATION_MAX_STRING,
+    ) ||
+    value.argv.some((argument, index) => argument !== expectedArgv[index]) ||
+    value.argv.filter((argument) => argument === expectedFlag).length !== 1 ||
+    value.argv.some(
+      (argument, index) =>
+        index !== 0 &&
+        (argument === '--inspect' ||
+          argument === '--inspect-brk' ||
+          argument.startsWith('--inspect=') ||
+          argument.startsWith('--inspect-brk=')),
+    )
+  ) {
+    throw new Error(
+      'paused Inspector launch record is not the exact packed --inspect-brk invocation',
+    );
+  }
+  return Object.freeze({
+    argv: Object.freeze([...value.argv]),
+    argvSha256: sha256(JSON.stringify([value.executable, ...value.argv])),
+    entrypoint,
+    executable: value.executable,
+    execArgv: Object.freeze([expectedFlag]),
+    pauseFlag: expectedFlag,
+    schema: value.schema,
+  });
+}
+
+async function readPausedBootstrapIdentity(
+  session,
+  { expectedPid, processMarker, targetId },
+  { deadline, now, pause },
+) {
+  if (typeof session?.onEvent !== 'function') {
+    throw new TypeError('paused Inspector session does not expose protocol events');
+  }
+  const events = [];
+  let protocolError = null;
+  const unsubscribe = session.onEvent((event) => {
+    if (event?.error instanceof Error) {
+      protocolError ??= event.error;
+    } else if (event?.method === 'Runtime.executionContextCreated') {
+      events.push(event.params);
+    }
+  });
+  try {
+    await session.send('Runtime.enable');
+    while (events.length === 0 && protocolError === null && now() < deadline) {
+      await pause(Math.max(1, Math.min(5, deadline - now())));
+    }
+    if (events.length > 0 && protocolError === null && now() < deadline) {
+      await pause(Math.max(1, Math.min(5, deadline - now())));
+    }
+  } finally {
+    unsubscribe();
+  }
+  if (protocolError !== null) throw protocolError;
+  if (events.length !== 1) {
+    throw new Error(
+      events.length === 0
+        ? 'paused Inspector omitted its default execution context'
+        : 'paused Inspector exposed a duplicate execution-context census',
+    );
+  }
+  const context = events[0]?.context;
+  if (
+    context === null ||
+    typeof context !== 'object' ||
+    Array.isArray(context) ||
+    !Number.isSafeInteger(context.id) ||
+    context.id <= 0 ||
+    typeof context.name !== 'string' ||
+    context.name.length === 0 ||
+    context.name.length > INSPECTOR_INVOCATION_MAX_STRING ||
+    context.origin !== '' ||
+    context.auxData === null ||
+    typeof context.auxData !== 'object' ||
+    Array.isArray(context.auxData) ||
+    context.auxData.isDefault !== true
+  ) {
+    throw new Error('paused Inspector default execution context was malformed');
+  }
+  const evaluated = await session.send('Runtime.evaluate', {
+    contextId: context.id,
+    expression: `({processMarkerMatched:globalThis.process?.env?.[${JSON.stringify(
+      processMarker,
+    )}]==='1',pidType:typeof globalThis.process?.pid,argvType:typeof globalThis.process?.argv,execArgvType:typeof globalThis.process?.execArgv})`,
+    returnByValue: true,
+  });
+  const value = evaluated?.result?.value;
+  const markerMatched = value?.processMarkerMatched === true;
+  const expectedContextName = `${process.execPath}[${String(expectedPid)}]`;
+  if (
+    evaluated?.exceptionDetails !== undefined ||
+    evaluated?.result?.type !== 'object' ||
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    typeof value.processMarkerMatched !== 'boolean' ||
+    value.pidType !== 'undefined' ||
+    value.argvType !== 'undefined' ||
+    value.execArgvType !== 'undefined' ||
+    context.name !== expectedContextName
+  ) {
+    const error = new PausedInspectorTerminalError(
+      'paused Inspector target was not the expected unadvanced Node bootstrap context',
+    );
+    if (markerMatched) throw error;
+    return {
+      contextId: context.id,
+      contextName: context.name,
+      processMarkerMatched: false,
+      schema: DEV_PAUSED_INSPECTOR_BOOTSTRAP_SCHEMA,
+      targetId,
+    };
+  }
+  return Object.freeze({
+    contextId: context.id,
+    contextName: context.name,
+    contextOrigin: context.origin,
+    processGlobals: 'pid-argv-execArgv-undefined',
+    processMarkerMatched: markerMatched,
+    schema: DEV_PAUSED_INSPECTOR_BOOTSTRAP_SCHEMA,
+    targetId,
+  });
+}
+
 async function openInspectorSession(webSocketDebuggerUrl) {
   const socket = new WebSocket(webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
@@ -914,8 +1223,56 @@ async function openInspectorSession(webSocketDebuggerUrl) {
   });
   let nextId = 1;
   const pending = new Map();
+  const eventListeners = new Set();
   socket.addEventListener('message', (event) => {
-    const message = JSON.parse(String(event.data));
+    let message;
+    try {
+      message = JSON.parse(String(event.data));
+    } catch {
+      for (const listener of eventListeners) {
+        listener({
+          error: new Error('Inspector emitted malformed JSON'),
+          method: null,
+          params: null,
+        });
+      }
+      socket.close();
+      return;
+    }
+    if (message === null || typeof message !== 'object' || Array.isArray(message)) {
+      for (const listener of eventListeners) {
+        listener({
+          error: new Error('Inspector emitted a malformed protocol message'),
+          method: null,
+          params: null,
+        });
+      }
+      socket.close();
+      return;
+    }
+    if (message.id === undefined) {
+      if (
+        typeof message.method !== 'string' ||
+        message.method.length === 0 ||
+        message.params === null ||
+        typeof message.params !== 'object' ||
+        Array.isArray(message.params)
+      ) {
+        for (const listener of eventListeners) {
+          listener({
+            error: new Error('Inspector emitted a malformed event'),
+            method: null,
+            params: null,
+          });
+        }
+        socket.close();
+        return;
+      }
+      for (const listener of eventListeners) {
+        listener({ error: null, method: message.method, params: message.params });
+      }
+      return;
+    }
     const request = pending.get(message.id);
     if (request === undefined) return;
     pending.delete(message.id);
@@ -926,10 +1283,20 @@ async function openInspectorSession(webSocketDebuggerUrl) {
   socket.addEventListener('close', () => {
     for (const request of pending.values()) request.reject(new Error('Inspector socket closed'));
     pending.clear();
+    for (const listener of eventListeners) {
+      listener({ error: new Error('Inspector socket closed'), method: null, params: null });
+    }
+    eventListeners.clear();
   });
   return {
     close() {
       socket.close();
+    },
+    onEvent(listener) {
+      if (typeof listener !== 'function')
+        throw new TypeError('Inspector event listener is required');
+      eventListeners.add(listener);
+      return () => eventListeners.delete(listener);
     },
     send(method, params = {}) {
       return new Promise((resolve, reject) => {
@@ -1101,6 +1468,13 @@ function percent(value, total) {
 
 function sha256(value) {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`;
+}
+
+function sameExactStringSet(left, right) {
+  if (left.length !== right.length) return false;
+  const sortedLeft = [...left].sort((a, b) => a.localeCompare(b));
+  const sortedRight = [...right].sort((a, b) => a.localeCompare(b));
+  return sortedLeft.every((value, index) => value === sortedRight[index]);
 }
 
 function boundedInteger(value, minimum, maximum, label) {

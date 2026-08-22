@@ -7,11 +7,17 @@ rerun or weaken that candidate's acceptance decision.
 
 The controller accepts only the exact clean baseline `01b2c7594…` and sealed candidate
 `64abadb44…`, prepares separate frozen packed products and matched external N=216 corpora, and runs
-one cold first-ready window in fixed `baseline, spike, spike, baseline` order. Before each packed
-CLI evaluates user code, `--inspect-brk` pauses it while the controller authenticates the PID,
-process marker, Inspector target, and exact pause flag. The controller then starts a 500 µs CPU
-profile and precise function coverage with call counts, resumes the process, and stops both at the
-existing browser-visible ready fence.
+one cold first-ready window in fixed `baseline, spike, spike, baseline` order. `--inspect-brk`
+holds Node before bootstrap advances; this is not described as a reliable first-line
+`Debugger.paused` event. The controller requires the sole default Runtime context to be named
+`process.execPath[spawnedPid]`, authenticates the inherited process marker there, and proves that
+`process.pid`, `process.argv`, and `process.execArgv` are still undefined. A framework-owned spawn
+record separately binds the exact executable and full bounded argv, including the single pause
+flag, packed CLI entry point, `dev` command, corpus entry, host posture, and dev port; its digest is
+recomputable from the retained executable plus argv. Only then does a one-shot capability start the 500 µs CPU
+profiler and precise coverage, in that order, before `Runtime.runIfWaitingForDebugger`. Both stop at
+the existing browser-visible ready fence. The controller and dev child strip `NODE_OPTIONS` and
+`NODE_PATH`, so inherited loaders cannot alter either authenticated runtime.
 
 Run it from a clean committed controller worktree on a quiet host:
 
@@ -43,6 +49,13 @@ cleaned, the controller reopens every artifact with `O_NOFOLLOW`, requires its o
 size and digest, parses its schema, recomputes calls from retained coverage, and accepts only the
 exact eight-file directory census. Every file-backed CPU/coverage URL under the packed consumer or
 corpus has retained source bytes plus inline/file source-map evidence for later frame attribution.
+The sealing pass also recomputes deterministic top-five rankings from those retained raw bytes:
+CPU self-sample counts use authenticated function/file/line/column frame identities, and precise
+coverage call counts use authenticated function/file/range identities. For each cell, lane, and the
+four-window aggregate, the CPU census separates ranked, unattributed, and idle samples; the call
+census separates authenticated and unattributed functions and calls. Ties use canonical identity
+order. The report carries an exact copy of the sealed analysis, and the minimal bootstrap rejects a
+detached, reordered, or census-confused ranking.
 
 Publication is non-clobbering. The bootstrap exclusively creates the final profile directory,
 hard-links each already-sealed artifact so its device/inode/content identity survives, removes the
@@ -60,5 +73,7 @@ remain diagnostic-only.
 Successful reports end with `verdict.status: "diagnostic-only"`. Inspector startup, sampling,
 coverage, and serialization perturb wall time and RSS, so `durationMs`, `paintFenceMs`,
 `peakRssBytes`, and `rssSamples` are explicitly excluded from acceptance. Use the profiles and call
-counts only to select or reject the next production-path hypothesis; any implementation still needs
-the complete unprofiled N=24/N=216 acceptance contract in `plans/good-perf.md`.
+counts only to select or reject the next production-path hypothesis. The ranking metric is Inspector
+self-sample count / precise-coverage outer-range call count and makes no wall-time claim. Any
+implementation still needs the complete unprofiled N=24/N=216 acceptance contract in
+`plans/good-perf.md`.

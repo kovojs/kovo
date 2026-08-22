@@ -35,6 +35,7 @@ import {
   runDevReadyProfile,
   runReadyProfileCell,
   sealDevReadyProfileArtifacts,
+  validReadyProfileAnalysis,
   validateReadyCpuProfile,
   validateReadyPreciseCoverage,
 } from './perf-dev-ready-profile.mjs';
@@ -218,7 +219,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
         connectInspector: async () => session,
       }),
     ).rejects.toThrow(/not the exact paused packed CLI invocation/u);
-    expect(commands).toEqual(['Runtime.evaluate', 'close']);
+    expect(commands).toEqual(['close']);
   });
 
   it('writes exclusive raw CPU/coverage artifacts with exact packed ranges and source-map digests', async () => {
@@ -239,7 +240,6 @@ describe('authenticated cold-first-ready diagnostic', () => {
     await profiler.abort();
 
     expect(commands).toEqual([
-      'Runtime.evaluate',
       'Profiler.enable',
       'Profiler.setSamplingInterval',
       'Profiler.startPreciseCoverage',
@@ -292,7 +292,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
     );
     expect(cpuArtifact).toMatchObject({
       binding: evidence.binding,
-      profile: syntheticCpuProfile(),
+      profile: syntheticCpuProfile(product),
       schema: DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA,
     });
     expect(coverageArtifact).toMatchObject({
@@ -313,6 +313,30 @@ describe('authenticated cold-first-ready diagnostic', () => {
     });
 
     expect(seal).toMatchObject({
+      analysis: {
+        overall: {
+          ranking: {
+            calls: {
+              census: {
+                authenticatedCallCount: 84,
+                totalCallCount: 84,
+                unattributedCallCount: 0,
+              },
+            },
+            cpu: {
+              census: {
+                idleSamples: 12,
+                rankedSamples: 68,
+                totalSamples: 88,
+                unattributedSamples: 8,
+              },
+            },
+          },
+          windows: 4,
+        },
+        policy: { wallTimeClaims: false },
+        schema: 'kovo-dev-ready-profile-analysis/v1',
+      },
       cells: expect.arrayContaining([
         expect.objectContaining({
           artifacts: {
@@ -325,6 +349,18 @@ describe('authenticated cold-first-ready diagnostic', () => {
       schema: 'kovo-dev-ready-profile-artifact-seal/v1',
     });
     expect(seal.directory.files).toHaveLength(8);
+    expect(seal.analysis.overall.ranking.cpu.topFive.map((entry) => entry.rank)).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
+    expect(seal.analysis.overall.ranking.cpu.topFive.map((entry) => entry.selfSamples)).toEqual([
+      20, 16, 12, 8, 8,
+    ]);
+    expect(
+      seal.analysis.overall.ranking.cpu.topFive
+        .slice(3)
+        .map((entry) => entry.identity.functionName),
+    ).toEqual(['exactEntryCompilerHost', 'queryIdentityCompilerOptions']);
+    expect(validReadyProfileAnalysis(seal.analysis)).toBe(true);
     expect(fixture.cells[0].profile.attribution.coverage[0]).toMatchObject({
       contentBase64: expect.any(String),
       map: {
@@ -334,6 +370,41 @@ describe('authenticated cold-first-ready diagnostic', () => {
       },
       sha256: sha256(Buffer.from(fixture.product.source)),
     });
+  });
+
+  it('rejects reordered, census-confused, or report-detached CPU/call rankings', async () => {
+    const fixture = await capturedSealableFixture();
+    const seal = sealDevReadyProfileArtifacts({
+      cells: fixture.cells,
+      profileDir: fixture.profileDir,
+      schedule: fixture.schedule,
+    });
+    const reordered = structuredClone(seal.analysis);
+    [reordered.overall.ranking.cpu.topFive[0], reordered.overall.ranking.cpu.topFive[1]] = [
+      reordered.overall.ranking.cpu.topFive[1],
+      reordered.overall.ranking.cpu.topFive[0],
+    ];
+    expect(validReadyProfileAnalysis(reordered)).toBe(false);
+
+    const censusConfused = structuredClone(seal.analysis);
+    censusConfused.overall.ranking.cpu.census.totalSamples += 1;
+    expect(validReadyProfileAnalysis(censusConfused)).toBe(false);
+
+    const detached = publicationReport(fixture.cells, seal);
+    detached.analysis.overall.ranking.calls.topFive[0].callCount += 1;
+    expect(() => verifyProfileArtifactCustody(detached, fixture.profileDir)).toThrow(/ranking/u);
+
+    const reorderedSeal = structuredClone(seal);
+    const forged = publicationReport(fixture.cells, reorderedSeal);
+    [
+      forged.analysis.overall.ranking.cpu.topFive[0],
+      forged.analysis.overall.ranking.cpu.topFive[1],
+    ] = [
+      forged.analysis.overall.ranking.cpu.topFive[1],
+      forged.analysis.overall.ranking.cpu.topFive[0],
+    ];
+    forged.artifactSeal.analysis = structuredClone(forged.analysis);
+    expect(() => verifyProfileArtifactCustody(forged, fixture.profileDir)).toThrow(/ranking/u);
   });
 
   it('publishes artifacts without clobber and rebinds the exact final-path directory identity', async () => {
@@ -539,6 +610,15 @@ describe('authenticated cold-first-ready diagnostic', () => {
         cell.profile.binding.invocation.pauseFlag = '--inspect-brk=127.0.0.1:1';
       },
       (cell) => {
+        cell.profile.binding.invocation.argv[8] = '1';
+      },
+      (cell) => {
+        cell.profile.binding.invocation.argvSha256 = digest('f');
+      },
+      (cell) => {
+        cell.profile.binding.invocation.unexpected = true;
+      },
+      (cell) => {
         cell.profile.binding.productDigest = digest('f');
       },
       (cell) => {
@@ -643,9 +723,27 @@ describe('authenticated cold-first-ready diagnostic', () => {
     const startAndResume = vi.fn();
     const abort = vi.fn();
     const profiler = { abort, captureAtReady: vi.fn(), startAndResume };
+    const createProfiler = vi.fn(async () => profiler);
     const launch = vi.fn(async (options) => ({
       handoff: { complete: true, target: options.targetSession },
       session: {
+        inspectorInvocation: {
+          argv: [
+            '--inspect-brk=127.0.0.1:21216',
+            '/consumer/bin.mjs',
+            'dev',
+            './src/app.tsx',
+            '--host',
+            'localhost',
+            '--strict-port',
+            '--port',
+            '20000',
+          ],
+          executable: process.execPath,
+          pauseOnStart: true,
+          port: 21_216,
+          schema: 'kovo-profiled-process-invocation/v1',
+        },
         pid: 9_201,
         processMarker: 'KOVO_PERF_DEV_SESSION_CELL',
         stop,
@@ -684,6 +782,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
         sourceState: sourceState(DEV_CRITICAL_PATH_CANDIDATE.parent),
       },
       cellDependencies({
+        createProfiler,
         expectedCorpus,
         launch,
         measure,
@@ -701,6 +800,15 @@ describe('authenticated cold-first-ready diagnostic', () => {
       }),
     );
     expect(startAndResume).toHaveBeenCalledOnce();
+    expect(createProfiler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedEntrypoint: '/consumer/bin.mjs',
+        inspectorInvocation: expect.objectContaining({
+          pauseOnStart: true,
+          port: 21_216,
+        }),
+      }),
+    );
     expect(verifyProduct).toHaveBeenCalledTimes(2);
     expect(cell).toMatchObject({
       authentication: {
@@ -842,7 +950,10 @@ describe('authenticated cold-first-ready diagnostic', () => {
         });
         return successfulCell(options);
       },
-      sealArtifacts: () => ({ schema: 'kovo-dev-ready-profile-artifact-seal/v1' }),
+      sealArtifacts: () => ({
+        analysis: readyAnalysisFixture(),
+        schema: 'kovo-dev-ready-profile-artifact-seal/v1',
+      }),
     });
 
     expect(calls.map(({ lane }) => lane)).toEqual(['baseline', 'spike', 'spike', 'baseline']);
@@ -854,6 +965,7 @@ describe('authenticated cold-first-ready diagnostic', () => {
     });
     expect(report).toMatchObject({
       integrity: {
+        analysisBound: true,
         complete: true,
         controllerStable: true,
         exactSchedule: true,
@@ -1001,10 +1113,64 @@ async function capturedSealableFixture() {
 
 function publicationReport(cells, artifactSeal) {
   return {
+    analysis: structuredClone(artifactSeal.analysis),
     artifactSeal,
     cells,
-    integrity: { artifactsSealed: true, complete: true, exactSchedule: true },
+    integrity: {
+      analysisBound: true,
+      artifactsSealed: true,
+      complete: true,
+      exactSchedule: true,
+    },
     verdict: { status: 'diagnostic-only' },
+  };
+}
+
+function readyAnalysisFixture() {
+  const ranking = () => ({
+    calls: {
+      census: {
+        authenticatedCallCount: 0,
+        authenticatedFunctions: 0,
+        authenticatedIdentities: 0,
+        totalCallCount: 0,
+        totalFunctions: 0,
+        unattributedCallCount: 0,
+        unattributedFunctions: 0,
+      },
+      topFive: [],
+    },
+    cpu: {
+      census: {
+        authenticatedFrames: 0,
+        idleSamples: 0,
+        rankedSamples: 0,
+        totalSamples: 0,
+        unattributedSamples: 0,
+      },
+      topFive: [],
+    },
+    schema: 'kovo-dev-ready-profile-ranking/v1',
+  });
+  return {
+    cells: [
+      { lane: 'baseline', ranking: ranking(), scheduleIndex: 0 },
+      { lane: 'spike', ranking: ranking(), scheduleIndex: 1 },
+      { lane: 'spike', ranking: ranking(), scheduleIndex: 2 },
+      { lane: 'baseline', ranking: ranking(), scheduleIndex: 3 },
+    ],
+    lanes: [
+      { lane: 'baseline', ranking: ranking(), windows: 2 },
+      { lane: 'spike', ranking: ranking(), windows: 2 },
+    ],
+    overall: { ranking: ranking(), windows: 4 },
+    policy: {
+      coverageMetric: 'precise-coverage-outer-range-call-count',
+      cpuMetric: 'inspector-self-sample-count',
+      top: 5,
+      wallTimeClaims: false,
+    },
+    schema: 'kovo-dev-ready-profile-analysis/v1',
   };
 }
 
@@ -1065,23 +1231,44 @@ function inspectorSession({
   pid = 9_201,
   product,
 }) {
+  const entrypoint = packedEntrypoint(product);
   return {
     close() {
       commands.push('close');
     },
     identity: inspectorIdentity(pid, marker, 'owned-target'),
+    invocation: pausedInvocationEvidence(entrypoint, execArgv[0]),
     async send(method) {
       commands.push(method);
-      if (method === 'Runtime.evaluate') return { result: { value: { execArgv } } };
-      if (method === 'Profiler.stop') return { profile: syntheticCpuProfile() };
+      if (method === 'Profiler.stop') return { profile: syntheticCpuProfile(product) };
       if (method === 'Profiler.takePreciseCoverage') return product.coverage;
       return {};
+    },
+    async startAndResume() {
+      for (const method of [
+        'Profiler.enable',
+        'Profiler.setSamplingInterval',
+        'Profiler.startPreciseCoverage',
+        'Profiler.start',
+        'Runtime.runIfWaitingForDebugger',
+      ]) {
+        commands.push(method);
+      }
     },
   };
 }
 
 function inspectorIdentity(pid, marker, targetId) {
   return {
+    bootstrap: {
+      contextId: 1,
+      contextName: `${process.execPath}[${String(pid)}]`,
+      contextOrigin: '',
+      processGlobals: 'pid-argv-execArgv-undefined',
+      processMarkerMatched: true,
+      schema: 'kovo-paused-inspector-bootstrap/v1',
+      targetId,
+    },
     pid,
     processMarkerMatched: true,
     processMarkerSha256: sha256(Buffer.from(marker)),
@@ -1101,7 +1288,9 @@ function profilerOptions({
     attributionRoots: { consumer: product.consumerRoot },
     cell,
     consumerRoot: product.consumerRoot,
+    expectedEntrypoint: packedEntrypoint(product),
     expectedPid: pid,
+    inspectorInvocation: profiledInvocationFixture(product, cell.port + 1),
     inspectorPort: cell.port + 1,
     processMarker: marker,
     productDigest: digest('a'),
@@ -1109,12 +1298,112 @@ function profilerOptions({
   };
 }
 
-function syntheticCpuProfile() {
+function packedEntrypoint(product) {
+  return path.join(product.consumerRoot, 'node_modules/@kovojs/cli/dist/bin.mjs');
+}
+
+function profiledInvocationFixture(product, inspectorPort) {
+  const pauseFlag = `--inspect-brk=127.0.0.1:${String(inspectorPort)}`;
+  return {
+    argv: [
+      pauseFlag,
+      packedEntrypoint(product),
+      'dev',
+      './src/app.tsx',
+      '--host',
+      'localhost',
+      '--strict-port',
+      '--port',
+      String(inspectorPort - 1),
+    ],
+    executable: process.execPath,
+    pauseOnStart: true,
+    port: inspectorPort,
+    schema: 'kovo-profiled-process-invocation/v1',
+  };
+}
+
+function pausedInvocationEvidence(entrypoint, pauseFlag) {
+  const executable = process.execPath;
+  const inspectorPort = Number(pauseFlag.slice(pauseFlag.lastIndexOf(':') + 1));
+  const argv = [
+    pauseFlag,
+    entrypoint,
+    'dev',
+    './src/app.tsx',
+    '--host',
+    'localhost',
+    '--strict-port',
+    '--port',
+    String(inspectorPort - 1),
+  ];
+  return {
+    argv,
+    argvSha256: sha256(JSON.stringify([executable, ...argv])),
+    entrypoint,
+    executable,
+    execArgv: [pauseFlag],
+    pauseFlag,
+    schema: 'kovo-profiled-process-invocation/v1',
+  };
+}
+
+function syntheticCpuProfile(product = null) {
+  if (product !== null) {
+    const functions = product.coverage.result[0].functions.slice(0, 6);
+    const nodes = [
+      {
+        callFrame: {
+          columnNumber: 0,
+          functionName: '(root)',
+          lineNumber: 0,
+          url: '',
+        },
+        children: functions.map((_fn, index) => index + 2),
+        id: 1,
+      },
+      ...functions.map((fn, index) => ({
+        callFrame: {
+          columnNumber: 0,
+          functionName: fn.functionName,
+          lineNumber: index,
+          url: product.coverage.result[0].url,
+        },
+        children: [],
+        id: index + 2,
+      })),
+      {
+        callFrame: { columnNumber: 0, functionName: '(idle)', lineNumber: 0, url: '' },
+        children: [],
+        id: functions.length + 2,
+      },
+    ];
+    const samples = [
+      ...Array(5).fill(2),
+      ...Array(4).fill(3),
+      ...Array(3).fill(4),
+      ...Array(2).fill(5),
+      ...Array(2).fill(6),
+      7,
+      1,
+      1,
+      functions.length + 2,
+      functions.length + 2,
+      functions.length + 2,
+    ];
+    return {
+      endTime: samples.length * 500,
+      nodes,
+      samples,
+      startTime: 0,
+      timeDeltas: samples.map(() => 500),
+    };
+  }
   return {
     endTime: 1_000,
     nodes: [
       {
-        callFrame: { functionName: '(root)', url: '' },
+        callFrame: { columnNumber: 0, functionName: '(root)', lineNumber: 0, url: '' },
         children: [],
         id: 1,
       },
@@ -1198,7 +1487,17 @@ function successfulCell(options) {
   const pid = 9_000 + options.scheduleIndex;
   const targetId = `target-${String(options.scheduleIndex)}`;
   const inspectFlag = `--inspect-brk=127.0.0.1:${String(options.inspectorPort)}`;
+  const entrypoint = '/tmp/kovo-ready-profile/node_modules/@kovojs/cli/dist/bin.mjs';
   const binding = {
+    bootstrap: {
+      contextId: 1,
+      contextName: `${process.execPath}[${String(pid)}]`,
+      contextOrigin: '',
+      processGlobals: 'pid-argv-execArgv-undefined',
+      processMarkerMatched: true,
+      schema: 'kovo-paused-inspector-bootstrap/v1',
+      targetId,
+    },
     cell: {
       inspectorPort: options.inspectorPort,
       lane: options.lane,
@@ -1207,7 +1506,7 @@ function successfulCell(options) {
       scheduleIndex: options.scheduleIndex,
     },
     inspectorProcess: { pid, processMarkerSha256: markerSha, targetId },
-    invocation: { execArgv: [inspectFlag], pauseFlag: inspectFlag },
+    invocation: pausedInvocationEvidence(entrypoint, inspectFlag),
     productDigest: options.product.identity.digest,
     schema: 'kovo-dev-ready-profile-window-binding/v1',
   };

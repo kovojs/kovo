@@ -33,6 +33,7 @@ import { chromium } from 'playwright';
 
 import {
   cleanGeneratedOutputs,
+  DEV_PROFILED_PROCESS_INVOCATION_SCHEMA,
   launchDevSessionAfterHandoff,
   loadCorpusManifest,
   materializeEntrantCommand,
@@ -45,7 +46,10 @@ import {
   inspectDevPortAllocation,
   validateDevPortAllocationEvidence,
 } from '../benchmarks/harness/dev-port-allocation.mjs';
-import { connectDevInspector } from './perf-dev-edit-profile.mjs';
+import {
+  connectPausedDevInspector,
+  DEV_PAUSED_INSPECTOR_BOOTSTRAP_SCHEMA,
+} from './perf-dev-edit-profile.mjs';
 import {
   acquireTimingLock,
   collectWorktreeState,
@@ -66,6 +70,8 @@ export const DEV_READY_PROFILE_SCHEMA = 'kovo-dev-ready-profile/v1';
 export const DEV_READY_PROFILE_WINDOW_SCHEMA = 'kovo-dev-ready-profile-window/v1';
 export const DEV_READY_PROFILE_CPU_ARTIFACT_SCHEMA = 'kovo-dev-ready-profile-cpu/v1';
 export const DEV_READY_PROFILE_COVERAGE_ARTIFACT_SCHEMA = 'kovo-dev-ready-profile-coverage/v1';
+export const DEV_READY_PROFILE_ANALYSIS_SCHEMA = 'kovo-dev-ready-profile-analysis/v1';
+export const DEV_READY_PROFILE_RANKING_SCHEMA = 'kovo-dev-ready-profile-ranking/v1';
 export const DEV_READY_PROFILE_CONTROLLER_BINDING_SCHEMA =
   'kovo-dev-ready-profile-controller-binding/v1';
 export const DEV_READY_PROFILE_SCHEDULE = Object.freeze([
@@ -330,6 +336,15 @@ export async function createDevReadyProfiler(options, dependencies = {}) {
   const artifactStem = boundedArtifactStem(options.artifactStem);
   const consumerRoot = canonicalDirectory(options.consumerRoot, 'packed consumer root');
   const productDigest = validSha256(options.productDigest, 'packed product digest');
+  const expectedEntrypoint = path.resolve(
+    requiredString(options.expectedEntrypoint, 'packed CLI entrypoint'),
+  );
+  if (
+    expectedEntrypoint !== options.expectedEntrypoint ||
+    !isWithinOrEqual(consumerRoot, expectedEntrypoint)
+  ) {
+    throw new TypeError('packed CLI entrypoint must be normalized within the packed consumer');
+  }
   const cell = normalizeProfilerCellIdentity(options.cell, inspectorPort);
   const attributionRoots = normalizeAttributionRoots(
     options.attributionRoots ?? { consumer: consumerRoot },
@@ -337,14 +352,26 @@ export async function createDevReadyProfiler(options, dependencies = {}) {
   const reservation = reserveArtifactStem(profileDir, artifactStem);
   let session;
   try {
-    session = await (dependencies.connectInspector ?? connectDevInspector)({
+    session = await (dependencies.connectInspector ?? connectPausedDevInspector)({
+      expectedDevPort: cell.port,
+      expectedEntrypoint,
       expectedPid,
       inspectorPort,
+      invocation: options.inspectorInvocation,
       processMarker,
+      samplingIntervalMicros: CPU_SAMPLING_INTERVAL_US,
     });
     validateReadyInspectorIdentity(session?.identity, { expectedPid, processMarker });
-    const invocation = await readPausedInspectorInvocation(session, inspectorPort);
+    if (
+      typeof session.close !== 'function' ||
+      typeof session.send !== 'function' ||
+      typeof session.startAndResume !== 'function'
+    ) {
+      throw new Error('fresh-ready Inspector session omitted its one-shot profiling capability');
+    }
+    const invocation = session.invocation;
     const binding = {
+      bootstrap: session.identity.bootstrap,
       cell,
       inspectorProcess: {
         pid: expectedPid,
@@ -355,6 +382,9 @@ export async function createDevReadyProfiler(options, dependencies = {}) {
       productDigest,
       schema: 'kovo-dev-ready-profile-window-binding/v1',
     };
+    if (!validReadyInspectorBinding(binding, inspectorPort)) {
+      throw new Error('Inspector target was not the exact paused packed CLI invocation');
+    }
     let active = false;
     let closed = false;
     let captured = false;
@@ -371,13 +401,9 @@ export async function createDevReadyProfiler(options, dependencies = {}) {
 
     async function startAndResume() {
       if (closed || active || captured) throw new Error('fresh-ready profiler cannot be restarted');
-      await session.send('Profiler.enable');
-      await session.send('Profiler.setSamplingInterval', { interval: CPU_SAMPLING_INTERVAL_US });
-      await session.send('Profiler.startPreciseCoverage', { callCount: true, detailed: true });
-      await session.send('Profiler.start');
-      active = true;
       try {
-        await session.send('Runtime.runIfWaitingForDebugger');
+        await session.startAndResume();
+        active = true;
       } catch (error) {
         await abort();
         throw error;
@@ -583,6 +609,199 @@ export function exactReadyCallEvidence(coverage, { consumerRoot }) {
   };
 }
 
+/** Rank only Inspector sample/call counts; profiled wall time is intentionally excluded. */
+export function analyzeReadyProfileEvidence(cpu, coverage, attribution) {
+  return classifyReadyProfileEvidence(cpu, coverage, attribution).ranking;
+}
+
+function classifyReadyProfileEvidence(cpu, coverage, attribution) {
+  validateReadyCpuProfile(cpu);
+  validateReadyPreciseCoverage(coverage);
+  if (!validRetainedAttribution(attribution)) {
+    throw new Error('ready-profile ranking requires authenticated retained attribution');
+  }
+  const cpuUrls = authenticatedRuntimeUrls(attribution.cpu, 'CPU');
+  const coverageUrls = authenticatedRuntimeUrls(attribution.coverage, 'coverage');
+  const cpuEntries = new Map();
+  const callEntries = new Map();
+  const nodes = new Map(cpu.nodes.map((node) => [node.id, node]));
+  let idleSamples = 0;
+  let unattributedSamples = 0;
+  for (const nodeId of cpu.samples) {
+    const frame = nodes.get(nodeId).callFrame;
+    if (frame.functionName === '(idle)') {
+      idleSamples += 1;
+      continue;
+    }
+    const source = cpuUrls.get(frame.url);
+    if (source === undefined) {
+      if (isFileBackedRuntimeUrl(frame.url)) {
+        throw new Error('ready-profile CPU ranking found an unauthenticated file-backed frame');
+      }
+      unattributedSamples += 1;
+      continue;
+    }
+    if (
+      !Number.isSafeInteger(frame.lineNumber) ||
+      frame.lineNumber < 0 ||
+      !Number.isSafeInteger(frame.columnNumber) ||
+      frame.columnNumber < 0
+    ) {
+      throw new Error('ready-profile CPU ranking found a malformed frame position');
+    }
+    const identity = {
+      columnNumber: frame.columnNumber,
+      functionName: frame.functionName.length === 0 ? '(anonymous)' : frame.functionName,
+      lineNumber: frame.lineNumber,
+      path: source.path,
+      root: source.root,
+    };
+    addRankedCount(cpuEntries, identity, 'selfSamples', 1);
+  }
+
+  let authenticatedFunctions = 0;
+  let unattributedFunctions = 0;
+  let authenticatedCallCount = 0;
+  let unattributedCallCount = 0;
+  for (const script of coverage.result) {
+    const source = coverageUrls.get(script.url);
+    if (source === undefined && isFileBackedRuntimeUrl(script.url)) {
+      throw new Error('ready-profile call ranking found an unauthenticated file-backed script');
+    }
+    for (const fn of script.functions) {
+      const range = outerCoverageRange(fn.ranges);
+      if (source === undefined) {
+        unattributedFunctions += 1;
+        unattributedCallCount = safeEvidenceSum(
+          unattributedCallCount,
+          range.count,
+          'unattributed coverage calls',
+        );
+        continue;
+      }
+      authenticatedFunctions += 1;
+      authenticatedCallCount = safeEvidenceSum(
+        authenticatedCallCount,
+        range.count,
+        'authenticated coverage calls',
+      );
+      const identity = {
+        endOffset: range.endOffset,
+        functionName: fn.functionName.length === 0 ? '(anonymous)' : fn.functionName,
+        path: source.path,
+        root: source.root,
+        startOffset: range.startOffset,
+      };
+      addRankedCount(callEntries, identity, 'callCount', range.count);
+    }
+  }
+  const rankedSamples = [...cpuEntries.values()].reduce(
+    (total, entry) => safeEvidenceSum(total, entry.selfSamples, 'ranked CPU samples'),
+    0,
+  );
+  const totalSamples = safeEvidenceSum(
+    safeEvidenceSum(rankedSamples, idleSamples, 'CPU sample census'),
+    unattributedSamples,
+    'CPU sample census',
+  );
+  if (totalSamples !== cpu.samples.length) {
+    throw new Error('ready-profile CPU ranking census does not close');
+  }
+  const ranking = readyProfileRanking(
+    {
+      census: {
+        authenticatedFrames: cpuEntries.size,
+        idleSamples,
+        rankedSamples,
+        totalSamples,
+        unattributedSamples,
+      },
+      entries: cpuEntries,
+    },
+    {
+      census: {
+        authenticatedCallCount,
+        authenticatedFunctions,
+        authenticatedIdentities: callEntries.size,
+        totalCallCount: safeEvidenceSum(
+          authenticatedCallCount,
+          unattributedCallCount,
+          'coverage call census',
+        ),
+        totalFunctions: safeEvidenceSum(
+          authenticatedFunctions,
+          unattributedFunctions,
+          'coverage function census',
+        ),
+        unattributedCallCount,
+        unattributedFunctions,
+      },
+      entries: callEntries,
+    },
+  );
+  return { callEntries, cpuEntries, ranking };
+}
+
+function authenticatedRuntimeUrls(entries, label) {
+  if (!Array.isArray(entries)) throw new Error(`${label} attribution census is missing`);
+  const urls = new Map();
+  for (const entry of entries) {
+    if (
+      typeof entry?.root !== 'string' ||
+      !/^[a-z][a-z0-9-]{0,31}$/u.test(entry.root) ||
+      typeof entry.path !== 'string' ||
+      entry.path.length === 0 ||
+      entry.path.length > MAX_EVIDENCE_STRING ||
+      !validPortableRankPath(entry.path) ||
+      !Array.isArray(entry.urls) ||
+      entry.urls.length === 0
+    ) {
+      throw new Error(`${label} attribution identity is malformed`);
+    }
+    for (const url of entry.urls) {
+      if (typeof url !== 'string' || !isFileBackedRuntimeUrl(url) || urls.has(url)) {
+        throw new Error(`${label} attribution URL census is malformed or duplicate`);
+      }
+      urls.set(url, { path: entry.path, root: entry.root });
+    }
+  }
+  return urls;
+}
+
+function addRankedCount(entries, identity, countName, count) {
+  const key = canonicalJson(identity);
+  const existing = entries.get(key);
+  entries.set(key, {
+    [countName]: safeEvidenceSum(existing?.[countName] ?? 0, count, countName),
+    identity,
+  });
+}
+
+function safeEvidenceSum(left, right, label) {
+  const result = left + right;
+  if (!Number.isSafeInteger(result) || result < 0) {
+    throw new Error(`ready-profile ${label} exceeded its integer evidence bound`);
+  }
+  return result;
+}
+
+function readyProfileRanking(cpu, calls) {
+  const topFive = (entries, countName) =>
+    [...entries.values()]
+      .sort(
+        (left, right) =>
+          right[countName] - left[countName] ||
+          compareEvidenceStrings(canonicalJson(left.identity), canonicalJson(right.identity)),
+      )
+      .slice(0, 5)
+      .map((entry, index) => ({ ...entry, rank: index + 1 }));
+  return {
+    calls: { census: calls.census, topFive: topFive(calls.entries, 'callCount') },
+    cpu: { census: cpu.census, topFive: topFive(cpu.entries, 'selfSamples') },
+    schema: DEV_READY_PROFILE_RANKING_SCHEMA,
+  };
+}
+
 export function attachReadyProfileSealCapability(cell, roots) {
   if (
     cell === null ||
@@ -634,6 +853,7 @@ export function sealDevReadyProfileArtifacts(options, dependencies = {}) {
   const readStable = dependencies.readStableFile ?? readStableReadyProfileFile;
   const inodeOwners = new Set();
   const sealedCells = [];
+  const classifiedCells = [];
   for (let index = 0; index < schedule.length; index += 1) {
     const expected = schedule[index];
     const cell = cells[index];
@@ -706,6 +926,12 @@ export function sealDevReadyProfileArtifacts(options, dependencies = {}) {
     ) {
       throw new Error('retained file-backed frame attribution is incomplete or changed');
     }
+    const classified = classifyReadyProfileEvidence(rawCpu, rawCoverage, recomputedAttribution);
+    classifiedCells.push({
+      ...classified,
+      lane: expected.lane,
+      scheduleIndex: expected.scheduleIndex,
+    });
     sealedCells.push({
       artifacts: {
         coverage: { ...cell.profile.artifact.coverage, sealed: true },
@@ -718,11 +944,285 @@ export function sealDevReadyProfileArtifacts(options, dependencies = {}) {
   if (!sameStableFileStat(directoryBefore, directoryAfter)) {
     throw new Error('fresh-ready artifact directory changed while being sealed');
   }
+  const analysis = aggregateReadyProfileAnalysis(classifiedCells);
+  if (!validReadyProfileAnalysis(analysis)) {
+    throw new Error('fresh-ready retained ranking is malformed or incomplete');
+  }
   return {
+    analysis,
     cells: sealedCells,
     directory: { files: EXPECTED_PROFILE_FILES, identity: stableFileIdentity(directoryAfter) },
     schema: 'kovo-dev-ready-profile-artifact-seal/v1',
   };
+}
+
+function aggregateReadyProfileAnalysis(cells) {
+  if (
+    cells.length !== DEV_READY_PROFILE_SCHEDULE.length ||
+    cells.some(
+      (cell, index) =>
+        cell.scheduleIndex !== index || cell.lane !== DEV_READY_PROFILE_SCHEDULE[index].lane,
+    )
+  ) {
+    throw new Error('ready-profile ranking cells are schedule-confused');
+  }
+  const aggregate = (selected) => {
+    const cpuEntries = new Map();
+    const callEntries = new Map();
+    const cpuCensus = {
+      authenticatedFrames: 0,
+      idleSamples: 0,
+      rankedSamples: 0,
+      totalSamples: 0,
+      unattributedSamples: 0,
+    };
+    const callCensus = {
+      authenticatedCallCount: 0,
+      authenticatedFunctions: 0,
+      authenticatedIdentities: 0,
+      totalCallCount: 0,
+      totalFunctions: 0,
+      unattributedCallCount: 0,
+      unattributedFunctions: 0,
+    };
+    for (const cell of selected) {
+      for (const entry of cell.cpuEntries.values()) {
+        addRankedCount(cpuEntries, entry.identity, 'selfSamples', entry.selfSamples);
+      }
+      for (const entry of cell.callEntries.values()) {
+        addRankedCount(callEntries, entry.identity, 'callCount', entry.callCount);
+      }
+      for (const key of ['idleSamples', 'rankedSamples', 'totalSamples', 'unattributedSamples']) {
+        cpuCensus[key] = safeEvidenceSum(
+          cpuCensus[key],
+          cell.ranking.cpu.census[key],
+          `aggregate ${key}`,
+        );
+      }
+      for (const key of [
+        'authenticatedCallCount',
+        'authenticatedFunctions',
+        'totalCallCount',
+        'totalFunctions',
+        'unattributedCallCount',
+        'unattributedFunctions',
+      ]) {
+        callCensus[key] = safeEvidenceSum(
+          callCensus[key],
+          cell.ranking.calls.census[key],
+          `aggregate ${key}`,
+        );
+      }
+    }
+    cpuCensus.authenticatedFrames = cpuEntries.size;
+    callCensus.authenticatedIdentities = callEntries.size;
+    return readyProfileRanking(
+      { census: cpuCensus, entries: cpuEntries },
+      { census: callCensus, entries: callEntries },
+    );
+  };
+  return {
+    cells: cells.map((cell) => ({
+      lane: cell.lane,
+      ranking: cell.ranking,
+      scheduleIndex: cell.scheduleIndex,
+    })),
+    lanes: ['baseline', 'spike'].map((lane) => {
+      const selected = cells.filter((cell) => cell.lane === lane);
+      return { lane, ranking: aggregate(selected), windows: selected.length };
+    }),
+    overall: { ranking: aggregate(cells), windows: cells.length },
+    policy: {
+      coverageMetric: 'precise-coverage-outer-range-call-count',
+      cpuMetric: 'inspector-self-sample-count',
+      top: 5,
+      wallTimeClaims: false,
+    },
+    schema: DEV_READY_PROFILE_ANALYSIS_SCHEMA,
+  };
+}
+
+export function validReadyProfileAnalysis(value) {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    value.schema !== DEV_READY_PROFILE_ANALYSIS_SCHEMA ||
+    canonicalJson(value.policy) !==
+      canonicalJson({
+        coverageMetric: 'precise-coverage-outer-range-call-count',
+        cpuMetric: 'inspector-self-sample-count',
+        top: 5,
+        wallTimeClaims: false,
+      }) ||
+    !Array.isArray(value.cells) ||
+    value.cells.length !== DEV_READY_PROFILE_SCHEDULE.length ||
+    value.cells.some(
+      (cell, index) =>
+        cell?.scheduleIndex !== index ||
+        cell.lane !== DEV_READY_PROFILE_SCHEDULE[index].lane ||
+        !validReadyProfileRanking(cell.ranking),
+    ) ||
+    !Array.isArray(value.lanes) ||
+    value.lanes.length !== 2 ||
+    value.lanes.some(
+      (lane, index) =>
+        lane?.lane !== ['baseline', 'spike'][index] ||
+        lane.windows !== 2 ||
+        !validReadyProfileRanking(lane.ranking),
+    ) ||
+    value.overall?.windows !== DEV_READY_PROFILE_SCHEDULE.length ||
+    !validReadyProfileRanking(value.overall?.ranking)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function validReadyProfileRanking(value) {
+  if (
+    value?.schema !== DEV_READY_PROFILE_RANKING_SCHEMA ||
+    !validReadyCpuRanking(value.cpu) ||
+    !validReadyCallRanking(value.calls)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function validReadyCpuRanking(value) {
+  const census = value?.census;
+  return (
+    validEvidenceCensus(census, [
+      'authenticatedFrames',
+      'idleSamples',
+      'rankedSamples',
+      'totalSamples',
+      'unattributedSamples',
+    ]) &&
+    census.totalSamples ===
+      census.rankedSamples + census.idleSamples + census.unattributedSamples &&
+    validTopFive(value.topFive, 'selfSamples', census.authenticatedFrames, validCpuRankIdentity)
+  );
+}
+
+function validReadyCallRanking(value) {
+  const census = value?.census;
+  return (
+    validEvidenceCensus(census, [
+      'authenticatedCallCount',
+      'authenticatedFunctions',
+      'authenticatedIdentities',
+      'totalCallCount',
+      'totalFunctions',
+      'unattributedCallCount',
+      'unattributedFunctions',
+    ]) &&
+    census.totalCallCount === census.authenticatedCallCount + census.unattributedCallCount &&
+    census.totalFunctions === census.authenticatedFunctions + census.unattributedFunctions &&
+    validTopFive(value.topFive, 'callCount', census.authenticatedIdentities, validCallRankIdentity)
+  );
+}
+
+function validEvidenceCensus(value, keys) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    sameExactStringSet(Object.keys(value), keys) &&
+    keys.every((key) => Number.isSafeInteger(value[key]) && value[key] >= 0)
+  );
+}
+
+function validTopFive(value, countName, identities, validIdentity) {
+  if (!Array.isArray(value) || value.length !== Math.min(5, identities)) return false;
+  const keys = new Set();
+  for (let index = 0; index < value.length; index += 1) {
+    const entry = value[index];
+    const key = canonicalJson(entry?.identity);
+    if (
+      entry?.rank !== index + 1 ||
+      !Number.isSafeInteger(entry[countName]) ||
+      entry[countName] < 0 ||
+      !validIdentity(entry.identity) ||
+      keys.has(key)
+    ) {
+      return false;
+    }
+    keys.add(key);
+    if (index > 0) {
+      const prior = value[index - 1];
+      if (
+        prior[countName] < entry[countName] ||
+        (prior[countName] === entry[countName] &&
+          compareEvidenceStrings(canonicalJson(prior.identity), key) >= 0)
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function validCpuRankIdentity(value) {
+  return (
+    validRankSourceIdentity(value) &&
+    sameExactStringSet(Object.keys(value), [
+      'columnNumber',
+      'functionName',
+      'lineNumber',
+      'path',
+      'root',
+    ]) &&
+    Number.isSafeInteger(value.lineNumber) &&
+    value.lineNumber >= 0 &&
+    Number.isSafeInteger(value.columnNumber) &&
+    value.columnNumber >= 0
+  );
+}
+
+function validCallRankIdentity(value) {
+  return (
+    validRankSourceIdentity(value) &&
+    sameExactStringSet(Object.keys(value), [
+      'endOffset',
+      'functionName',
+      'path',
+      'root',
+      'startOffset',
+    ]) &&
+    Number.isSafeInteger(value.startOffset) &&
+    value.startOffset >= 0 &&
+    Number.isSafeInteger(value.endOffset) &&
+    value.endOffset > value.startOffset
+  );
+}
+
+function validRankSourceIdentity(value) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof value.functionName === 'string' &&
+    value.functionName.length > 0 &&
+    value.functionName.length <= 1_024 &&
+    typeof value.root === 'string' &&
+    /^[a-z][a-z0-9-]{0,31}$/u.test(value.root) &&
+    typeof value.path === 'string' &&
+    value.path.length > 0 &&
+    value.path.length <= MAX_EVIDENCE_STRING &&
+    validPortableRankPath(value.path)
+  );
+}
+
+function validPortableRankPath(value) {
+  if (path.isAbsolute(value) || value.includes('\\')) return false;
+  const segments = value.split('/');
+  return segments.every((segment) => segment.length > 0 && segment !== '.' && segment !== '..');
+}
+
+function compareEvidenceStrings(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function reopenArtifact(profileDir, evidence, maximum, readStable) {
@@ -758,6 +1258,7 @@ function parseArtifactEnvelope(bytes, schema, label) {
 }
 
 function validRetainedAttribution(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   return ['cpu', 'coverage'].every(
     (kind) =>
       Array.isArray(value[kind]) &&
@@ -947,11 +1448,32 @@ export async function runDevReadyProfile(options = {}, dependencies = {}) {
         errors.push(`artifact sealing: ${errorMessage(error)}`);
       }
     }
+    const analysis =
+      artifactSeal?.analysis === undefined ? null : structuredClone(artifactSeal.analysis);
+    const analysisBound =
+      validReadyProfileAnalysis(analysis) &&
+      canonicalJson(analysis) === canonicalJson(artifactSeal?.analysis);
+    if (
+      errors.length === 0 &&
+      cells.length === DEV_READY_PROFILE_SCHEDULE.length &&
+      artifactSeal?.schema !== 'kovo-dev-ready-profile-artifact-seal/v1'
+    ) {
+      errors.push('artifact seal omitted the exact retained profile census');
+    }
+    if (
+      errors.length === 0 &&
+      cells.length === DEV_READY_PROFILE_SCHEDULE.length &&
+      !analysisBound
+    ) {
+      errors.push('artifact seal omitted the authenticated deterministic CPU/call ranking');
+    }
     const complete =
       errors.length === 0 &&
       cells.length === DEV_READY_PROFILE_SCHEDULE.length &&
-      artifactSeal?.schema === 'kovo-dev-ready-profile-artifact-seal/v1';
+      artifactSeal?.schema === 'kovo-dev-ready-profile-artifact-seal/v1' &&
+      analysisBound;
     const report = {
+      analysis,
       artifactSeal,
       candidate: prepared.candidateBinding,
       cells,
@@ -961,6 +1483,7 @@ export async function runDevReadyProfile(options = {}, dependencies = {}) {
       hostDiagnostics: postTimingHost === null ? [] : [postTimingHost],
       hostSamples,
       integrity: {
+        analysisBound,
         artifactsSealed: artifactSeal?.schema === 'kovo-dev-ready-profile-artifact-seal/v1',
         complete,
         controllerStable,
@@ -1124,7 +1647,9 @@ export async function runReadyProfileCell(options, dependencies = {}) {
       },
       consumerRoot: packedBefore.consumerRoot,
       expectedPid: launched.session.pid,
+      expectedEntrypoint: packedBefore.cliEntry,
       inspectorPort: options.inspectorPort,
+      inspectorInvocation: launched.session.inspectorInvocation,
       processMarker: launched.session.processMarker,
       productDigest: options.product.identity.digest,
       profileDir: options.profileDir,
@@ -1403,12 +1928,50 @@ function validateReadyProfileCell(cell, expected) {
 
 function validReadyInspectorBinding(binding, inspectorPort) {
   const expectedFlag = `--inspect-brk=127.0.0.1:${String(inspectorPort)}`;
+  const expectedArgv = [
+    expectedFlag,
+    binding.invocation?.entrypoint,
+    'dev',
+    './src/app.tsx',
+    '--host',
+    'localhost',
+    '--strict-port',
+    '--port',
+    String(binding.cell?.port),
+  ];
   return (
     Number.isSafeInteger(binding.inspectorProcess?.pid) &&
     binding.inspectorProcess.pid > 0 &&
     /^sha256:[0-9a-f]{64}$/u.test(binding.inspectorProcess.processMarkerSha256 ?? '') &&
     typeof binding.inspectorProcess.targetId === 'string' &&
     binding.inspectorProcess.targetId.length > 0 &&
+    binding.bootstrap?.schema === DEV_PAUSED_INSPECTOR_BOOTSTRAP_SCHEMA &&
+    binding.bootstrap.targetId === binding.inspectorProcess.targetId &&
+    binding.bootstrap.contextName ===
+      `${process.execPath}[${String(binding.inspectorProcess.pid)}]` &&
+    binding.bootstrap.contextOrigin === '' &&
+    binding.bootstrap.processGlobals === 'pid-argv-execArgv-undefined' &&
+    binding.bootstrap.processMarkerMatched === true &&
+    binding.invocation?.schema === DEV_PROFILED_PROCESS_INVOCATION_SCHEMA &&
+    binding.invocation.executable === process.execPath &&
+    Array.isArray(binding.invocation.argv) &&
+    binding.invocation.argv.length === expectedArgv.length &&
+    binding.invocation.argv.every((argument, index) => argument === expectedArgv[index]) &&
+    typeof binding.invocation.entrypoint === 'string' &&
+    path.isAbsolute(binding.invocation.entrypoint) &&
+    path.resolve(binding.invocation.entrypoint) === binding.invocation.entrypoint &&
+    /^sha256:[0-9a-f]{64}$/u.test(binding.invocation.argvSha256 ?? '') &&
+    binding.invocation.argvSha256 ===
+      sha256(JSON.stringify([binding.invocation.executable, ...binding.invocation.argv])) &&
+    sameExactStringSet(Object.keys(binding.invocation), [
+      'argv',
+      'argvSha256',
+      'entrypoint',
+      'executable',
+      'execArgv',
+      'pauseFlag',
+      'schema',
+    ]) &&
     binding.invocation?.pauseFlag === expectedFlag &&
     Array.isArray(binding.invocation.execArgv) &&
     binding.invocation.execArgv.filter((value) => value === expectedFlag).length === 1 &&
@@ -1707,32 +2270,6 @@ function authenticatedCoverageAsset(urlValue, consumerRoot) {
   };
 }
 
-async function readPausedInspectorInvocation(session, inspectorPort) {
-  const result = await session.send('Runtime.evaluate', {
-    expression: '({execArgv:globalThis.process?.execArgv??null})',
-    returnByValue: true,
-  });
-  const execArgv = result?.result?.value?.execArgv;
-  const expected = `--inspect-brk=127.0.0.1:${String(inspectorPort)}`;
-  if (
-    !Array.isArray(execArgv) ||
-    execArgv.length > 32 ||
-    execArgv.some(
-      (value) =>
-        typeof value !== 'string' || value.length === 0 || value.length > MAX_EVIDENCE_STRING,
-    ) ||
-    execArgv.filter((value) => value === expected).length !== 1 ||
-    execArgv.some(
-      (value) =>
-        value !== expected &&
-        (value.startsWith('--inspect=') || value.startsWith('--inspect-brk=')),
-    )
-  ) {
-    throw new Error('Inspector target was not the exact paused packed CLI invocation');
-  }
-  return { execArgv, pauseFlag: expected };
-}
-
 function validateReadyInspectorIdentity(identity, expected) {
   if (
     identity === null ||
@@ -1742,7 +2279,13 @@ function validateReadyInspectorIdentity(identity, expected) {
     identity.processMarkerSha256 !== sha256(Buffer.from(expected.processMarker)) ||
     typeof identity.targetId !== 'string' ||
     identity.targetId.length === 0 ||
-    identity.targetId.length > 256
+    identity.targetId.length > 256 ||
+    identity.bootstrap?.schema !== DEV_PAUSED_INSPECTOR_BOOTSTRAP_SCHEMA ||
+    identity.bootstrap.targetId !== identity.targetId ||
+    identity.bootstrap.contextName !== `${process.execPath}[${String(expected.expectedPid)}]` ||
+    identity.bootstrap.contextOrigin !== '' ||
+    identity.bootstrap.processGlobals !== 'pid-argv-execArgv-undefined' ||
+    identity.bootstrap.processMarkerMatched !== true
   ) {
     throw new Error('fresh-ready Inspector target does not belong to the spawned process');
   }

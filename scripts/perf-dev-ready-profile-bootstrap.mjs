@@ -293,13 +293,16 @@ export async function runReadyProfileBootstrap(argv = process.argv.slice(2), dep
   let publishedReport = null;
   let report = null;
   try {
+    const controllerEnvironment = { ...(dependencies.environment ?? process.env) };
+    delete controllerEnvironment.NODE_OPTIONS;
+    delete controllerEnvironment.NODE_PATH;
     const child = (dependencies.spawnController ?? spawnSync)(
       process.execPath,
       [path.join(materialized.privateRoot, 'scripts/perf-dev-ready-profile.mjs'), ...childArgv],
       {
         cwd: materialized.privateRoot,
         env: {
-          ...process.env,
+          ...controllerEnvironment,
           KOVO_DEV_READY_PROFILE_CONTROLLER_BINDING: materialized.bindingPath,
           KOVO_DEV_READY_PROFILE_CONTROLLER_BINDING_SHA256: materialized.bindingSha256,
         },
@@ -414,6 +417,7 @@ export function verifyProfileArtifactCustody(report, profileDir, dependencies = 
   if (
     report.verdict?.status !== 'diagnostic-only' ||
     report.integrity?.complete !== true ||
+    report.integrity?.analysisBound !== true ||
     report.integrity?.artifactsSealed !== true ||
     report.integrity?.exactSchedule !== true ||
     !Array.isArray(reportCells) ||
@@ -421,10 +425,12 @@ export function verifyProfileArtifactCustody(report, profileDir, dependencies = 
     seal?.schema !== 'kovo-dev-ready-profile-artifact-seal/v1' ||
     !Array.isArray(seal.cells) ||
     seal.cells.length !== 4 ||
+    !validReadyProfileAnalysisSeal(seal.analysis) ||
+    canonicalJson(report.analysis) !== canonicalJson(seal.analysis) ||
     !Array.isArray(expectedFiles) ||
     expectedFiles.length !== 8
   ) {
-    throw new Error('staged report omitted the exact artifact seal');
+    throw new Error('staged report omitted the exact artifact seal or authenticated ranking');
   }
   const root = canonicalDirectory(profileDir, 'profile artifact directory');
   const directoryBefore = lstatSync(root, { bigint: true });
@@ -508,6 +514,156 @@ export function verifyProfileArtifactCustody(report, profileDir, dependencies = 
     throw new Error('staged profile directory changed during bootstrap custody verification');
   }
   return identity(directoryAfter);
+}
+
+function validReadyProfileAnalysisSeal(value) {
+  const schedule = ['baseline', 'spike', 'spike', 'baseline'];
+  return (
+    value?.schema === 'kovo-dev-ready-profile-analysis/v1' &&
+    canonicalJson(value.policy) ===
+      canonicalJson({
+        coverageMetric: 'precise-coverage-outer-range-call-count',
+        cpuMetric: 'inspector-self-sample-count',
+        top: 5,
+        wallTimeClaims: false,
+      }) &&
+    Array.isArray(value.cells) &&
+    value.cells.length === schedule.length &&
+    value.cells.every(
+      (cell, index) =>
+        cell?.scheduleIndex === index &&
+        cell.lane === schedule[index] &&
+        validReadyProfileRankingSeal(cell.ranking),
+    ) &&
+    Array.isArray(value.lanes) &&
+    value.lanes.length === 2 &&
+    value.lanes.every(
+      (lane, index) =>
+        lane?.lane === ['baseline', 'spike'][index] &&
+        lane.windows === 2 &&
+        validReadyProfileRankingSeal(lane.ranking),
+    ) &&
+    value.overall?.windows === schedule.length &&
+    validReadyProfileRankingSeal(value.overall.ranking)
+  );
+}
+
+function validReadyProfileRankingSeal(value) {
+  const cpu = value?.cpu;
+  const calls = value?.calls;
+  return (
+    value?.schema === 'kovo-dev-ready-profile-ranking/v1' &&
+    validNonnegativeCensus(cpu?.census, [
+      'authenticatedFrames',
+      'idleSamples',
+      'rankedSamples',
+      'totalSamples',
+      'unattributedSamples',
+    ]) &&
+    cpu.census.totalSamples ===
+      cpu.census.rankedSamples + cpu.census.idleSamples + cpu.census.unattributedSamples &&
+    validRankedTopFive(cpu.topFive, 'selfSamples', cpu.census.authenticatedFrames, [
+      'columnNumber',
+      'functionName',
+      'lineNumber',
+      'path',
+      'root',
+    ]) &&
+    validNonnegativeCensus(calls?.census, [
+      'authenticatedCallCount',
+      'authenticatedFunctions',
+      'authenticatedIdentities',
+      'totalCallCount',
+      'totalFunctions',
+      'unattributedCallCount',
+      'unattributedFunctions',
+    ]) &&
+    calls.census.totalCallCount ===
+      calls.census.authenticatedCallCount + calls.census.unattributedCallCount &&
+    calls.census.totalFunctions ===
+      calls.census.authenticatedFunctions + calls.census.unattributedFunctions &&
+    validRankedTopFive(calls.topFive, 'callCount', calls.census.authenticatedIdentities, [
+      'endOffset',
+      'functionName',
+      'path',
+      'root',
+      'startOffset',
+    ])
+  );
+}
+
+function validNonnegativeCensus(value, keys) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    exactKeys(value, keys) &&
+    keys.every((key) => Number.isSafeInteger(value[key]) && value[key] >= 0)
+  );
+}
+
+function validRankedTopFive(value, countName, identities, identityKeys) {
+  if (!Array.isArray(value) || value.length !== Math.min(5, identities)) return false;
+  const seen = new Set();
+  return value.every((entry, index) => {
+    const identity = entry?.identity;
+    const identityKey = canonicalJson(identity);
+    const prior = value[index - 1];
+    const ordered =
+      prior === undefined ||
+      prior[countName] > entry[countName] ||
+      (prior[countName] === entry[countName] &&
+        compareEvidenceStrings(canonicalJson(prior.identity), identityKey) < 0);
+    const validPosition =
+      countName === 'selfSamples'
+        ? Number.isSafeInteger(identity?.lineNumber) &&
+          identity.lineNumber >= 0 &&
+          Number.isSafeInteger(identity?.columnNumber) &&
+          identity.columnNumber >= 0
+        : Number.isSafeInteger(identity?.startOffset) &&
+          identity.startOffset >= 0 &&
+          Number.isSafeInteger(identity?.endOffset) &&
+          identity.endOffset > identity.startOffset;
+    if (
+      entry?.rank !== index + 1 ||
+      !Number.isSafeInteger(entry[countName]) ||
+      entry[countName] < 0 ||
+      !exactKeys(identity, identityKeys) ||
+      typeof identity.functionName !== 'string' ||
+      identity.functionName.length === 0 ||
+      identity.functionName.length > 1_024 ||
+      typeof identity.root !== 'string' ||
+      !/^[a-z][a-z0-9-]{0,31}$/u.test(identity.root) ||
+      typeof identity.path !== 'string' ||
+      identity.path.length === 0 ||
+      identity.path.length > 8_192 ||
+      !validRankPath(identity.path) ||
+      !validPosition ||
+      seen.has(identityKey) ||
+      !ordered
+    ) {
+      return false;
+    }
+    seen.add(identityKey);
+    return true;
+  });
+}
+
+function exactKeys(value, expected) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const observed = Object.keys(value).sort((left, right) => left.localeCompare(right));
+  const sortedExpected = [...expected].sort((left, right) => left.localeCompare(right));
+  return canonicalJson(observed) === canonicalJson(sortedExpected);
+}
+
+function validRankPath(value) {
+  if (path.isAbsolute(value) || value.includes('\\')) return false;
+  const segments = value.split('/');
+  return segments.every((segment) => segment.length > 0 && segment !== '.' && segment !== '..');
+}
+
+function compareEvidenceStrings(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 /** Publish the exact eight controller files without replacing an appearing target. */

@@ -1,18 +1,23 @@
 import { createHash } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   analyzeDevEditProfiles,
   auditDevEditProfileArtifacts,
   connectDevInspector,
+  connectPausedDevInspector,
   createDevEditProfiler,
   DEV_EDIT_PROFILE_AUDIT_SCHEMA,
   DEV_EDIT_PROFILE_CATEGORIES,
   DEV_EDIT_PROFILE_SCHEMA,
+  DEV_PAUSED_INSPECTOR_BOOTSTRAP_SCHEMA,
   summarizeProfileWindows,
 } from './perf-dev-edit-profile.mjs';
 
@@ -65,6 +70,194 @@ describe('exact dev edit-to-paint diagnostics', () => {
     expect(closed).toEqual(['ws://127.0.0.1:21216/unrelated']);
     session.close();
     expect(closed).toEqual(['ws://127.0.0.1:21216/unrelated', 'ws://127.0.0.1:21216/owned']);
+  });
+
+  it('authenticates the sole prebootstrap context and starts both samplers before runtime advance', async () => {
+    const fixture = pausedConnectionFixture();
+    const beforeRuntimeAdvance = vi.fn(() => {
+      expect(fixture.commands.slice(-1)).toEqual(['Profiler.start']);
+    });
+    const connection = await connectPausedDevInspector(fixture.options, {
+      ...fixture.dependencies,
+      beforeRuntimeAdvance,
+    });
+
+    expect(connection.identity).toMatchObject({
+      bootstrap: {
+        contextName: `${process.execPath}[9999]`,
+        processGlobals: 'pid-argv-execArgv-undefined',
+        schema: DEV_PAUSED_INSPECTOR_BOOTSTRAP_SCHEMA,
+      },
+      pid: 9_999,
+      processMarkerMatched: true,
+      targetId: 'owned',
+    });
+    expect(connection.invocation.argv).toEqual(fixture.options.invocation.argv);
+    await connection.startAndResume();
+    expect(fixture.commands).toEqual([
+      'Runtime.enable',
+      'Runtime.evaluate',
+      'Profiler.enable',
+      'Profiler.setSamplingInterval',
+      'Profiler.startPreciseCoverage',
+      'Profiler.start',
+      'Runtime.runIfWaitingForDebugger',
+    ]);
+    expect(beforeRuntimeAdvance).toHaveBeenCalledOnce();
+    connection.close();
+  });
+
+  it('fails closed on missing, duplicate, malformed, advanced, or wrong-PID bootstrap evidence', async () => {
+    const cases = [
+      {
+        expected: /omitted its default execution context/u,
+        fixture: pausedConnectionFixture({ events: [] }),
+      },
+      {
+        expected: /duplicate execution-context census/u,
+        fixture: pausedConnectionFixture({
+          events: [pausedContext(9_999), pausedContext(9_999, { id: 2 })],
+        }),
+      },
+      {
+        expected: /default execution context was malformed/u,
+        fixture: pausedConnectionFixture({ events: [pausedContext(9_999, { origin: 'file:' })] }),
+      },
+      {
+        expected: /not the expected unadvanced Node bootstrap context/u,
+        fixture: pausedConnectionFixture({
+          evaluation: pausedEvaluation({ pidType: 'number' }),
+        }),
+      },
+      {
+        expected: /not the expected unadvanced Node bootstrap context/u,
+        fixture: pausedConnectionFixture({ events: [pausedContext(7_777)] }),
+      },
+    ];
+    for (const { expected, fixture } of cases) {
+      await expect(
+        connectPausedDevInspector(fixture.options, fixture.dependencies),
+      ).rejects.toThrow(expected);
+      expect(fixture.commands).not.toContain('Runtime.runIfWaitingForDebugger');
+    }
+  });
+
+  it('rejects an honest non-paused launch record before opening Inspector', async () => {
+    const fixture = pausedConnectionFixture();
+    fixture.options.invocation = {
+      ...fixture.options.invocation,
+      argv: fixture.options.invocation.argv.with(
+        0,
+        fixture.options.invocation.argv[0].replace('--inspect-brk=', '--inspect='),
+      ),
+      pauseOnStart: false,
+    };
+    await expect(connectPausedDevInspector(fixture.options, fixture.dependencies)).rejects.toThrow(
+      /exact packed --inspect-brk invocation/u,
+    );
+    expect(fixture.opened).toHaveLength(0);
+  });
+
+  it('stops precise coverage when CPU profiler start fails after coverage activation', async () => {
+    const fixture = pausedConnectionFixture({ failMethod: 'Profiler.start' });
+    const connection = await connectPausedDevInspector(fixture.options, fixture.dependencies);
+    await expect(connection.startAndResume()).rejects.toThrow(/synthetic Profiler.start failure/u);
+    expect(fixture.commands).toEqual([
+      'Runtime.enable',
+      'Runtime.evaluate',
+      'Profiler.enable',
+      'Profiler.setSamplingInterval',
+      'Profiler.startPreciseCoverage',
+      'Profiler.start',
+      'Profiler.stopPreciseCoverage',
+      'close',
+    ]);
+  });
+
+  it('proves a real inspect-brk process has not run user code before the sampler fence', async () => {
+    const root = await temporaryRoot();
+    const entrypoint = path.join(root, 'bin.mjs');
+    const sentinel = path.join(root, 'started.txt');
+    await writeFile(
+      entrypoint,
+      `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(
+        sentinel,
+      )}, 'started');\nsetInterval(() => {}, 1000);\n`,
+    );
+    const inspectorPort = await reserveLoopbackPort();
+    const marker = 'KOVO_PERF_DEV_SESSION_REAL_PAUSED';
+    const invocation = profiledPausedInvocation(entrypoint, inspectorPort, inspectorPort - 1);
+    const child = spawn(process.execPath, invocation.argv, {
+      env: { ...process.env, [marker]: '1' },
+      stdio: 'ignore',
+    });
+    try {
+      const connection = await connectPausedDevInspector(
+        {
+          expectedDevPort: inspectorPort - 1,
+          expectedEntrypoint: entrypoint,
+          expectedPid: child.pid,
+          inspectorPort,
+          invocation,
+          processMarker: marker,
+          samplingIntervalMicros: 500,
+        },
+        {
+          beforeRuntimeAdvance() {
+            expect(existsSync(sentinel)).toBe(false);
+          },
+        },
+      );
+      expect(existsSync(sentinel)).toBe(false);
+      await connection.startAndResume();
+      await waitFor(() => existsSync(sentinel));
+      await Promise.all([
+        connection.send('Profiler.stop'),
+        connection.send('Profiler.stopPreciseCoverage'),
+      ]);
+      connection.close();
+    } finally {
+      await stopChild(child);
+    }
+  });
+
+  it('rejects a real already-advanced Inspector target even with forged paused launch evidence', async () => {
+    const root = await temporaryRoot();
+    const entrypoint = path.join(root, 'bin.mjs');
+    const sentinel = path.join(root, 'started.txt');
+    await writeFile(
+      entrypoint,
+      `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(
+        sentinel,
+      )}, 'started');\nsetInterval(() => {}, 1000);\n`,
+    );
+    const inspectorPort = await reserveLoopbackPort();
+    const marker = 'KOVO_PERF_DEV_SESSION_REAL_ADVANCED';
+    const claimed = profiledPausedInvocation(entrypoint, inspectorPort, inspectorPort - 1);
+    const actualArgv = claimed.argv.with(
+      0,
+      claimed.argv[0].replace('--inspect-brk=', '--inspect='),
+    );
+    const child = spawn(process.execPath, actualArgv, {
+      env: { ...process.env, [marker]: '1' },
+      stdio: 'ignore',
+    });
+    try {
+      await waitFor(() => existsSync(sentinel));
+      await expect(
+        connectPausedDevInspector({
+          expectedDevPort: inspectorPort - 1,
+          expectedEntrypoint: entrypoint,
+          expectedPid: child.pid,
+          inspectorPort,
+          invocation: claimed,
+          processMarker: marker,
+          samplingIntervalMicros: 500,
+        }),
+      ).rejects.toThrow(/not the expected unadvanced Node bootstrap context/u);
+    } finally {
+      await stopChild(child);
+    }
   });
 
   it('ranks directly sampled categories and retires absent hypotheses', () => {
@@ -535,4 +728,156 @@ async function temporaryRoot() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-dev-profile-test-'));
   roots.push(root);
   return root;
+}
+
+function pausedConnectionFixture({ evaluation, events, failMethod } = {}) {
+  const marker = 'KOVO_PERF_DEV_SESSION_PAUSED_FIXTURE';
+  const expectedPid = 9_999;
+  const inspectorPort = 21_216;
+  const expectedDevPort = inspectorPort - 1;
+  const entrypoint = '/tmp/kovo-packed/node_modules/@kovojs/cli/dist/bin.mjs';
+  const commands = [];
+  const opened = [];
+  const listeners = new Set();
+  let clock = 0;
+  const emitted = events ?? [pausedContext(expectedPid)];
+  const session = {
+    close() {
+      commands.push('close');
+    },
+    onEvent(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    async send(method) {
+      commands.push(method);
+      if (method === failMethod) throw new Error(`synthetic ${method} failure`);
+      if (method === 'Runtime.enable') {
+        for (const params of emitted) {
+          for (const listener of listeners) {
+            listener({ error: null, method: 'Runtime.executionContextCreated', params });
+          }
+        }
+      }
+      if (method === 'Runtime.evaluate') return evaluation ?? pausedEvaluation();
+      return {};
+    },
+  };
+  return {
+    commands,
+    dependencies: {
+      delay: async (milliseconds) => {
+        clock += milliseconds;
+      },
+      fetch: async () => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify([
+            {
+              id: 'owned',
+              webSocketDebuggerUrl: `ws://127.0.0.1:${String(inspectorPort)}/owned`,
+            },
+          ]),
+      }),
+      now: () => clock,
+      openSession: async (url) => {
+        opened.push(url);
+        return session;
+      },
+      timeoutMs: 20,
+    },
+    opened,
+    options: {
+      expectedDevPort,
+      expectedEntrypoint: entrypoint,
+      expectedPid,
+      inspectorPort,
+      invocation: profiledPausedInvocation(entrypoint, inspectorPort, expectedDevPort),
+      processMarker: marker,
+      samplingIntervalMicros: 500,
+    },
+  };
+}
+
+function pausedContext(pid, overrides = {}) {
+  return {
+    context: {
+      auxData: { isDefault: true },
+      id: 1,
+      name: `${process.execPath}[${String(pid)}]`,
+      origin: '',
+      ...overrides,
+    },
+  };
+}
+
+function pausedEvaluation(overrides = {}) {
+  return {
+    result: {
+      type: 'object',
+      value: {
+        argvType: 'undefined',
+        execArgvType: 'undefined',
+        pidType: 'undefined',
+        processMarkerMatched: true,
+        ...overrides,
+      },
+    },
+  };
+}
+
+function profiledPausedInvocation(entrypoint, inspectorPort, devPort) {
+  return {
+    argv: [
+      `--inspect-brk=127.0.0.1:${String(inspectorPort)}`,
+      entrypoint,
+      'dev',
+      './src/app.tsx',
+      '--host',
+      'localhost',
+      '--strict-port',
+      '--port',
+      String(devPort),
+    ],
+    executable: process.execPath,
+    pauseOnStart: true,
+    port: inspectorPort,
+    schema: 'kovo-profiled-process-invocation/v1',
+  };
+}
+
+async function reserveLoopbackPort() {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  await new Promise((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+  if (address === null || typeof address === 'string') throw new Error('test port was unavailable');
+  return address.port;
+}
+
+async function waitFor(predicate, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('timed out waiting for test process state');
+}
+
+async function stopChild(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  child.kill('SIGTERM');
+  const forceTimer = setTimeout(() => child.kill('SIGKILL'), 1_000);
+  try {
+    await exited;
+  } finally {
+    clearTimeout(forceTimer);
+  }
 }

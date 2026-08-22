@@ -367,6 +367,8 @@ describe('immutable ready-profile controller bootstrap', () => {
       },
     });
     expect(report.artifactSeal.directory.identity).toEqual(finalDirectory);
+    expect(fixture.controllerEnvironment).not.toHaveProperty('NODE_OPTIONS');
+    expect(fixture.controllerEnvironment).not.toHaveProperty('NODE_PATH');
     expect(readdirSync(fixture.profileDir)).toHaveLength(8);
     for (const [index, cell] of report.artifactSeal.cells.entries()) {
       for (const kind of ['cpu', 'coverage']) {
@@ -394,6 +396,12 @@ describe('immutable ready-profile controller bootstrap', () => {
 
   it('fails closed and rolls back when source or artifacts change across publication', async () => {
     const mutations = [
+      {
+        hook: 'afterPrepublicationVerification',
+        mutate({ report }) {
+          report.analysis.overall.windows = 3;
+        },
+      },
       {
         hook: 'afterPrepublicationVerification',
         mutate({ report, stagedProfiles }) {
@@ -570,7 +578,13 @@ async function bootstrapRunFixture() {
         copyFileSync(path.join(source.root, file), target);
       }
     },
-    spawnController(_command, args) {
+    environment: {
+      ...process.env,
+      NODE_OPTIONS: '--require=/tmp/untrusted.cjs',
+      NODE_PATH: '/tmp/untrusted',
+    },
+    spawnController(_command, args, options) {
+      fixture.controllerEnvironment = options.env;
       const childArgv = args.slice(1);
       const stagedOut = childArgv[childArgv.indexOf('--out') + 1];
       const stagedProfiles = childArgv[childArgv.indexOf('--profile-dir') + 1];
@@ -649,8 +663,11 @@ function writeSyntheticControllerReport(out, profileDir, commit, tree) {
     });
   }
   files.sort((left, right) => left.localeCompare(right));
+  const analysis = syntheticReadyAnalysis();
   const report = {
+    analysis: structuredClone(analysis),
     artifactSeal: {
+      analysis,
       cells: sealedCells,
       directory: {
         files,
@@ -663,12 +680,65 @@ function writeSyntheticControllerReport(out, profileDir, commit, tree) {
       before: { commit, tree },
       stable: true,
     },
-    integrity: { artifactsSealed: true, complete: true, exactSchedule: true },
+    integrity: {
+      analysisBound: true,
+      artifactsSealed: true,
+      complete: true,
+      exactSchedule: true,
+    },
     schema: 'kovo-dev-ready-profile/v1',
     verdict: { status: 'diagnostic-only' },
   };
   writeFileSync(out, `${JSON.stringify(report)}\n`, { flag: 'wx', mode: 0o600 });
   return report;
+}
+
+function syntheticReadyAnalysis() {
+  const ranking = () => ({
+    calls: {
+      census: {
+        authenticatedCallCount: 0,
+        authenticatedFunctions: 0,
+        authenticatedIdentities: 0,
+        totalCallCount: 0,
+        totalFunctions: 0,
+        unattributedCallCount: 0,
+        unattributedFunctions: 0,
+      },
+      topFive: [],
+    },
+    cpu: {
+      census: {
+        authenticatedFrames: 0,
+        idleSamples: 0,
+        rankedSamples: 0,
+        totalSamples: 0,
+        unattributedSamples: 0,
+      },
+      topFive: [],
+    },
+    schema: 'kovo-dev-ready-profile-ranking/v1',
+  });
+  return {
+    cells: [
+      { lane: 'baseline', ranking: ranking(), scheduleIndex: 0 },
+      { lane: 'spike', ranking: ranking(), scheduleIndex: 1 },
+      { lane: 'spike', ranking: ranking(), scheduleIndex: 2 },
+      { lane: 'baseline', ranking: ranking(), scheduleIndex: 3 },
+    ],
+    lanes: [
+      { lane: 'baseline', ranking: ranking(), windows: 2 },
+      { lane: 'spike', ranking: ranking(), windows: 2 },
+    ],
+    overall: { ranking: ranking(), windows: 4 },
+    policy: {
+      coverageMetric: 'precise-coverage-outer-range-call-count',
+      cpuMetric: 'inspector-self-sample-count',
+      top: 5,
+      wallTimeClaims: false,
+    },
+    schema: 'kovo-dev-ready-profile-analysis/v1',
+  };
 }
 
 function syntheticArtifactEvidence(root, file, schema) {

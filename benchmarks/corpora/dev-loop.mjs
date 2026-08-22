@@ -57,6 +57,7 @@ import {
 } from './generate.mjs';
 
 export const DEV_LOOP_REPORT_SCHEMA = 'kovo-dev-loop-report/v1';
+export const DEV_PROFILED_PROCESS_INVOCATION_SCHEMA = 'kovo-profiled-process-invocation/v1';
 export const DEV_SESSION_HANDOFF_SCHEMA = 'kovo-dev-session-handoff/v2';
 export const DEV_SOCKET_OWNER_EVIDENCE_SCHEMA = 'kovo-dev-socket-owner-evidence/v1';
 
@@ -2197,21 +2198,34 @@ function startDevSession({
   const invocation = profiledDevInvocation(command, inspectorPort, {
     pauseOnStart: inspectorPauseOnStart,
   });
+  const inspectorInvocation =
+    inspectorPort === null
+      ? null
+      : Object.freeze({
+          argv: Object.freeze([...invocation.argv]),
+          executable: invocation.executable,
+          pauseOnStart: inspectorPauseOnStart,
+          port: inspectorPort,
+          schema: DEV_PROFILED_PROCESS_INVOCATION_SCHEMA,
+        });
   const processMarker = createDevProcessMarker();
+  const environment = markedDevProcessEnvironment(
+    {
+      ...process.env,
+      ...command.env,
+      ...invocation.env,
+      FORCE_COLOR: '0',
+      NEXT_TELEMETRY_DISABLED: '1',
+      NO_COLOR: '1',
+    },
+    processMarker,
+  );
+  delete environment.NODE_OPTIONS;
+  delete environment.NODE_PATH;
   const child = spawnProcess(invocation.executable, invocation.argv, {
     cwd: command.cwd,
     detached: process.platform !== 'win32',
-    env: markedDevProcessEnvironment(
-      {
-        ...process.env,
-        ...command.env,
-        ...invocation.env,
-        FORCE_COLOR: '0',
-        NEXT_TELEMETRY_DISABLED: '1',
-        NO_COLOR: '1',
-      },
-      processMarker,
-    ),
+    env: environment,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   if (!Number.isSafeInteger(child.pid) || child.pid <= 0) {
@@ -2252,6 +2266,7 @@ function startDevSession({
     exited: () => exited,
     logCount: () => events.length,
     logTail: () => tail.slice(-8_192),
+    inspectorInvocation,
     pid: child.pid,
     processMarker,
     async stop() {
